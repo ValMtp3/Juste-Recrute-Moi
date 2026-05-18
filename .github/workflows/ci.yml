@@ -101,13 +101,45 @@ jobs:
       - run: cd backend && uv run python -m pytest tests/test_import_boundaries.py -q
       - run: cd backend && uv run python -m pytest tests -q --cov=. --cov-report=term-missing --cov-fail-under=60
 
-  macos-sidecar-smoke:
-    name: macOS sidecar smoke
-    runs-on: macos-latest
+  release-smoke:
+    name: Release smoke (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            platform: linux
+          - name: Windows
+            os: windows-latest
+            platform: windows
+          - name: macOS
+            os: macos-latest
+            platform: macos
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6
+
+      - name: Install Tauri Linux system dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            pkg-config \
+            patchelf \
+            wget
 
       - uses: actions/setup-node@v6
         with:
@@ -122,17 +154,18 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
       - name: Install frontend dependencies
         run: npm ci
 
       - name: Install backend dependencies
         run: cd backend && uv sync --dev --frozen
 
-      - name: Build macOS sidecar
-        run: npm run build:sidecar
-
-      - name: Smoke macOS sidecar
-        run: npm run smoke:sidecar
+      - name: Run release smoke
+        run: npm run release:smoke
 
   backend-domains:
     name: Backend domain tests
@@ -166,39 +199,6 @@ jobs:
           else
             uv run python -m pytest tests/test_import_boundaries.py -q
           fi
-
-  windows-sidecar-smoke:
-    name: Windows sidecar smoke
-    runs-on: windows-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: npm
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-
-      - uses: astral-sh/setup-uv@v8.1.0
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Install backend dependencies
-        run: cd backend && uv sync --dev --frozen
-
-      - name: Build Windows sidecar
-        run: npm run build:sidecar
-
-      - name: Smoke Windows sidecar
-        run: npm run smoke:sidecar
 
   rust:
     name: Rust check

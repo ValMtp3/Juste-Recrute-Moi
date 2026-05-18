@@ -29,14 +29,16 @@ def startup_warnings(repo: Repository) -> list[str]:
         if not (cfg.get(key_name) or os.environ.get(env_name or "")):
             warnings.append(f"LLM provider '{provider}' is selected but no API key is configured.")
 
-    for target in job_targets(cfg.get("job_boards", ""), cfg.get("job_market_focus", "global")):
-        lower = target.lower()
-        if lower.startswith(("site:", "ats:", "github:", "hn:", "reddit:", "http://", "https://")):
-            if lower.startswith(("http://", "https://")) and not urlparse(target).netloc:
-                warnings.append(f"Job target looks like an invalid URL: {target}")
-            continue
-        if "." not in target and " " not in target:
-            warnings.append(f"Job target may be invalid or too broad: {target}")
+    raw_job_boards = str(cfg.get("job_boards", "") or "")
+    if raw_job_boards.strip():
+        for target in job_targets(raw_job_boards, cfg.get("job_market_focus", "global")):
+            lower = target.lower()
+            if lower.startswith(("site:", "ats:", "github:", "hn:", "reddit:", "http://", "https://")):
+                if lower.startswith(("http://", "https://")) and not urlparse(target).netloc:
+                    warnings.append(f"Job target looks like an invalid URL: {target}")
+                continue
+            if "." not in target and " " not in target:
+                warnings.append(f"Job target may be invalid or too broad: {target}")
 
     return warnings
 

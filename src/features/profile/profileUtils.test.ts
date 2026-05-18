@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { entryTitle, normalizeProfileResponse, profileDeleteKey, profileDeletePath, removeProfileItem } from "./profileUtils";
 
+const fieldText = (item: unknown, key: string): string =>
+  item && typeof item === "object" && key in item
+    ? String((item as Record<string, unknown>)[key] || "")
+    : "";
+
 describe("normalizeProfileResponse", () => {
   it("normalizes partial profile payloads instead of rejecting them", () => {
     const profile = normalizeProfileResponse({
@@ -44,9 +49,13 @@ describe("removeProfileItem", () => {
     });
 
     const next = removeProfileItem(profile, "skill", "fastapi");
+    const firstProject = next.projects[0];
+    const firstProjectStack = firstProject && typeof firstProject === "object" && "stack" in firstProject
+      ? firstProject.stack
+      : [];
 
-    expect(next.skills.map((skill: any) => skill.n)).toEqual(["React"]);
-    expect(next.projects[0].stack).toEqual(["FastAPI"]);
+    expect(next.skills.map((skill) => fieldText(skill, "n"))).toEqual(["React"]);
+    expect(firstProjectStack).toEqual(["FastAPI"]);
   });
 
   it("removes profile rows by fallback labels for text and structured entries", () => {
@@ -57,7 +66,7 @@ describe("removeProfileItem", () => {
       achievements: ["Shipped"],
     });
 
-    expect(removeProfileItem(profile, "experience", "Engineer at Acme").exp.map((item: any) => item.role)).toEqual(["Designer"]);
+    expect(removeProfileItem(profile, "experience", "Engineer at Acme").exp.map((item) => fieldText(item, "role"))).toEqual(["Designer"]);
     expect(removeProfileItem(profile, "education", "B.Tech%20%2F%20MBA").education).toEqual(["MSc"]);
     expect(removeProfileItem(profile, "certification", "AWS").certifications).toEqual([]);
     expect(removeProfileItem(profile, "achievement", "Shipped").achievements).toEqual([]);

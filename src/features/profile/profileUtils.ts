@@ -2,29 +2,41 @@ const IDENTITY_KEYS = ["email", "phone", "linkedin_url", "github_url", "website_
 
 export type ProfileTextType = "education" | "certification" | "achievement";
 
-const asArray = (value: unknown): any[] => Array.isArray(value) ? value : [];
+type ProfileRecord = Record<string, unknown>;
+
+const asArray = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
+const asRecord = (value: unknown): ProfileRecord =>
+  value && typeof value === "object" && !Array.isArray(value) ? value as ProfileRecord : {};
+
+const textOrEmpty = (value: unknown): string => {
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  return "";
+};
+
+const joinedLabel = (values: unknown[], separator: string): string =>
+  values.map(textOrEmpty).filter(Boolean).join(separator);
 
 export const entryTitle = (item: unknown): string =>
   typeof item === "string"
     ? item
-    : String(
-        (item as any)?.title
-        || (item as any)?.name
-        || (item as any)?.n
-        || [(item as any)?.role, (item as any)?.co].filter(Boolean).join(" at ")
-        || (item as any)?.id
+    : textOrEmpty(
+        asRecord(item).title
+        || asRecord(item).name
+        || asRecord(item).n
+        || joinedLabel([asRecord(item).role, asRecord(item).co], " at ")
+        || asRecord(item).id
         || "",
       );
 
 export const profileDeleteKey = (item: unknown): string => {
   if (typeof item === "string") return item;
-  const source = item && typeof item === "object" ? item as Record<string, any> : {};
+  const source = asRecord(item);
   return String(source.id || entryTitle(source));
 };
 
 export function normalizeProfileResponse(data: unknown) {
-  const source = data && typeof data === "object" ? data as Record<string, any> : {};
-  const identitySource = source.identity && typeof source.identity === "object" ? source.identity as Record<string, any> : {};
+  const source = asRecord(data);
+  const identitySource = asRecord(source.identity);
   const identity = Object.fromEntries(
     IDENTITY_KEYS.map(key => [key, String(identitySource[key] || source[key] || "")]),
   );
@@ -66,7 +78,7 @@ export function removeProfileItem(profile: unknown, type: string, idOrTitle: str
   if (!target) return next;
 
   const keepStructured = (item: unknown, values: unknown[]) => {
-    const source = item && typeof item === "object" ? item as Record<string, any> : {};
+    const source = asRecord(item);
     return !deleteTokenMatches(target, [
       profileDeleteKey(item),
       entryTitle(item),
@@ -77,16 +89,25 @@ export function removeProfileItem(profile: unknown, type: string, idOrTitle: str
   const keepTextEntry = (item: unknown) => !deleteTokenMatches(target, [profileDeleteKey(item), entryTitle(item), item]);
 
   if (type === "skill") {
-    next.skills = next.skills.filter((item: any) => keepStructured(item, [item?.n, item?.name, item?.title]));
+    next.skills = next.skills.filter((item) => {
+      const source = asRecord(item);
+      return keepStructured(item, [source.n, source.name, source.title]);
+    });
   } else if (type === "experience") {
-    next.exp = next.exp.filter((item: any) => keepStructured(item, [
-      item?.role,
-      item?.co,
-      [item?.role, item?.co].filter(Boolean).join(" at "),
-      [item?.role, item?.co].filter(Boolean).join(" - "),
-    ]));
+    next.exp = next.exp.filter((item) => {
+      const source = asRecord(item);
+      return keepStructured(item, [
+        source.role,
+        source.co,
+        joinedLabel([source.role, source.co], " at "),
+        joinedLabel([source.role, source.co], " - "),
+      ]);
+    });
   } else if (type === "project") {
-    next.projects = next.projects.filter((item: any) => keepStructured(item, [item?.title, item?.name]));
+    next.projects = next.projects.filter((item) => {
+      const source = asRecord(item);
+      return keepStructured(item, [source.title, source.name]);
+    });
   } else if (type === "education") {
     next.education = next.education.filter(keepTextEntry);
   } else if (type === "certification") {

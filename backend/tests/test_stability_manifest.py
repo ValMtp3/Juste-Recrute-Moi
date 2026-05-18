@@ -103,7 +103,11 @@ def test_ci_enforces_manifest_guardrails():
     assert "--cov-fail-under=60" in ci
     assert "npm run lint" in ci
     assert "npm run test:coverage" in ci
+    assert "Release smoke" in ci
+    assert "npm run release:smoke" in ci
+    assert "ubuntu-latest" in ci
     assert "windows-latest" in ci
+    assert "macos-latest" in ci
 
 
 def test_release_includes_frozen_backend_and_windows_smoke():

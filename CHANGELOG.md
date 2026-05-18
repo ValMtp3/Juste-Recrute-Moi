@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 - 2026-05-18
+
+- Added cross-platform `release:smoke` CI coverage across Linux, Windows, and macOS.
+- Added profile-to-score-to-generate integration coverage plus startup, lead-store, generation-readiness, and scoring invariant tests.
+- Tightened profile parsing utilities by replacing unsafe `as any` casts with explicit unknown narrowing.
+- Fixed startup validation so built-in default job targets do not produce false broad-target warnings.
+
 ## 1.0.0 - 2026-05-18
 
 - Added thread-local SQLite connection pooling with shutdown cleanup to reduce lock churn.
