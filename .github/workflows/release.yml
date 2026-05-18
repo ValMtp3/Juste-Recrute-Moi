@@ -388,7 +388,6 @@ jobs:
           if (-not (Test-Path $sidecarPath)) {
             throw "Packaged Windows sidecar resource not found at $sidecarPath"
           }
-          $env:JHM_SIDECAR_PATH = (Resolve-Path $sidecarPath).Path
           npm run smoke:sidecar
 
       - name: Smoke packaged macOS sidecar
