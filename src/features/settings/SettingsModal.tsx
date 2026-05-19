@@ -75,7 +75,7 @@ export default function SettingsModal({ api, onClose }: Props) {
           {saveError && <div style={{ marginRight: "auto", alignSelf: "center", color: "var(--bad)", fontSize: 12, fontWeight: 700 }}>{saveError}</div>}
           <button className="btn" onClick={onClose} style={{ padding: "9px 20px", fontSize: 13, borderRadius: 10 }}>Cancel</button>
           <button className="btn btn-accent" onClick={save} disabled={saving} style={{ padding: "9px 26px", fontSize: 13, borderRadius: 10, minWidth: 110 }}>
-            {saved ? "? Saved" : saving ? "Saving?" : "Save settings"}
+            {saved ? "Saved" : saving ? "Saving..." : "Save settings"}
           </button>
         </div>
       </div>

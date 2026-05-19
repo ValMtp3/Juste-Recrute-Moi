@@ -41,8 +41,14 @@ def embed_texts(texts: list[str]) -> list:
                         from sentence_transformers import SentenceTransformer
 
                         result[0] = SentenceTransformer("all-MiniLM-L6-v2")
+                    except ModuleNotFoundError as exc:
+                        if exc.name == "sentence_transformers":
+                            _log.info("SentenceTransformer package not installed; using built-in local embedder")
+                        else:
+                            _log.warning("SentenceTransformer dependency unavailable; using built-in local embedder: %s", exc)
+                        exc_holder[0] = exc
                     except Exception as exc:
-                        logging.getLogger(__name__).warning('suppressed exception in backend/data/vector/embeddings.py:_load: %s', exc)
+                        logging.getLogger(__name__).warning("SentenceTransformer unavailable; using built-in local embedder: %s", exc)
                         exc_holder[0] = exc
 
                 thread = threading.Thread(target=_load, daemon=True)
@@ -70,9 +76,9 @@ def embedding_status() -> dict:
             return {"status": "ok", "mode": "lazy", "model": "all-MiniLM-L6-v2"}
         if _st == "hashing":
             return {
-                "status": "degraded",
+                "status": "ok",
                 "mode": "hashing",
                 "model": "built-in hashing embedder",
-                "error": _st_error or "SentenceTransformer unavailable",
+                "reason": _st_error or "SentenceTransformer unavailable",
             }
         return {"status": "ok", "mode": "sentence-transformer", "model": "all-MiniLM-L6-v2"}

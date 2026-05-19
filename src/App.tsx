@@ -39,6 +39,14 @@ const PIPELINE_VIEW_TO_TAB: Partial<Record<View, PipelineTab>> = {
 
 type SubsystemHealth = Record<string, { status: string; error?: string; reason?: string; [key: string]: unknown }>;
 
+function isActionableSubsystemIssue(name: string, value: SubsystemHealth[string]) {
+  if (value.status === "ok") return false;
+  const message = String(value.error || value.reason || "").toLowerCase();
+  if (name === "llm" && message.includes("api key")) return false;
+  if (name === "embeddings" && value.mode === "hashing") return false;
+  return true;
+}
+
 export default function App() {
   const { conn, port, apiToken, sidecarError, logs, addLog: wsAddLog, progress } = useWS();
   const api = useMemo<ApiFetch | null>(() => {
@@ -256,7 +264,7 @@ export default function App() {
   };
   const pipelineTab = PIPELINE_VIEW_TO_TAB[view] || "all";
   const isPipelineView = Boolean(PIPELINE_VIEW_TO_TAB[view]);
-  const degradedSubsystems = Object.entries(subsystems ?? {}).filter(([, value]) => value.status !== "ok");
+  const degradedSubsystems = Object.entries(subsystems ?? {}).filter(([name, value]) => isActionableSubsystemIssue(name, value));
 
   if (!api) {
     return (

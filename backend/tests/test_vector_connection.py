@@ -108,3 +108,22 @@ def test_vector_runtime_roots_include_common_site_package_layouts(tmp_path, monk
     assert tmp_path / "vector-runtime" in roots
     assert tmp_path / "vector-runtime" / "site-packages" in roots
     assert tmp_path / "vector-runtime" / "Lib" / "site-packages" in roots
+
+
+def test_hash_embedding_fallback_reports_ok(monkeypatch):
+    from data.vector import embeddings
+
+    monkeypatch.setattr(embeddings, "_st", "hashing")
+    monkeypatch.setattr(embeddings, "_st_error", "No module named 'sentence_transformers'")
+
+    status = embeddings.embedding_status()
+
+    assert status["status"] == "ok"
+    assert status["mode"] == "hashing"
+    assert "error" not in status
+
+
+def test_embedding_loader_does_not_log_suppressed_exception_noise():
+    text = Path(__file__).resolve().parents[1].joinpath("data", "vector", "embeddings.py").read_text(encoding="utf-8")
+
+    assert "suppressed exception" not in text
