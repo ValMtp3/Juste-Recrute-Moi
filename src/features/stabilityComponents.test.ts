@@ -9,6 +9,7 @@ const ingestion = readFileSync(new URL("./profile/IngestionView.tsx", import.met
 const errorBoundary = readFileSync(new URL("../shared/components/ErrorBoundary.tsx", import.meta.url), "utf8");
 const approvalDrawer = readFileSync(new URL("./pipeline/components/ApprovalDrawer.tsx", import.meta.url), "utf8");
 const semanticRuntimePrompt = readFileSync(new URL("../shared/components/SemanticRuntimePrompt.tsx", import.meta.url), "utf8");
+const updatePrompt = readFileSync(new URL("../shared/components/UpdatePrompt.tsx", import.meta.url), "utf8");
 const settingsModal = readFileSync(new URL("./settings/SettingsModal.tsx", import.meta.url), "utf8");
 const stylesheet = readFileSync(new URL("../index.css", import.meta.url), "utf8");
 
@@ -63,6 +64,13 @@ describe("FIX.md frontend stability contracts", () => {
   it("keeps updater reachable above mandatory runtime blockers", () => {
     expect(stylesheet).toMatch(/\.update-toast\s*{[^}]*z-index:\s*260;/s);
     expect(stylesheet).toMatch(/\.semantic-runtime-backdrop\s*{[^}]*z-index:\s*180;/s);
+  });
+
+  it("keeps updater downloads resilient to release asset transport hiccups", () => {
+    expect(updatePrompt).toContain("downloadAndInstall");
+    expect(updatePrompt).toContain("UPDATE_DOWNLOAD_TIMEOUT_MS");
+    expect(updatePrompt).toContain("Cache-Control");
+    expect(updatePrompt).toContain("isRetryableUpdateDownloadError");
   });
 
   it("does not present expected setup states as broken UI", () => {

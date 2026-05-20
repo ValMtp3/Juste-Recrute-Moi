@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
+import { check, type DownloadEvent, type DownloadOptions, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
 type UpdateState = "checking" | "available" | "downloading" | "installing" | "relaunching" | "ready" | "error";
@@ -16,6 +16,21 @@ type UpdateInstallStatus = {
 const DISMISSED_UPDATE_KEY = "jhm.dismissedUpdate";
 const PENDING_RESTART_KEY = "jhm.pendingUpdateRestart";
 const RELEASES_URL = "https://github.com/vasu-devs/JustHireMe/releases/latest";
+const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+const UPDATE_DOWNLOAD_HEADERS = {
+  Accept: "application/octet-stream",
+};
+const UPDATE_DOWNLOAD_RETRY_HEADERS = {
+  ...UPDATE_DOWNLOAD_HEADERS,
+  "Cache-Control": "no-cache",
+};
+
+function updateDownloadOptions(headers: Record<string, string> = UPDATE_DOWNLOAD_HEADERS): DownloadOptions {
+  return {
+    headers,
+    timeout: UPDATE_DOWNLOAD_TIMEOUT_MS,
+  };
+}
 
 function formatBytes(value: number) {
   if (!value) return "0 MB";
@@ -34,6 +49,21 @@ async function readUpdateInstallStatus() {
   } catch {
     return null;
   }
+}
+
+function errorMessage(err: unknown) {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function isRetryableUpdateDownloadError(err: unknown) {
+  const message = errorMessage(err).toLowerCase();
+  return (
+    message.includes("error decoding response body") ||
+    message.includes("request timed out") ||
+    message.includes("connection") ||
+    message.includes("network") ||
+    message.includes("body")
+  );
 }
 
 export function UpdatePrompt() {
@@ -144,7 +174,7 @@ export function UpdatePrompt() {
     setStartedAt(Date.now());
     setNow(Date.now());
     try {
-      await update.download((event: DownloadEvent) => {
+      const onEvent = (event: DownloadEvent) => {
         if (event.event === "Started") {
           setTotal(event.data.contentLength ?? null);
           setDownloaded(0);
@@ -153,9 +183,19 @@ export function UpdatePrompt() {
         } else if (event.event === "Finished") {
           setState("installing");
         }
-      });
-      setState("installing");
-      await update.install();
+      };
+
+      try {
+        await update.downloadAndInstall(onEvent, updateDownloadOptions());
+      } catch (firstError) {
+        if (!isRetryableUpdateDownloadError(firstError)) throw firstError;
+        setDownloaded(0);
+        setTotal(null);
+        setStartedAt(Date.now());
+        setNow(Date.now());
+        await update.downloadAndInstall(onEvent, updateDownloadOptions(UPDATE_DOWNLOAD_RETRY_HEADERS));
+      }
+
       localStorage.setItem(PENDING_RESTART_KEY, update.version);
       setPendingRestartVersion(update.version);
       setState("relaunching");
@@ -163,7 +203,7 @@ export function UpdatePrompt() {
         void relaunchIntoUpdate();
       }, 650);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
       setState("error");
     }
   };

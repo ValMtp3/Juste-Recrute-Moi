@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.21 - 2026-05-20
+
+- Repaired the Windows updater flow to retry signed release downloads as a single download-and-install operation after transient response-body decode failures.
+- Prevented Windows installer smoke tests from leaving the real JustHireMe uninstall registry entry pointed at a temporary test install.
+
 ## 1.0.20 - 2026-05-20
 
 - Fixed the PyO3/LanceDB startup path so native vector import failures degrade to deterministic matching instead of blocking the app behind a restart modal.

@@ -8,6 +8,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const updateSmokeEnabled = process.env.JHM_WINDOWS_UPDATE_SMOKE === "1";
 const installerSmokeEnabled = process.env.JHM_WINDOWS_INSTALLER_SMOKE === "1";
 const timeoutMs = Number(process.env.JHM_WINDOWS_UPDATE_TIMEOUT_MS || 120_000);
+const uninstallRegistryKey = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\JustHireMe";
 
 function fail(message) {
   throw new Error(message);
@@ -63,6 +64,45 @@ function run(command, args, options = {}) {
   if (result.status !== 0) {
     fail(`${command} ${args.join(" ")} exited with ${result.status}`);
   }
+}
+
+function runQuiet(command, args) {
+  return spawnSync(command, args, {
+    stdio: "ignore",
+    windowsHide: true,
+  });
+}
+
+function snapshotUninstallRegistry(root) {
+  if (process.platform !== "win32") return null;
+  const snapshot = join(root, "previous-justhireme-uninstall.reg");
+  const result = runQuiet("reg", ["export", uninstallRegistryKey, snapshot, "/y"]);
+  return result.status === 0 ? snapshot : null;
+}
+
+function restoreUninstallRegistry(snapshot) {
+  if (process.platform !== "win32") return;
+  if (snapshot && existsSync(snapshot)) {
+    const result = runQuiet("reg", ["import", snapshot]);
+    if (result.status !== 0) {
+      console.warn("Cleanup warning: could not restore previous JustHireMe uninstall registry entry.");
+    }
+    return;
+  }
+  runQuiet("reg", ["delete", uninstallRegistryKey, "/f"]);
+}
+
+async function cleanupInstalledPackage(installDir, registrySnapshot) {
+  if (process.platform !== "win32") return;
+  const uninstaller = join(installDir, "uninstall.exe");
+  if (existsSync(uninstaller)) {
+    const result = runQuiet(uninstaller, ["/S"]);
+    if (result.status !== 0) {
+      console.warn(`Cleanup warning: JustHireMe uninstaller exited with ${result.status}.`);
+    }
+    await sleep(1500);
+  }
+  restoreUninstallRegistry(registrySnapshot);
 }
 
 function killImage(name) {
@@ -324,6 +364,7 @@ async function freshInstallerSmoke() {
   await removeWithRetry(root);
   mkdirSync(installDir, { recursive: true });
   mkdirSync(appDataDir, { recursive: true });
+  const registrySnapshot = snapshotUninstallRegistry(root);
 
   try {
     run(newInstaller, ["/S", `/D=${installDir}`]);
@@ -333,6 +374,7 @@ async function freshInstallerSmoke() {
     killImage("justhireme.exe");
     killImage("jhm-sidecar-next.exe");
     killImage("backend.exe");
+    await cleanupInstalledPackage(installDir, registrySnapshot);
     await removeWithRetry(root, { allowFailure: true, label: "Windows installed package smoke temp dir" });
   }
 }
@@ -350,6 +392,7 @@ async function updateInstallerSmoke() {
   await removeWithRetry(root);
   mkdirSync(installDir, { recursive: true });
   mkdirSync(appDataDir, { recursive: true });
+  const registrySnapshot = snapshotUninstallRegistry(root);
 
   try {
     run(oldInstaller, ["/S", `/D=${installDir}`]);
@@ -378,6 +421,7 @@ async function updateInstallerSmoke() {
     killImage("justhireme.exe");
     killImage("jhm-sidecar-next.exe");
     killImage("backend.exe");
+    await cleanupInstalledPackage(installDir, registrySnapshot);
     await removeWithRetry(root, { allowFailure: true, label: "Windows update smoke temp dir" });
   }
 }
