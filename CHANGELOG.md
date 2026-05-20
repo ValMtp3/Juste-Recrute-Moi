@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.22 - 2026-05-21
+
+- Fixed OTA runtime readiness so incomplete stale LanceDB payloads no longer count as installed.
+- Added runtime-pack verification that imports LanceDB and opens a vector connection before publishing OTA assets.
+
 ## 1.0.21 - 2026-05-20
 
 - Repaired the Windows updater flow to retry signed release downloads as a single download-and-install operation after transient response-body decode failures.

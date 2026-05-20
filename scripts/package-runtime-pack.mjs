@@ -131,6 +131,20 @@ function run(command, args, options = {}) {
   }
 }
 
+function runCapture(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    cwd: options.cwd || repoRoot,
+    env: options.env || process.env,
+    shell: false,
+    encoding: "utf8",
+  });
+  if (result.status !== 0) {
+    const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+    throw new Error(`${command} ${args.join(" ")} exited with code ${result.status}\n${output}`);
+  }
+  return result.stdout;
+}
+
 function archiveDirectory(sourceDir, archivePath) {
   rmSync(archivePath, { force: true });
   if (process.platform === "win32") {
@@ -176,6 +190,42 @@ function assertBrowserRuntimeReady() {
   if (!hasChromiumRuntime()) {
     throw new Error(`Playwright Chromium runtime does not contain a Chromium payload: ${browserRuntimeSource}`);
   }
+}
+
+function assertVectorRuntimeImportable() {
+  const code = `
+import os
+import sys
+import tempfile
+
+runtime = os.environ["JHM_VECTOR_RUNTIME_DIR"]
+sys.path.insert(0, runtime)
+if hasattr(os, "add_dll_directory"):
+    os.add_dll_directory(runtime)
+    for name in ("pyarrow.libs", "numpy.libs"):
+        candidate = os.path.join(runtime, name)
+        if os.path.isdir(candidate):
+            os.add_dll_directory(candidate)
+
+import lancedb
+
+if not callable(getattr(lancedb, "connect", None)):
+    raise RuntimeError("staged lancedb package has no connect function")
+
+db = lancedb.connect(os.path.join(tempfile.gettempdir(), "jhm-runtime-pack-probe"))
+if db is None:
+    raise RuntimeError("staged lancedb connect returned None")
+print("Vector runtime import/connect probe passed.")
+`;
+  const output = runCapture(python, ["-c", code], {
+    cwd: backendDir,
+    env: {
+      ...process.env,
+      JHM_VECTOR_RUNTIME_DIR: vectorStageDir,
+      PYTHONNOUSERSITE: "1",
+    },
+  });
+  process.stdout.write(output);
 }
 
 if (!existsSync(sitePackages)) {
@@ -248,6 +298,8 @@ writeFileSync(join(stageDir, "runtime-pack-manifest.json"), `${JSON.stringify({
     },
   },
 }, null, 2)}\n`, "utf8");
+
+assertVectorRuntimeImportable();
 
 const runtimePackArchive = join(releaseAssetsDir, runtimePackAssetName());
 const vectorArchive = join(releaseAssetsDir, vectorRuntimeAssetName());

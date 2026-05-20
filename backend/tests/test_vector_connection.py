@@ -113,6 +113,41 @@ def test_vector_runtime_roots_include_common_site_package_layouts(tmp_path, monk
     assert tmp_path / "vector-runtime" / "Lib" / "site-packages" in roots
 
 
+def test_vector_runtime_ready_rejects_partial_lancedb_payload(tmp_path, monkeypatch):
+    from data.vector import runtime
+
+    runtime_dir = tmp_path / "vector-runtime"
+    lancedb_dir = runtime_dir / "lancedb"
+    pyarrow_dir = runtime_dir / "pyarrow"
+    lancedb_dir.mkdir(parents=True)
+    pyarrow_dir.mkdir()
+    (lancedb_dir / "__init__.py").write_text("", encoding="utf-8")
+    (lancedb_dir / "_lancedb.pyd").write_bytes(b"placeholder")
+    (pyarrow_dir / "__init__.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(runtime.importlib.util, "find_spec", lambda _name: object())
+
+    assert runtime.vector_runtime_files_complete(runtime_dir) is False
+    assert runtime.vector_runtime_ready(runtime_dir) is False
+
+
+def test_vector_runtime_ready_accepts_complete_lancedb_payload(tmp_path, monkeypatch):
+    from data.vector import runtime
+
+    runtime_dir = tmp_path / "vector-runtime"
+    lancedb_dir = runtime_dir / "lancedb"
+    pyarrow_dir = runtime_dir / "pyarrow"
+    lancedb_dir.mkdir(parents=True)
+    pyarrow_dir.mkdir()
+    for name in ["__init__.py", "common.py", "db.py", "table.py"]:
+        (lancedb_dir / name).write_text("", encoding="utf-8")
+    (lancedb_dir / "_lancedb.pyd").write_bytes(b"placeholder")
+    (pyarrow_dir / "__init__.py").write_text("", encoding="utf-8")
+    monkeypatch.setattr(runtime.importlib.util, "find_spec", lambda _name: object())
+
+    assert runtime.vector_runtime_files_complete(runtime_dir) is True
+    assert runtime.vector_runtime_ready(runtime_dir) is True
+
+
 def test_runtime_status_requires_single_pack_components(monkeypatch, tmp_path):
     from data.vector import runtime
 

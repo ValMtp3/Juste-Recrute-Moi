@@ -7,7 +7,7 @@ import sys
 import threading
 
 from core.logging import get_logger
-from data.vector.runtime import add_vector_runtime_to_path, vector_runtime_ready, vector_runtime_roots
+from data.vector.runtime import add_vector_runtime_to_path, vector_runtime_files_complete, vector_runtime_ready
 
 _log = get_logger(__name__)
 lancedb = None
@@ -64,7 +64,7 @@ def _clear_lancedb_modules() -> None:
 
 
 def _runtime_package_installed() -> bool:
-    return any((root / "lancedb" / "__init__.py").exists() for root in vector_runtime_roots())
+    return vector_runtime_files_complete()
 
 
 def _is_pyo3_reinit_error(exc: BaseException) -> bool:

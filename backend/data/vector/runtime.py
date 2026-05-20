@@ -128,6 +128,42 @@ def vector_runtime_roots(path: Path | None = None) -> list[Path]:
     ]
 
 
+def _runtime_has_any_vector_payload(root: Path) -> bool:
+    return any((candidate / "lancedb" / "__init__.py").exists() for candidate in vector_runtime_roots(root))
+
+
+def _lancedb_native_binary_present(lancedb_dir: Path) -> bool:
+    suffixes = (".pyd", ".so", ".dylib")
+    return any(
+        child.is_file() and child.name.startswith("_lancedb") and child.name.lower().endswith(suffixes)
+        for child in lancedb_dir.iterdir()
+    ) if lancedb_dir.exists() else False
+
+
+def vector_runtime_files_complete(path: Path | None = None) -> bool:
+    root = path or vector_runtime_dir()
+    for candidate in vector_runtime_roots(root):
+        lancedb_dir = candidate / "lancedb"
+        pyarrow_dir = candidate / "pyarrow"
+        if not (lancedb_dir / "__init__.py").exists():
+            continue
+        required_lancedb = [
+            lancedb_dir / "common.py",
+            lancedb_dir / "db.py",
+            lancedb_dir / "table.py",
+        ]
+        required_pyarrow = [
+            pyarrow_dir / "__init__.py",
+        ]
+        if (
+            all(item.exists() for item in required_lancedb)
+            and _lancedb_native_binary_present(lancedb_dir)
+            and all(item.exists() for item in required_pyarrow)
+        ):
+            return True
+    return False
+
+
 def _add_dll_dir(path: Path) -> None:
     if os.name != "nt" or not path.exists() or not path.is_dir() or not hasattr(os, "add_dll_directory"):
         return
@@ -152,7 +188,10 @@ def add_vector_runtime_to_path(path: Path | None = None) -> None:
 
 def vector_runtime_ready(path: Path | None = None) -> bool:
     root = path or vector_runtime_dir()
-    if getattr(sys, "frozen", False) and not any((candidate / "lancedb" / "__init__.py").exists() for candidate in vector_runtime_roots(root)):
+    has_payload = _runtime_has_any_vector_payload(root)
+    if has_payload and not vector_runtime_files_complete(root):
+        return False
+    if getattr(sys, "frozen", False) and not vector_runtime_files_complete(root):
         return False
     add_vector_runtime_to_path(root)
     try:
@@ -460,6 +499,7 @@ def vector_runtime_status() -> dict:
         "url": runtime_pack_url(),
         "vector": {
             "ready": vector_ready,
+            "files_complete": vector_runtime_files_complete(runtime_dir),
             "dir": str(runtime_dir),
             "legacy_asset": vector_runtime_asset_name(),
             "legacy_url": vector_runtime_url(),
