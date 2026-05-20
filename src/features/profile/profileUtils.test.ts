@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { entryTitle, normalizeProfileResponse, profileDeleteKey, profileDeletePath, removeProfileItem } from "./profileUtils";
+import { entryTitle, mergeProfileWithGraphFallback, normalizeProfileResponse, profileDeleteKey, profileDeletePath, profileFromGraphStats, removeProfileItem } from "./profileUtils";
 
 const fieldText = (item: unknown, key: string): string =>
   item && typeof item === "object" && key in item
@@ -38,6 +38,45 @@ describe("profile delete labels", () => {
     expect(profileDeleteKey({ id: "proj-1", title: "Hiring Agent" })).toBe("proj-1");
     expect(profileDeleteKey({ title: "B.Tech / MBA" })).toBe("B.Tech / MBA");
     expect(profileDeleteKey({ n: "FastAPI" })).toBe("FastAPI");
+  });
+});
+
+describe("graph profile fallback", () => {
+  const stats = {
+    candidate: 1,
+    skill: 2,
+    project: 1,
+    experience: 0,
+    joblead: 0,
+    graph: {
+      nodes: [
+        { id: "candidate:vasu", label: "VASU", type: "Candidate", subtitle: "AI engineer" },
+        { id: "project:justhireme", label: "JustHireMe", type: "Project", subtitle: "Python, React" },
+        { id: "skill:python", label: "Python", type: "Skill", subtitle: "general" },
+        { id: "skill:react", label: "React", type: "Skill", subtitle: "general" },
+      ],
+      edges: [
+        { source: "candidate:vasu", target: "project:justhireme", type: "BUILT" },
+        { source: "candidate:vasu", target: "skill:python", type: "HAS_SKILL" },
+        { source: "project:justhireme", target: "skill:react", type: "PROJ_UTILIZES" },
+      ],
+    },
+  };
+
+  it("derives profile rows from graph evidence", () => {
+    const profile = profileFromGraphStats(stats);
+
+    expect(profile?.n).toBe("VASU");
+    expect(profile?.projects.map((project) => fieldText(project, "title"))).toEqual(["JustHireMe"]);
+    expect(profile?.skills.map((skill) => fieldText(skill, "n")).sort()).toEqual(["Python", "React"]);
+  });
+
+  it("fills sparse profile payloads from graph stats", () => {
+    const profile = mergeProfileWithGraphFallback({ n: "", skills: [], projects: [], exp: [] }, stats);
+
+    expect(profile.n).toBe("VASU");
+    expect(profile.skills.length).toBe(2);
+    expect(profile.projects.length).toBe(1);
   });
 });
 

@@ -249,7 +249,7 @@ def test_graph_profile_get_profile_merges_snapshot_with_existing_graph(monkeypat
     saved = {}
 
     monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: snapshot)
-    monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda: graph)
+    monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda **_kwargs: graph)
     monkeypatch.setattr(graph_profile, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
 
     merged = graph_profile.get_profile(prefer_snapshot=False)
@@ -274,6 +274,23 @@ def test_graph_profile_get_profile_prefers_saved_snapshot(monkeypatch):
     monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda: (_ for _ in ()).throw(RuntimeError("graph read should not block profile load")))
 
     assert graph_profile.get_profile() == snapshot
+
+
+def test_graph_profile_get_profile_returns_snapshot_when_strict_graph_read_is_busy(monkeypatch):
+    from data.graph import profile as graph_profile
+
+    snapshot = {
+        "n": "Jane Doe",
+        "s": "Imported resume",
+        "skills": [{"id": "python", "n": "Python", "cat": "resume"}],
+        "projects": [],
+        "exp": [],
+    }
+
+    monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: snapshot)
+    monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("graph query unavailable")))
+
+    assert graph_profile.get_profile(prefer_snapshot=False) == snapshot
 
 
 def test_graph_profile_manual_candidate_save_updates_snapshot(monkeypatch):
@@ -327,7 +344,7 @@ def test_graph_profile_delete_education_accepts_title_path_and_updates_snapshot(
     deleted_vec_ids = []
     graph_deletes = []
 
-    monkeypatch.setattr(graph_profile, "_query_rows", lambda query, _params=None: [["edu-1", "B.Tech / MBA"]] if "Education" in query else [])
+    monkeypatch.setattr(graph_profile, "_query_rows", lambda query, _params=None, **_kwargs: [["edu-1", "B.Tech / MBA"]] if "Education" in query else [])
     monkeypatch.setattr(graph_profile, "_safe_execute", lambda query, params=None: graph_deletes.append((query, params)))
     monkeypatch.setattr(graph_profile, "delete_vec_id_from_all", lambda row_id: deleted_vec_ids.append(row_id))
     monkeypatch.setattr(graph_profile, "_refresh_after_write", lambda _db_path=None: None)
@@ -359,7 +376,7 @@ def test_graph_profile_delete_skill_accepts_name_when_id_is_missing(monkeypatch)
     graph_deletes = []
     deleted_vec_ids = []
 
-    monkeypatch.setattr(graph_profile, "_query_rows", lambda query, _params=None: [["skill-1", "FastAPI"]] if "Skill" in query else [])
+    monkeypatch.setattr(graph_profile, "_query_rows", lambda query, _params=None, **_kwargs: [["skill-1", "FastAPI"]] if "Skill" in query else [])
     monkeypatch.setattr(graph_profile, "_safe_execute", lambda query, params=None: graph_deletes.append((query, params)))
     monkeypatch.setattr(graph_profile, "delete_vec_rows", lambda _table, ids: deleted_vec_ids.extend(ids))
     monkeypatch.setattr(graph_profile, "delete_vec_id_from_all", lambda row_id: deleted_vec_ids.append(row_id))
@@ -390,7 +407,7 @@ def test_graph_profile_delete_project_accepts_title_when_id_is_missing(monkeypat
     saved = {}
     graph_deletes = []
 
-    monkeypatch.setattr(graph_profile, "_query_rows", lambda query, _params=None: [["proj-1", "Hiring Agent"]] if "Project" in query else [])
+    monkeypatch.setattr(graph_profile, "_query_rows", lambda query, _params=None, **_kwargs: [["proj-1", "Hiring Agent"]] if "Project" in query else [])
     monkeypatch.setattr(graph_profile, "_safe_execute", lambda query, params=None: graph_deletes.append((query, params)))
     monkeypatch.setattr(graph_profile, "delete_vec_rows", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(graph_profile, "delete_vec_id_from_all", lambda *_args, **_kwargs: None)
@@ -426,7 +443,7 @@ def test_graph_profile_deleted_project_does_not_rehydrate_from_graph(monkeypatch
             return json.dumps(deleted_payload)
         return default
 
-    def fake_query_rows(query, _params=None):
+    def fake_query_rows(query, _params=None, **_kwargs):
         if "Project" in query:
             return [[graph_profile.hash_id("Hiring Agent"), "Hiring Agent", "Python", "", "Built it"]]
         return []
@@ -478,7 +495,7 @@ def test_graph_profile_delete_experience_accepts_role_company_label_when_id_is_m
     saved = {}
     graph_deletes = []
 
-    monkeypatch.setattr(graph_profile, "_query_rows", lambda query, _params=None: [["exp-1", "Engineer", "Acme"]] if "Experience" in query else [])
+    monkeypatch.setattr(graph_profile, "_query_rows", lambda query, _params=None, **_kwargs: [["exp-1", "Engineer", "Acme"]] if "Experience" in query else [])
     monkeypatch.setattr(graph_profile, "_safe_execute", lambda query, params=None: graph_deletes.append((query, params)))
     monkeypatch.setattr(graph_profile, "delete_vec_rows", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(graph_profile, "delete_vec_id_from_all", lambda *_args, **_kwargs: None)

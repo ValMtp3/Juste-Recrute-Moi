@@ -155,12 +155,14 @@ def graph_stats_payload(*, repair: bool = False) -> dict:
     counts = safe_graph_step(repo.graph.graph_counts, "counts", errors, default={})
     available = safe_graph_step(repo.graph.graph_available, "availability", errors, default=False)
     graph = safe_graph_step(repo.graph.graph_snapshot, "snapshot", errors, default={"nodes": [], "edges": [], "available": False})
-    profile_snapshot = safe_graph_step(
-        lambda: repo.profile.load_profile_snapshot() or repo.profile.get_profile(),
-        "profile snapshot",
-        errors,
-        default={},
-    )
+    profile_snapshot = {}
+    if profile_repo:
+        profile_snapshot = safe_graph_step(
+            lambda: profile_repo.load_profile_snapshot() or profile_repo.get_profile(),
+            "profile snapshot",
+            errors,
+            default={},
+        )
     profile_graph = _profile_snapshot_graph(profile_snapshot)
     graph = _merge_graphs(_filter_stale_profile_nodes(graph, profile_graph), profile_graph)
     embedding = embedding_space(repo)
@@ -183,4 +185,5 @@ def graph_stats_payload(*, repair: bool = False) -> dict:
         "sync": {**sync, "profile": profile_sync, "vectors": vector_sync},
         "graph": graph,
         "embedding": embedding,
+        "profile": profile_snapshot,
     }

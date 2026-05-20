@@ -1,3 +1,5 @@
+import type { GraphStats } from "../../types";
+
 const IDENTITY_KEYS = ["email", "phone", "linkedin_url", "github_url", "website_url", "city"] as const;
 
 export type ProfileTextType = "education" | "certification" | "achievement";
@@ -53,6 +55,133 @@ export function normalizeProfileResponse(data: unknown) {
     achievements: asArray(source.achievements || source.awards),
     identity,
   };
+}
+
+export function profileHasContent(profile: unknown) {
+  const source = normalizeProfileResponse(profile);
+  return Boolean(
+    source.n.trim()
+    || source.s.trim()
+    || source.skills.length
+    || source.projects.length
+    || source.exp.length
+    || source.education.length
+    || source.certifications.length
+    || source.achievements.length
+    || Object.values(source.identity).some(value => String(value || "").trim()),
+  );
+}
+
+const graphId = (id: unknown, prefix: string): string => {
+  const text = String(id || "");
+  return text.startsWith(`${prefix}:`) ? text.slice(prefix.length + 1) : text;
+};
+
+const goodLabel = (value: unknown): string => String(value || "").trim();
+
+export function profileFromGraphStats(stats: GraphStats | null | undefined) {
+  const nodes = stats?.graph?.nodes || [];
+  const edges = stats?.graph?.edges || [];
+  if (!nodes.length) return null;
+
+  const byId = new Map(nodes.map(node => [node.id, node]));
+  const candidateNodes = nodes.filter(node => node.type === "Candidate");
+  const candidateIds = new Set(candidateNodes.map(node => node.id));
+  const hasCandidate = candidateIds.size > 0;
+  const candidate = candidateNodes.find(node => !["candidate", "profile"].includes(node.label.trim().toLowerCase())) || candidateNodes[0];
+
+  const targetsFrom = (types: string[], sources = candidateIds) => new Set(
+    edges
+      .filter(edge => types.includes(edge.type) && (!hasCandidate || sources.has(edge.source)))
+      .map(edge => edge.target),
+  );
+
+  const projectIds = targetsFrom(["BUILT"]);
+  const experienceIds = targetsFrom(["WORKED_AS"]);
+  const credentialIds = targetsFrom(["HAS_EDUCATION", "HAS_CERTIFICATION", "HAS_ACHIEVEMENT"]);
+  if (!hasCandidate) {
+    nodes.forEach(node => {
+      if (node.type === "Project") projectIds.add(node.id);
+      if (node.type === "Experience") experienceIds.add(node.id);
+      if (node.type === "Credential") credentialIds.add(node.id);
+    });
+  }
+
+  const skillIds = targetsFrom(["HAS_SKILL"]);
+  for (const edge of edges) {
+    if ((projectIds.has(edge.source) && edge.type === "PROJ_UTILIZES") || (experienceIds.has(edge.source) && edge.type === "EXP_UTILIZES")) {
+      skillIds.add(edge.target);
+    }
+  }
+  if (!skillIds.size) {
+    nodes.filter(node => node.type === "Skill").forEach(node => skillIds.add(node.id));
+  }
+
+  const skills = [...skillIds]
+    .map(id => byId.get(id))
+    .filter(Boolean)
+    .map(node => ({ id: graphId(node!.id, "skill"), n: goodLabel(node!.label), cat: goodLabel(node!.subtitle) || "graph" }))
+    .filter(skill => skill.n);
+
+  const skillNameById = new Map(skills.map(skill => [`skill:${skill.id}`, skill.n]));
+  const projects = [...projectIds]
+    .map(id => byId.get(id))
+    .filter(Boolean)
+    .map(node => {
+      const stack = edges
+        .filter(edge => edge.source === node!.id && edge.type === "PROJ_UTILIZES")
+        .map(edge => skillNameById.get(edge.target) || goodLabel(byId.get(edge.target)?.label))
+        .filter(Boolean);
+      return {
+        id: graphId(node!.id, "project"),
+        title: goodLabel(node!.label),
+        stack: stack.length ? stack : (goodLabel(node!.subtitle) ? [goodLabel(node!.subtitle)] : []),
+        repo: "",
+        impact: "",
+      };
+    })
+    .filter(project => project.title);
+
+  const exp = [...experienceIds]
+    .map(id => byId.get(id))
+    .filter(Boolean)
+    .map(node => ({ id: graphId(node!.id, "experience"), role: goodLabel(node!.label), co: goodLabel(node!.subtitle), period: "", d: "" }))
+    .filter(item => item.role || item.co);
+
+  const credentials = [...credentialIds].map(id => byId.get(id)).filter(Boolean);
+  const education = credentials.filter(node => goodLabel(node!.subtitle).toLowerCase() === "education").map(node => goodLabel(node!.label)).filter(Boolean);
+  const certifications = credentials.filter(node => goodLabel(node!.subtitle).toLowerCase() === "certification").map(node => goodLabel(node!.label)).filter(Boolean);
+  const achievements = credentials.filter(node => goodLabel(node!.subtitle).toLowerCase() === "achievement").map(node => goodLabel(node!.label)).filter(Boolean);
+
+  const profile = normalizeProfileResponse({
+    n: candidate && !["candidate", "profile"].includes(candidate.label.trim().toLowerCase()) ? candidate.label : "",
+    s: candidate?.subtitle || "",
+    skills,
+    projects,
+    exp,
+    education,
+    certifications,
+    achievements,
+  });
+  return profileHasContent(profile) ? profile : null;
+}
+
+export function mergeProfileWithGraphFallback(profile: unknown, stats: GraphStats | null | undefined) {
+  const base = normalizeProfileResponse(profile);
+  const graphProfile = profileHasContent(stats?.profile) ? normalizeProfileResponse(stats?.profile) : profileFromGraphStats(stats);
+  if (!graphProfile) return base;
+  return normalizeProfileResponse({
+    ...base,
+    n: base.n || graphProfile.n,
+    s: base.s || graphProfile.s,
+    skills: base.skills.length ? base.skills : graphProfile.skills,
+    projects: base.projects.length ? base.projects : graphProfile.projects,
+    exp: base.exp.length ? base.exp : graphProfile.exp,
+    education: base.education.length ? base.education : graphProfile.education,
+    certifications: base.certifications.length ? base.certifications : graphProfile.certifications,
+    achievements: base.achievements.length ? base.achievements : graphProfile.achievements,
+    identity: { ...graphProfile.identity, ...Object.fromEntries(Object.entries(base.identity).filter(([, value]) => String(value || "").trim())) },
+  });
 }
 
 export function profileDeletePath(type: string, idOrTitle: string) {

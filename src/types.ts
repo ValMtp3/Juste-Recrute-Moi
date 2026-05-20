@@ -68,6 +68,7 @@ export interface GraphStats {
   available?: boolean; status?: "live" | "degraded"; error?: string;
   loading?: boolean; loaded?: boolean; request_error?: string;
   sync?: { status?: string; synced?: number; refreshed_at?: string; error?: string };
+  profile?: Record<string, any>;
   graph?: {
     nodes: { id: string; label: string; type: string; subtitle?: string }[];
     edges: { source: string; target: string; type: string }[];

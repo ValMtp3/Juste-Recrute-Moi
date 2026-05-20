@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Icon from "../../shared/components/Icon";
-import type { ApiFetch, View } from "../../types";
-import { entryTitle, normalizeProfileResponse, profileDeleteKey, profileDeletePath, removeProfileItem } from "./profileUtils";
+import type { ApiFetch, GraphStats, View } from "../../types";
+import { entryTitle, mergeProfileWithGraphFallback, normalizeProfileResponse, profileDeleteKey, profileDeletePath, removeProfileItem } from "./profileUtils";
 
 const stackItems = (stack: any): string[] =>
   (Array.isArray(stack) ? stack : String(stack || "").split(","))
     .map((s: string) => s.trim())
     .filter(Boolean);
 
-export function ProfileView({ api, setView }: { api: ApiFetch; setView: (v: View) => void }) {
+export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (v: View) => void; stats?: GraphStats }) {
   const [profile, setProfile] = useState<any>(null);
   const [profileErr, setProfileErr] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -26,7 +26,7 @@ export function ProfileView({ api, setView }: { api: ApiFetch; setView: (v: View
       const r = await api(`/api/v1/profile`);
       if (!r.ok) throw new Error(`Profile load failed (${r.status})`);
       const data = await r.json();
-      setProfile(normalizeProfileResponse(data));
+      setProfile(mergeProfileWithGraphFallback(data, stats));
       setProfileErr(null);
       return true;
     } catch (err: any) {
@@ -37,9 +37,12 @@ export function ProfileView({ api, setView }: { api: ApiFetch; setView: (v: View
       }
       return false;
     }
-  }, [api]);
+  }, [api, stats]);
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
+  useEffect(() => {
+    setProfile((prev: any) => prev ? mergeProfileWithGraphFallback(prev, stats) : prev);
+  }, [stats]);
   useEffect(() => {
     const onProfileRefresh = () => { void fetchProfile(); };
     window.addEventListener("profile-refresh", onProfileRefresh);

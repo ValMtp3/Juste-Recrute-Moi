@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.23 - 2026-05-21
+
+- Stopped automatic graph refreshes from running heavy repair/vector sync work that could trip the 45s UI timeout.
+- Added graph-backed profile hydration so Profile shows project, skill, and evidence rows when the graph has them but the profile endpoint is sparse.
+- Kept saved profile snapshots visible when graph reads are temporarily busy instead of returning an empty profile.
+
 ## 1.0.22 - 2026-05-21
 
 - Fixed OTA runtime readiness so incomplete stale LanceDB payloads no longer count as installed.

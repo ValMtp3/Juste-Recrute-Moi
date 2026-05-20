@@ -323,16 +323,18 @@ def _safe_execute(query: str, params: dict | None = None):
         return None
 
 
-def _query_rows(query: str, params: dict | None = None) -> list[list]:
+def _query_rows(query: str, params: dict | None = None, *, require_result: bool = False) -> list[list]:
     rows: list[list] = []
     result = _safe_execute(query, params)
+    if result is None and require_result:
+        raise RuntimeError("graph query unavailable")
     while result is not None and result.has_next():
         rows.append(result.get_next())
     return rows
 
 
-def read_profile_from_graph() -> dict:
-    candidates = _query_rows("MATCH (n:Candidate) RETURN n.id, n.n, n.s")
+def read_profile_from_graph(*, require_graph: bool = False) -> dict:
+    candidates = _query_rows("MATCH (n:Candidate) RETURN n.id, n.n, n.s", require_result=require_graph)
     if candidates:
         candidates.sort(
             key=lambda row: (
@@ -346,20 +348,20 @@ def read_profile_from_graph() -> dict:
         candidate = ["", "", ""]
 
     skills = []
-    for row in _query_rows("MATCH (n:Skill) RETURN n.id, n.n, n.cat"):
+    for row in _query_rows("MATCH (n:Skill) RETURN n.id, n.n, n.cat", require_result=require_graph):
         skills.append({"id": row[0], "n": row[1], "cat": row[2]})
 
     projects = []
-    for row in _query_rows("MATCH (n:Project) RETURN n.id, n.title, n.stack, n.repo, n.impact"):
+    for row in _query_rows("MATCH (n:Project) RETURN n.id, n.title, n.stack, n.repo, n.impact", require_result=require_graph):
         projects.append({"id": row[0], "title": row[1], "stack": stack_list(row[2]), "repo": row[3], "impact": row[4]})
 
     experience = []
-    for row in _query_rows("MATCH (n:Experience) RETURN n.id, n.role, n.co, n.period, n.d"):
+    for row in _query_rows("MATCH (n:Experience) RETURN n.id, n.role, n.co, n.period, n.d", require_result=require_graph):
         experience.append({"id": row[0], "role": row[1], "co": row[2], "period": row[3], "d": row[4]})
 
     def read_text_nodes(label: str) -> list[str]:
         items: list[str] = []
-        for row in _query_rows(f"MATCH (n:{label}) RETURN n.title"):
+        for row in _query_rows(f"MATCH (n:{label}) RETURN n.title", require_result=require_graph):
             text = str(row[0] or "").strip()
             if text:
                 items.append(text)
@@ -383,7 +385,7 @@ def get_profile(db_path: str | None = None, *, prefer_snapshot: bool = True) -> 
     if prefer_snapshot and profile_has_data(snapshot):
         return snapshot
     try:
-        profile = normal_profile(read_profile_from_graph())
+        profile = normal_profile(read_profile_from_graph(require_graph=True))
     except Exception as exc:
         if snapshot:
             return snapshot

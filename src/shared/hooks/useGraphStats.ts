@@ -28,7 +28,7 @@ export function useGraphStats(api: ApiFetch | null) {
         setStats(prev => ({ ...prev, loaded: true, loading: false, request_error: message }));
       }
     };
-    const refresh = () => load(true);
+    const refresh = () => load(false);
     load();
     window.addEventListener("lead-updated", refresh);
     window.addEventListener("leads-refresh", refresh);

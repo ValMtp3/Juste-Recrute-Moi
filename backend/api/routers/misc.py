@@ -54,6 +54,14 @@ async def graph_stats(repo: Repository = Depends(get_repository), repair: bool =
     counts = await _safe_graph_step_async(repo.graph.graph_counts, "counts", errors, default={})
     available = await _safe_graph_step_async(repo.graph.graph_available, "availability", errors, default=False)
     graph = await _safe_graph_step_async(repo.graph.graph_snapshot, "snapshot", errors, default={"nodes": [], "edges": [], "available": False})
+    profile_snapshot = {}
+    if profile_repo:
+        profile_snapshot = await _safe_graph_step_async(
+            lambda: profile_repo.load_profile_snapshot() or profile_repo.get_profile(),
+            "profile snapshot",
+            errors,
+            default={},
+        )
     embedding = _embedding_space(repo)
     if embedding.get("error"):
         errors.append(f"embedding: {embedding['error']}")
@@ -74,6 +82,7 @@ async def graph_stats(repo: Repository = Depends(get_repository), repair: bool =
         "sync": {**sync, "profile": profile_sync, "vectors": vector_sync},
         "graph": graph,
         "embedding": embedding,
+        "profile": profile_snapshot,
     }
 
 
