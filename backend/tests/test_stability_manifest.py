@@ -148,6 +148,7 @@ def test_release_installer_stays_slim_and_runtime_pack_is_ota_only():
     assert "src-tauri/resources/sidecar-internal/" not in release
     assert "python313.dll" not in release
     assert "base_library.zip" not in release
+    assert release.count("path: src-tauri/resources/backend/") == 3
 
 
 def test_release_includes_frozen_backend_and_windows_smoke():

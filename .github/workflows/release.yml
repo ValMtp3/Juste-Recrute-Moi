@@ -411,7 +411,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: backend-sidecar-windows
-          path: src-tauri/resources/
+          path: src-tauri/resources/backend/
 
       - name: Download frontend dist
         uses: actions/download-artifact@v8
@@ -582,7 +582,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: backend-sidecar-macos
-          path: src-tauri/resources/
+          path: src-tauri/resources/backend/
 
       - name: Download frontend dist
         uses: actions/download-artifact@v8
@@ -758,7 +758,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: backend-sidecar-linux
-          path: src-tauri/resources/
+          path: src-tauri/resources/backend/
 
       - name: Download frontend dist
         uses: actions/download-artifact@v8
