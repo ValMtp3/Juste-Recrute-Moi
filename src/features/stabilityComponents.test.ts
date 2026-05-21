@@ -73,6 +73,12 @@ describe("FIX.md frontend stability contracts", () => {
     expect(updatePrompt).toContain("isRetryableUpdateDownloadError");
   });
 
+  it("does not persist pending update restart state across app launches", () => {
+    expect(updatePrompt).toContain("sessionStorage.getItem(PENDING_RESTART_KEY)");
+    expect(updatePrompt).toContain("sessionStorage.setItem(PENDING_RESTART_KEY");
+    expect(updatePrompt).not.toContain("localStorage.getItem(PENDING_RESTART_KEY)");
+  });
+
   it("does not present expected setup states as broken UI", () => {
     expect(app).toContain("isActionableSubsystemIssue");
     expect(app).toContain('name === "llm"');

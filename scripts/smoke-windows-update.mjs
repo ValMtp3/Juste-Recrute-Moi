@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
@@ -24,6 +24,14 @@ function staticChecks() {
   }
   if (!hooks.includes("$INSTDIR\\_internal")) {
     fail("NSIS preinstall hook must remove stale _internal directories from old onedir releases.");
+  }
+  if (!hooks.includes("NSIS_HOOK_POSTINSTALL")) {
+    fail("NSIS postinstall hook must repair Windows install metadata.");
+  }
+  for (const required of ["CreateShortCut", "InstallLocation", "QuietUninstallString", "User Pinned\\TaskBar"]) {
+    if (!hooks.includes(required)) {
+      fail(`NSIS postinstall hook is missing ${required}.`);
+    }
   }
   const tauriConfigPath = join(repoRoot, "src-tauri", "tauri.conf.json");
   const tauriConfig = JSON.parse(readFileSync(tauriConfigPath, "utf8"));
@@ -80,6 +88,39 @@ function snapshotUninstallRegistry(root) {
   return result.status === 0 ? snapshot : null;
 }
 
+function windowsShortcutPaths() {
+  if (process.platform !== "win32") return [];
+  return [
+    join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "JustHireMe.lnk"),
+    join(process.env.USERPROFILE || "", "Desktop", "JustHireMe.lnk"),
+    join(process.env.APPDATA || "", "Microsoft", "Internet Explorer", "Quick Launch", "User Pinned", "TaskBar", "JustHireMe.lnk"),
+  ].filter(Boolean);
+}
+
+function snapshotShortcutFiles(root) {
+  if (process.platform !== "win32") return [];
+  const snapshotDir = join(root, "shortcut-snapshot");
+  mkdirSync(snapshotDir, { recursive: true });
+  return windowsShortcutPaths().map((shortcut, index) => {
+    const backup = join(snapshotDir, `${index}.lnk`);
+    const existed = existsSync(shortcut);
+    if (existed) copyFileSync(shortcut, backup);
+    return { shortcut, backup, existed };
+  });
+}
+
+function restoreShortcutFiles(records) {
+  if (process.platform !== "win32") return;
+  for (const record of records) {
+    if (record.existed && existsSync(record.backup)) {
+      mkdirSync(dirname(record.shortcut), { recursive: true });
+      copyFileSync(record.backup, record.shortcut);
+    } else {
+      rmSync(record.shortcut, { force: true });
+    }
+  }
+}
+
 function restoreUninstallRegistry(snapshot) {
   if (process.platform !== "win32") return;
   if (snapshot && existsSync(snapshot)) {
@@ -90,6 +131,64 @@ function restoreUninstallRegistry(snapshot) {
     return;
   }
   runQuiet("reg", ["delete", uninstallRegistryKey, "/f"]);
+}
+
+function stripOuterQuotes(value) {
+  return String(value || "").trim().replace(/^"|"$/g, "");
+}
+
+function normalizeFsPath(value) {
+  return resolve(stripOuterQuotes(value)).toLowerCase();
+}
+
+function readRegistryValue(name) {
+  if (process.platform !== "win32") return "";
+  const result = spawnSync("reg", ["query", uninstallRegistryKey, "/v", name], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0) return "";
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`^\\s*${escaped}\\s+REG_\\w+\\s+(.+)$`, "im");
+  return stripOuterQuotes(result.stdout.match(pattern)?.[1] || "");
+}
+
+function readShortcutTarget(shortcut) {
+  const script = `$s=(New-Object -ComObject WScript.Shell).CreateShortcut('${shortcut.replace(/'/g, "''")}'); [Console]::Out.Write($s.TargetPath)`;
+  const result = spawnSync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  if (result.status !== 0) {
+    fail(`Could not inspect shortcut ${shortcut}: ${result.stderr || result.stdout}`);
+  }
+  return stripOuterQuotes(result.stdout);
+}
+
+function assertInstalledMetadata(installDir) {
+  if (process.platform !== "win32") return;
+  const expectedApp = join(installDir, "justhireme.exe");
+  const installLocation = readRegistryValue("InstallLocation");
+  if (normalizeFsPath(installLocation) !== normalizeFsPath(installDir)) {
+    fail(`Registry InstallLocation points to ${installLocation || "(missing)"}, expected ${installDir}.`);
+  }
+  const uninstallString = readRegistryValue("UninstallString");
+  if (!normalizeFsPath(uninstallString.replace(/\\uninstall\.exe.*$/i, "")).startsWith(normalizeFsPath(installDir))) {
+    fail(`Registry UninstallString points outside the install dir: ${uninstallString || "(missing)"}.`);
+  }
+
+  const shortcuts = windowsShortcutPaths();
+  const startMenuShortcut = shortcuts[0];
+  if (!existsSync(startMenuShortcut)) {
+    fail(`Missing Start Menu shortcut: ${startMenuShortcut}`);
+  }
+  for (const shortcut of shortcuts) {
+    if (!existsSync(shortcut)) continue;
+    const target = readShortcutTarget(shortcut);
+    if (normalizeFsPath(target) !== normalizeFsPath(expectedApp)) {
+      fail(`Shortcut ${shortcut} points to ${target || "(missing)"}, expected ${expectedApp}.`);
+    }
+  }
 }
 
 async function cleanupInstalledPackage(installDir, registrySnapshot) {
@@ -365,9 +464,11 @@ async function freshInstallerSmoke() {
   mkdirSync(installDir, { recursive: true });
   mkdirSync(appDataDir, { recursive: true });
   const registrySnapshot = snapshotUninstallRegistry(root);
+  const shortcutSnapshot = snapshotShortcutFiles(root);
 
   try {
     run(newInstaller, ["/S", `/D=${installDir}`]);
+    assertInstalledMetadata(installDir);
     await smokeInstalledSidecar(installDir, appDataDir);
     console.log(`Windows installed package smoke passed: ${installDir}`);
   } finally {
@@ -375,6 +476,7 @@ async function freshInstallerSmoke() {
     killImage("jhm-sidecar-next.exe");
     killImage("backend.exe");
     await cleanupInstalledPackage(installDir, registrySnapshot);
+    restoreShortcutFiles(shortcutSnapshot);
     await removeWithRetry(root, { allowFailure: true, label: "Windows installed package smoke temp dir" });
   }
 }
@@ -393,6 +495,7 @@ async function updateInstallerSmoke() {
   mkdirSync(installDir, { recursive: true });
   mkdirSync(appDataDir, { recursive: true });
   const registrySnapshot = snapshotUninstallRegistry(root);
+  const shortcutSnapshot = snapshotShortcutFiles(root);
 
   try {
     run(oldInstaller, ["/S", `/D=${installDir}`]);
@@ -409,6 +512,7 @@ async function updateInstallerSmoke() {
     }
 
     run(newInstaller, ["/S", `/D=${installDir}`]);
+    assertInstalledMetadata(installDir);
     if (appProcess && appProcess.exitCode === null) {
       killProcessTree(appProcess);
       await waitForChildClose(appProcess, 5_000);
@@ -422,6 +526,7 @@ async function updateInstallerSmoke() {
     killImage("jhm-sidecar-next.exe");
     killImage("backend.exe");
     await cleanupInstalledPackage(installDir, registrySnapshot);
+    restoreShortcutFiles(shortcutSnapshot);
     await removeWithRetry(root, { allowFailure: true, label: "Windows update smoke temp dir" });
   }
 }

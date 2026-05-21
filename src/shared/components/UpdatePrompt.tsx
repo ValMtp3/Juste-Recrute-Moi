@@ -76,7 +76,7 @@ export function UpdatePrompt() {
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
   const [dismissedVersion, setDismissedVersion] = useState(() => localStorage.getItem(DISMISSED_UPDATE_KEY) || "");
-  const [pendingRestartVersion, setPendingRestartVersion] = useState(() => localStorage.getItem(PENDING_RESTART_KEY) || "");
+  const [pendingRestartVersion, setPendingRestartVersion] = useState(() => sessionStorage.getItem(PENDING_RESTART_KEY) || "");
 
   useEffect(() => {
     let alive = true;
@@ -153,7 +153,7 @@ export function UpdatePrompt() {
 
   const relaunchIntoUpdate = async () => {
     try {
-      localStorage.removeItem(PENDING_RESTART_KEY);
+      sessionStorage.removeItem(PENDING_RESTART_KEY);
       await relaunch();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -196,7 +196,7 @@ export function UpdatePrompt() {
         await update.downloadAndInstall(onEvent, updateDownloadOptions(UPDATE_DOWNLOAD_RETRY_HEADERS));
       }
 
-      localStorage.setItem(PENDING_RESTART_KEY, update.version);
+      sessionStorage.setItem(PENDING_RESTART_KEY, update.version);
       setPendingRestartVersion(update.version);
       setState("relaunching");
       window.setTimeout(() => {
