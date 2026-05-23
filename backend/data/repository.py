@@ -27,6 +27,10 @@ class Repository:
         return import_module("data.graph.profile")
 
     @property
+    def resume_templates(self):
+        return import_module("data.sqlite.resume_templates")
+
+    @property
     def settings(self):
         return import_module("data.sqlite.settings")
 

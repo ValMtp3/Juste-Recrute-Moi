@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
-import shutil
 import tempfile
 import contextlib
 from pathlib import Path
@@ -82,8 +82,42 @@ class ProfileImportBody(BaseModel):
     achievements: list[ProfileEntry] = Field(default_factory=list)
 
 
-@contextlib.contextmanager
-def _temp_upload(file: UploadFile | None):
+def _read_profile_template(path: Path, logger) -> dict:
+    """Load the profile-import template, falling back to a built-in default if
+    the file is missing or corrupt (C3 — packaged builds must not 500 here)."""
+    try:
+        with open(path, encoding="utf-8") as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        logger.warning("profile template unavailable (%s); serving default", exc)
+        return _default_profile_template()
+
+
+def _default_profile_template() -> dict:
+    """Minimal valid profile-import template, used when the bundled JSON file
+    is missing (e.g. a packaged build that didn't ship it). Mirrors the shape
+    of data/profile_schema_example.json so the import UI keeps working."""
+    return {
+        "candidate": {"name": "Your Full Name", "summary": "2-4 sentence professional summary."},
+        "identity": {
+            "email": "you@example.com",
+            "phone": "",
+            "linkedin_url": "",
+            "github_url": "",
+            "website_url": "",
+            "city": "",
+        },
+        "skills": [{"name": "Python", "category": "language"}],
+        "experience": [{"role": "", "company": "", "period": "", "description": ""}],
+        "projects": [{"title": "", "stack": "", "repo": "", "impact": ""}],
+        "education": [{"title": ""}],
+        "certifications": [{"title": ""}],
+        "achievements": [{"title": ""}],
+    }
+
+
+@contextlib.asynccontextmanager
+async def _temp_upload(file: UploadFile | None):
     if not file or not file.filename:
         yield None
         return
@@ -92,9 +126,16 @@ def _temp_upload(file: UploadFile | None):
         suffix = ".txt"
     tmp_name = ""
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            shutil.copyfileobj(file.file, tmp)
-            tmp_name = tmp.name
+        # L1: read the upload asynchronously and write the temp file off the
+        # event loop so a large upload can't block other coroutines.
+        content = await file.read()
+
+        def _write() -> str:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(content)
+                return tmp.name
+
+        tmp_name = await asyncio.to_thread(_write)
         yield tmp_name
     finally:
         if tmp_name:
@@ -115,7 +156,7 @@ def create_router(manager, logger) -> APIRouter:
         if file and file.filename and file.size and file.size > MAX_UPLOAD_SIZE:
             raise HTTPException(status_code=413, detail=f"File too large (max {MAX_UPLOAD_SIZE // 1024 // 1024} MB)")
         try:
-            with _temp_upload(file) as pdf_path:
+            async with _temp_upload(file) as pdf_path:
                 profile = await get_profile_service().ingest_resume(raw, pdf_path)
                 if isinstance(profile, dict):
                     profile_payload = profile
@@ -192,8 +233,7 @@ def create_router(manager, logger) -> APIRouter:
     @router.get("/ingest/profile/template")
     async def get_profile_template():
         template_path = Path(__file__).resolve().parents[2] / "data" / "profile_schema_example.json"
-        with open(template_path, encoding="utf-8") as file:
-            return json.load(file)
+        return _read_profile_template(template_path, logger)
 
     @router.post("/ingest/portfolio")
     async def ingest_portfolio_endpoint(body: PortfolioIngestBody):

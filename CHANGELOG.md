@@ -1,5 +1,64 @@
 # Changelog
 
+## 1.0.32 - 2026-05-24
+
+- Fixed the profile delete bug: deleted skills/projects/experience no longer linger on the Knowledge page or reappear on the Profile page. Deletion tombstones are now applied to the graph snapshot and embedding-space read paths, and the delete UI keeps a loader until the backend-confirmed profile reloads.
+- Ingestion now rebuilds derived graph correlations (related skills, similar projects, project↔experience, credential↔skill) and re-embeds the profile after every source (resume, GitHub, LinkedIn, JSON import).
+- Surfaced the active embedding mode in evaluation reasoning so hash-fallback scores read as "runtime not installed," not a poor fit.
+- Added user-managed resume templates: upload your own resumes (PDF/DOCX) as reusable style guides, set a default, and pick one per job at generation time.
+- Moved the canonical skill alias map to the data layer to respect module import boundaries; made the GitHub ingestor enrichment-cap test derive its expectations from the configured limits.
+- Simplified the runtime-pack install banner and removed dead formatting helpers.
+
+## 1.0.31 - 2026-05-22
+
+- Fixed graph profile recovery so stale or partially-ingested vector rows no longer shadow the live graph state.
+- Improved semantic matching score normalization for hash-embedded profiles versus sentence-transformer profiles.
+- Added bad-vector-label pruning to prevent placeholder or template text from polluting vector search results.
+- Added regression tests for semantic scoring and vector connection edge cases.
+
+## 1.0.30 - 2026-05-22
+
+- Fixed runtime startup so the vector store initializes reliably when LanceDB is available but the module cache is stale.
+- Added health endpoint diagnostics for app data directory resolution and vector store readiness.
+- Added lazy-import guard in the vector store package init to avoid circular import failures.
+- Updated the SemanticRuntimePrompt polling timeout to 90 seconds for slower first-run extractions.
+
+## 1.0.29 - 2026-05-22
+
+- Hardened all data layer modules against missing or relocated app data directories on first launch.
+- Fixed graph connection to re-derive its base directory when the app data path changes between sessions.
+- Added path resolution tests for app data directory across bundled and development environments.
+
+## 1.0.28 - 2026-05-21
+
+- Bundled the runtime pack directly into desktop installers so first-run extraction no longer requires an internet download.
+- Added Tauri resource embedding for the runtime pack zip and extraction logic in the Rust sidecar launcher.
+- Updated CI release workflow to build and embed the runtime pack per-platform before packaging installers.
+
+## 1.0.27 - 2026-05-21
+
+- Fixed Windows update shortcut metadata so Start Menu entries survive in-place upgrades.
+- Expanded NSIS installer hooks to preserve and restore shortcut properties during updates.
+- Added Windows updater smoke tests covering shortcut persistence across upgrade cycles.
+
+## 1.0.26 - 2026-05-21
+
+- Fixed profile graph ingestion so skills, projects, and experience nodes stay consistent after repeated imports.
+- Improved graph connection upsert logic to handle duplicate primary key races without data loss.
+- Added frontend profile utility tests for graph-to-UI data mapping.
+
+## 1.0.25 - 2026-05-21
+
+- Added profile hydration from graph vectors so the Profile view shows project, skill, and credential rows even when the snapshot is sparse.
+- Added bad-vector-label detection to filter out placeholder or template entries from vector-backed profile reads.
+- Expanded profile service tests for vector-to-profile round-trip fidelity.
+
+## 1.0.24 - 2026-05-21
+
+- Fixed Windows updater persistence so pending-restart state does not carry over across fresh app launches.
+- Added NSIS installer hooks to clean up stale update state during upgrades.
+- Added stability component tests for updater restart flow and session storage cleanup.
+
 ## 1.0.23 - 2026-05-21
 
 - Stopped automatic graph refreshes from running heavy repair/vector sync work that could trip the 45s UI timeout.

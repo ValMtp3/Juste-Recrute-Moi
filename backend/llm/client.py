@@ -1,11 +1,15 @@
+import asyncio
+import concurrent.futures
 import logging
 import os
 import ipaddress
 import threading
+import time
 from urllib.parse import urlparse
 import httpx
 import anthropic
 import instructor
+import openai
 from openai import OpenAI
 from pydantic import BaseModel
 from data.repository import Repository, create_repository
@@ -13,7 +17,85 @@ from core.logging import get_logger
 
 _log = get_logger(__name__)
 
-_TIMEOUT = httpx.Timeout(300.0, connect=10.0)
+# 120s — a single LLM call taking longer than this is hung, not slow. (H5)
+_TIMEOUT = httpx.Timeout(120.0, connect=10.0)
+
+# Number of retries (after the first attempt) for transient LLM errors. (C2)
+_MAX_LLM_RETRIES = 3
+_RETRY_BASE_DELAY = 1.0  # seconds; doubles each retry → 1s, 2s, 4s
+
+# H5: a dedicated, bounded thread pool for blocking LLM calls. Using the default
+# asyncio executor meant a burst of slow (up to 120s) generations could occupy
+# every default worker and starve all other to_thread work (DB reads, file IO).
+# Keeping LLM calls on their own pool caps the blast radius at max_workers.
+LLM_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="llm")
+
+
+async def acall_llm(s: str, u: str, m: type[BaseModel], step: str | None = None):
+    """Async wrapper that runs call_llm on the dedicated LLM thread pool (H5)."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(LLM_EXECUTOR, call_llm, s, u, m, step)
+
+
+async def acall_raw(s: str, u: str, step: str | None = None) -> str:
+    """Async wrapper that runs call_raw on the dedicated LLM thread pool (H5)."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(LLM_EXECUTOR, call_raw, s, u, step)
+
+
+def _is_retryable_llm_error(exc: Exception) -> bool:
+    """True for transient errors worth retrying (rate limit, connection, 5xx).
+
+    Permanent errors — authentication, invalid request, 4xx other than 429 —
+    return False so they propagate immediately rather than wasting retries.
+    """
+    if isinstance(
+        exc,
+        (
+            openai.RateLimitError,
+            openai.APIConnectionError,
+            openai.APITimeoutError,
+            anthropic.RateLimitError,
+            anthropic.APIConnectionError,
+            anthropic.APITimeoutError,
+        ),
+    ):
+        return True
+    # HTTP 5xx from either SDK (APIStatusError subclasses expose status_code).
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int) and 500 <= status < 600:
+        return True
+    return False
+
+
+def is_transient_llm_error(exc: Exception) -> bool:
+    """Public alias of the transient-error classifier (used by callers that
+    need to distinguish retryable LLM failures from permanent ones, e.g. M4)."""
+    return _is_retryable_llm_error(exc)
+
+
+def _retry_llm_call(fn, *, max_retries: int = _MAX_LLM_RETRIES):
+    """Run ``fn`` with exponential backoff on transient LLM errors.
+
+    Retries up to ``max_retries`` times with 1s/2s/4s delays. Permanent errors
+    are re-raised on the first occurrence.
+    """
+    delay = _RETRY_BASE_DELAY
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except Exception as exc:
+            if attempt >= max_retries or not _is_retryable_llm_error(exc):
+                raise
+            _log.warning(
+                "transient LLM error (attempt %d/%d) — retrying in %.0fs: %s",
+                attempt + 1,
+                max_retries,
+                delay,
+                exc,
+            )
+            time.sleep(delay)
+            delay *= 2
 # STABILITY: thread-safe LLM repository singleton
 _repo_lock = threading.RLock()
 _repo: Repository = create_repository()
@@ -240,7 +322,13 @@ def call_llm(s: str, u: str, m: type[BaseModel], step: str | None = None):
 
     Pass `step` (e.g. "evaluator", "scout", "ingestor") to use that step's
     per-step provider/key/model settings. Omit for global defaults.
+
+    Transient errors (rate limit, connection, 5xx) are retried with backoff.
     """
+    return _retry_llm_call(lambda: _call_llm_once(s, u, m, step))
+
+
+def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
     p, k, model = _resolve(step)
 
     if p == "anthropic":
@@ -331,7 +419,9 @@ def call_llm(s: str, u: str, m: type[BaseModel], step: str | None = None):
             return _parse_fallback(u, m)
         if p == "perplexity":
             schema = m.model_json_schema()
-            raw = call_raw(
+            # _call_raw_once (not call_raw) — the outer _retry_llm_call already
+            # wraps this call_llm invocation; nesting would multiply retries.
+            raw = _call_raw_once(
                 s + "\nReturn only valid JSON matching this schema:\n" + str(schema),
                 u,
                 step=step,
@@ -376,7 +466,13 @@ def call_raw(s: str, u: str, step: str | None = None) -> str:
     Call LLM for free-form text output.
 
     Pass `step` (e.g. "generator") to use that step's per-step settings.
+
+    Transient errors (rate limit, connection, 5xx) are retried with backoff.
     """
+    return _retry_llm_call(lambda: _call_raw_once(s, u, step))
+
+
+def _call_raw_once(s: str, u: str, step: str | None = None) -> str:
     p, k, model = _resolve(step)
 
     if p == "anthropic":

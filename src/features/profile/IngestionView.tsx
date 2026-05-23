@@ -4,6 +4,14 @@ import Icon from "../../shared/components/Icon";
 import type { ApiFetch } from "../../types";
 
 async function responseErrorMessage(response: Response, fallback: string) {
+  // M3: surface rate-limit cooldown using the standard Retry-After header so
+  // the user sees "Please wait X seconds" instead of a generic 429 error.
+  if (response.status === 429) {
+    const retryAfter = Number(response.headers.get("Retry-After"));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) {
+      return `Too many requests. Please wait ${retryAfter} second${retryAfter === 1 ? "" : "s"} and try again.`;
+    }
+  }
   try {
     const data = await response.clone().json();
     const detail = data?.detail ?? data?.error;

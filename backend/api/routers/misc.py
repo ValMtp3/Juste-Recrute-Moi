@@ -55,6 +55,7 @@ async def graph_stats(repo: Repository = Depends(get_repository), repair: bool =
     counts = await _safe_graph_step_async(repo.graph.graph_counts, "counts", errors, default={})
     available = await _safe_graph_step_async(repo.graph.graph_available, "availability", errors, default=False)
     graph = await _safe_graph_step_async(repo.graph.graph_snapshot, "snapshot", errors, default={"nodes": [], "edges": [], "available": False})
+    graph = _apply_graph_deletions(graph)
     profile_snapshot = {}
     if profile_repo:
         profile_snapshot = await _safe_graph_step_async(
@@ -63,7 +64,7 @@ async def graph_stats(repo: Repository = Depends(get_repository), repair: bool =
             errors,
             default={},
         )
-    embedding = _embedding_space(repo)
+    embedding = _apply_embedding_deletions(_embedding_space(repo))
     if embedding.get("error"):
         errors.append(f"embedding: {embedding['error']}")
     graph_error = "" if available else repo.graph.graph_error()
@@ -85,6 +86,29 @@ async def graph_stats(repo: Repository = Depends(get_repository), repair: bool =
         "embedding": embedding,
         "profile": profile_snapshot,
     }
+
+
+def _apply_graph_deletions(graph: dict) -> dict:
+    # Keep the Knowledge page (raw Kùzu snapshot) consistent with the deletion
+    # tombstones the Profile page applies. Failsafe: never break the endpoint.
+    try:
+        from data.graph.profile import filter_graph_deletions
+
+        return filter_graph_deletions(graph)
+    except Exception as exc:
+        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_apply_graph_deletions: %s', exc)
+        return graph
+
+
+def _apply_embedding_deletions(embedding: dict) -> dict:
+    # Same as above for the raw LanceDB embedding-space points.
+    try:
+        from data.graph.profile import filter_embedding_deletions
+
+        return filter_embedding_deletions(embedding)
+    except Exception as exc:
+        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_apply_embedding_deletions: %s', exc)
+        return embedding
 
 
 def _safe_graph_step(fn, label: str, errors: list[str], default=None):

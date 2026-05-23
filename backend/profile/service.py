@@ -17,6 +17,20 @@ class ProfileService:
     def refresh_profile_snapshot(self) -> None:
         graph_profile.refresh_profile_snapshot()
 
+    def _queue_post_ingest_sync(self) -> str:
+        """Rebuild correlations + re-embed in the background after an ingest.
+
+        Runs sync_profile_relationships() then sync_vectors_from_graph() so the
+        knowledge graph gains derived correlation edges and the vector tables
+        stay in lockstep, without blocking the ingest response.
+        """
+        try:
+            asyncio.get_running_loop().create_task(run_graph(graph_profile.rebuild_profile_correlations))
+            return "queued"
+        except Exception as log_exc:
+            logging.getLogger(__name__).warning('suppressed exception in backend/profile/service.py:_queue_post_ingest_sync: %s', log_exc)
+            return "skipped"
+
     def update_candidate(self, name: str, summary: str) -> dict:
         return graph_profile.update_candidate(name, summary)
 
@@ -79,11 +93,7 @@ class ProfileService:
         await run_graph(self.refresh_profile_snapshot)
         if graph_profile.profile_has_data(snapshot):
             await run_graph(graph_profile.save_profile_snapshot, snapshot)
-        try:
-            asyncio.get_running_loop().create_task(run_graph(graph_profile.sync_vectors_from_graph))
-        except Exception as log_exc:
-            logging.getLogger(__name__).warning('suppressed exception in backend/profile/service.py:ingest_resume: %s', log_exc)
-            pass
+        self._queue_post_ingest_sync()
         return result
 
     async def ingest_linkedin(self, zip_bytes: bytes) -> dict:
@@ -144,6 +154,8 @@ class ProfileService:
                 logging.getLogger(__name__).warning('suppressed exception in backend/profile/service.py:ingest_linkedin: %s', exc)
                 errors.append(f"cert: {exc}")
 
+        self._queue_post_ingest_sync()
+
         return {
             "status": "ok" if not errors else "partial",
             "stats": parsed["stats"],
@@ -197,6 +209,8 @@ class ProfileService:
             settings_update["website_url"] = github_user["blog"]
         if settings_update:
             await asyncio.to_thread(settings.save_settings, settings_update)
+
+        self._queue_post_ingest_sync()
 
         return {
             "status": "ok" if not errors else "partial",
@@ -329,12 +343,7 @@ class ProfileService:
                 logging.getLogger(__name__).warning('suppressed exception in backend/profile/service.py:import_profile_data: %s', exc)
                 errors.append(f"profile snapshot fallback: {exc}")
 
-        try:
-            asyncio.get_running_loop().create_task(run_graph(graph_profile.sync_vectors_from_graph))
-            vector_status = "queued"
-        except Exception as log_exc:
-            logging.getLogger(__name__).warning('suppressed exception in backend/profile/service.py:import_profile_data: %s', log_exc)
-            vector_status = "skipped"
+        vector_status = self._queue_post_ingest_sync()
 
         return {"status": "ok" if not errors else "partial", "stats": {**stats, "vector_sync": vector_status}, "errors": errors}
 

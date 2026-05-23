@@ -5,6 +5,7 @@ import base64
 import html
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from urllib.parse import urljoin, urlparse, urlunparse
 
@@ -18,6 +19,11 @@ _log = get_logger(__name__)
 MAX_PAGES = 100
 MAX_TEXT_PER_PAGE = 200000
 MAX_LLM_TEXT = 120000
+# M6: cap the whole multi-page crawl. The soft deadline stops queueing new
+# pages and returns what was collected; the hard backstop (soft + buffer) is an
+# asyncio.wait_for that unblocks if a single await hangs past its own timeout.
+_CRAWL_SESSION_TIMEOUT = 300
+_CRAWL_HARD_TIMEOUT = _CRAWL_SESSION_TIMEOUT + 30
 LIKELY_INTERNAL_PATHS = (
     "",
     "about",
@@ -199,10 +205,24 @@ async def ingest_portfolio_url(url: str) -> dict:
     fetch_error: str | None = None
 
     try:
-        pages, screenshot_b64 = await _crawl_portfolio_browser(start_url)
+        # M6: hard backstop in case a single page await hangs past its own
+        # timeout; the soft deadline inside the crawl handles the normal case
+        # and returns partial pages via a normal return.
+        pages, screenshot_b64 = await asyncio.wait_for(
+            _crawl_portfolio_browser(start_url),
+            timeout=_CRAWL_HARD_TIMEOUT,
+        )
         if not pages:
             fetch_error = "Browser could not access the portfolio site."
             pages = await asyncio.to_thread(_crawl_portfolio_http, start_url)
+    except asyncio.TimeoutError:
+        _log.warning(
+            "portfolio crawl exceeded %ss hard limit for %s; falling back to HTTP",
+            _CRAWL_HARD_TIMEOUT,
+            start_url,
+        )
+        fetch_error = "Portfolio crawl timed out."
+        pages = await asyncio.to_thread(_crawl_portfolio_http, start_url)
     except Exception as exc:
         _log.warning("portfolio browser crawl failed for %s: %s; trying HTTP fallback", start_url, exc)
         fetch_error = str(exc)
@@ -293,6 +313,9 @@ async def _crawl_portfolio_browser(url: str) -> tuple[list[PageSnapshot], str]:
 
     pages: list[PageSnapshot] = []
     screenshot_b64 = ""
+    # M6: a soft deadline stops queueing new pages and returns what was
+    # collected so far, bounding the otherwise-unlimited multi-page crawl.
+    deadline = time.monotonic() + _CRAWL_SESSION_TIMEOUT
     async with async_playwright() as pw:
         browser = await launch_chromium(pw, headless=True)
         context = await browser.new_context(
@@ -303,6 +326,13 @@ async def _crawl_portfolio_browser(url: str) -> tuple[list[PageSnapshot], str]:
         queue = _seed_urls(url)
         seen: set[str] = set()
         while queue and len(pages) < MAX_PAGES:
+            if time.monotonic() > deadline:
+                _log.warning(
+                    "portfolio crawl hit %ss session limit; returning %d page(s)",
+                    _CRAWL_SESSION_TIMEOUT,
+                    len(pages),
+                )
+                break
             current = queue.pop(0)
             normalized = _canonical_url(current)
             if normalized in seen or not _same_origin(url, normalized):
@@ -483,7 +513,7 @@ async def _extract_with_llm(url: str, pages: list[PageSnapshot], deterministic: 
         provider, api_key, _model = _resolve("ingestor")
         if provider != "ollama" and not api_key:
             return None
-        from llm import call_llm
+        from llm import acall_llm
 
         system = (
             "You are JustHireMe's portfolio-ingestion agent. Extract factual profile data from portfolio pages. "
@@ -500,7 +530,7 @@ async def _extract_with_llm(url: str, pages: list[PageSnapshot], deterministic: 
             "Return candidate_name, candidate_summary, skills, projects, experience, education, certifications, achievements. "
             "For projects include title, stack, repo, impact. Use visible evidence only."
         )
-        return await asyncio.to_thread(call_llm, system, user_prompt, _PortfolioExtract, "ingestor")
+        return await acall_llm(system, user_prompt, _PortfolioExtract, "ingestor")
     except Exception as exc:
         _log.warning("portfolio LLM extract failed: %s", exc)
         return None
@@ -607,10 +637,16 @@ def _project_block(lines: list[str], index: int) -> str:
 
 def _filter_quality_projects(projects: list[dict[str, str]]) -> list[dict[str, str]]:
     ranked: list[tuple[int, dict[str, str]]] = []
+    filtered_count = 0
     for project in projects:
         score = _project_quality_score(project)
-        if score >= 20:
+        if score >= 15:
             ranked.append((score, {**project, "quality_score": score}))
+        else:
+            filtered_count += 1
+            _log.debug("portfolio project filtered (score=%d): %s", score, project.get("title", "?")[:60])
+    if filtered_count:
+        _log.info("portfolio: filtered %d low-quality projects out of %d total", filtered_count, len(projects))
     ranked.sort(key=lambda item: item[0], reverse=True)
     return [project for _score, project in ranked]
 
@@ -711,9 +747,10 @@ def _is_noise_title(title: str) -> bool:
         return True
     if re.match(r"^\d+\s*/\s*\w+", lower):
         return True
-    if re.search(r"\b(show all|view all|open|available for|book a|free call|resume|source code|live demo|watch_demo|live_demo|watch demo|demo)\b", lower):
+    if re.search(r"\b(show all|view all|available for|book a|free call|resume|watch_demo|live_demo|watch demo)\b", lower):
         return True
-    if re.search(r"\b\d+[\d,.]*\s*(tools?|merged prs?|stars earned|total commits|launch views|views|likes|reposts|replies|integrations|tests|days|stars|repos|commits|prs)\b", lower):
+    # Only filter metric-only titles, not titles that happen to contain metrics
+    if re.fullmatch(r"\d+[\d,.]*\s*(tools?|merged prs?|stars earned|total commits|launch views|views|likes|reposts|replies|integrations|tests|days|stars|repos|commits|prs)", lower.strip()):
         return True
     if _looks_like_stack_cluster(title):
         return True

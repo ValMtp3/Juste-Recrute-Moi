@@ -635,9 +635,17 @@ def _semantic_criterion(jd: str, candidate_data: dict, weight: int) -> Criterion
             + ", ".join(f"{name} ({sim:.2f})" for name, sim in profile_matches[:1])
         )
     source = result.get("source") or (result.get("raw") or {}).get("source") or "semantic"
-    reason = f"embedding similarity vs current profile ({source})"
+    mode = result.get("mode") or (result.get("raw") or {}).get("mode") or ""
+    descriptor = f"{source}, {mode}" if mode else source
+    reason = f"embedding similarity vs current profile ({descriptor})"
     if parts:
         reason += " - " + "; ".join(parts)
+    # Make degraded scoring legible: a hash-fallback score means the local
+    # embedding runtime pack isn't installed, so matching is approximate.
+    from ranking.semantic import _is_semantic_provider
+
+    if mode and not _is_semantic_provider(mode):
+        reason += " [degraded: local embedding runtime not installed, scores approximate]"
     return CriterionScore("Semantic fit", score, weight, reason)
 
 

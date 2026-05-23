@@ -17,6 +17,12 @@ from core.paths import app_data_dir
 
 _log = get_logger(__name__)
 
+
+class GraphBusyError(RuntimeError):
+    """Raised when the graph lock cannot be acquired within the timeout."""
+    pass
+
+
 try:
     import kuzu
 except Exception as exc:
@@ -68,30 +74,40 @@ def _prepare_graph_path() -> bool:
 
 _prepare_graph_path()
 
-def _ensure_connection() -> bool:
+def _ensure_connection_unlocked() -> bool:
+    """Connect (and initialize the schema) if needed.
+
+    C4: the caller MUST already hold ``_graph_lock``. ``_prepare_graph_path``
+    can null out ``db``/``conn`` when the data dir changes, so it must run under
+    the lock — otherwise another thread executing a query could observe ``conn``
+    being torn out from under it.
+    """
     global db, conn, _GRAPH_ERROR
     _prepare_graph_path()
     if db is not None and conn is not None:
         return True
+    try:
+        if not _GRAPH_DIR_READY:
+            raise RuntimeError(_GRAPH_ERROR or "Graph directory is not available")
+        if kuzu is None:
+            raise RuntimeError(_KUZU_IMPORT_ERROR or "Kuzu is not available")
+        db = kuzu.Database(GRAPH_PATH)
+        conn = kuzu.Connection(db)
+        _GRAPH_ERROR = ""
+        _init_graph_unlocked()
+        return True
+    except Exception as exc:
+        db = None
+        conn = None
+        _GRAPH_ERROR = str(exc)
+        _log.warning("graph store disabled: %s", exc)
+        return False
+
+
+def _ensure_connection() -> bool:
+    """Public connection check; acquires the graph lock internally (C4)."""
     with _graph_lock:
-        if db is not None and conn is not None:
-            return True
-        try:
-            if not _GRAPH_DIR_READY:
-                raise RuntimeError(_GRAPH_ERROR or "Graph directory is not available")
-            if kuzu is None:
-                raise RuntimeError(_KUZU_IMPORT_ERROR or "Kuzu is not available")
-            db = kuzu.Database(GRAPH_PATH)
-            conn = kuzu.Connection(db)
-            _GRAPH_ERROR = ""
-            _init_graph_unlocked()
-            return True
-        except Exception as exc:
-            db = None
-            conn = None
-            _GRAPH_ERROR = str(exc)
-            _log.warning("graph store disabled: %s", exc)
-            return False
+        return _ensure_connection_unlocked()
 
 
 async def run_graph(fn, *args, **kwargs):
@@ -106,6 +122,8 @@ def init_graph() -> None:
 
 
 def _init_graph_unlocked() -> None:
+    # Runs while _graph_lock is held and immediately after conn is created, so
+    # it executes directly against conn rather than re-entering execute_query.
     if conn is None:
         return
     for statement in [
@@ -133,19 +151,30 @@ def _init_graph_unlocked() -> None:
         "CREATE REL TABLE IF NOT EXISTS PROJECT_SUPPORTS_EXPERIENCE(FROM Project TO Experience)",
         "CREATE REL TABLE IF NOT EXISTS REQUIRES(FROM JobLead TO Skill)",
     ]:
-        execute_query(statement)
+        conn.execute(statement)
+
+
+def _execute_query_unlocked(query: str, params: dict | None = None):
+    """Run a query assuming ``_graph_lock`` is already held by the caller (M2).
+
+    Use this from code paths that have already acquired the lock (e.g.
+    ``sync_profile_relationships``) to avoid relying on RLock reentrancy.
+    """
+    if not _ensure_connection_unlocked() or conn is None:
+        return None
+    if params:
+        return conn.execute(query, params)
+    return conn.execute(query)
 
 
 def execute_query(query: str, params: dict | None = None):
-    if not _ensure_connection() or conn is None:
-        return None
+    # C4: hold the lock for the entire connection-check + execute, so the
+    # connection cannot be reset between ensuring it exists and using it.
     if not _graph_lock.acquire(timeout=_GRAPH_LOCK_TIMEOUT_SECONDS):
         _log.warning("graph lock acquisition timed out")
-        return None
+        raise GraphBusyError("graph lock acquisition timed out")
     try:
-        if params:
-            return conn.execute(query, params)
-        return conn.execute(query)
+        return _execute_query_unlocked(query, params)
     finally:
         _graph_lock.release()
 
@@ -184,6 +213,12 @@ def graph_counts() -> dict:
 
 
 def sync_profile_relationships() -> dict:
+    # M2: this function holds _graph_lock for the whole batch to keep the
+    # rebuild atomic, then calls execute_query/_query_rows which re-acquire the
+    # same lock. That is safe ONLY because _graph_lock is a reentrant RLock —
+    # the same thread can re-acquire it without blocking. Do not change
+    # _graph_lock to a plain Lock without converting these calls to
+    # _execute_query_unlocked.
     if not _ensure_connection() or conn is None:
         return {"status": "disabled", "linked": 0, "error": graph_error()}
     linked = 0
@@ -370,6 +405,19 @@ def _skill_ids_in_text(text: str, skills_by_name: dict[str, str]) -> set[str]:
         pattern = r"(?<![a-z0-9+#.-])" + re.escape(skill_name) + r"(?![a-z0-9+#.-])"
         if re.search(pattern, text_value):
             out.add(skill_id)
+    # Also check canonical aliases — e.g. "ts" in text should match "TypeScript" skill
+    try:
+        from data.skill_taxonomy import SKILL_CANONICAL
+        for alias, canonical in SKILL_CANONICAL.items():
+            if len(alias) < 2:
+                continue
+            canonical_key = canonical.lower()
+            if canonical_key in skills_by_name:
+                pattern = r"(?<![a-z0-9+#.-])" + re.escape(alias) + r"(?![a-z0-9+#.-])"
+                if re.search(pattern, text_value):
+                    out.add(skills_by_name[canonical_key])
+    except ImportError:
+        pass
     return out
 
 

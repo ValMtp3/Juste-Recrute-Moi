@@ -3,6 +3,7 @@ import Icon from "../../shared/components/Icon";
 import { AutomationSettings } from "./panels/AutomationSettings";
 import { DiscoverySettings } from "./panels/DiscoverySettings";
 import { GlobalSettings } from "./panels/GlobalSettings";
+import { ResumeTemplatesPanel } from "./panels/ResumeTemplatesPanel";
 import { StepSettings } from "./panels/StepSettings";
 import { EMPTY, type Cfg } from "./panels/shared";
 import type { ApiFetch } from "../../types";
@@ -65,6 +66,7 @@ export default function SettingsModal({ api, onClose }: Props) {
 
         <div className="scroll" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 22 }}>
           <GlobalSettings cfg={cfg} set={set} onChange={onChange} prov={prov} api={api} />
+          <ResumeTemplatesPanel api={api} />
           <StepSettings cfg={cfg} onChange={onChange} />
           <DiscoverySettings cfg={cfg} set={set} onChange={onChange} />
           <AutomationSettings cfg={cfg} onChange={onChange} />

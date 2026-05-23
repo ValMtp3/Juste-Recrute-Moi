@@ -45,17 +45,6 @@ type PromptState = "checking" | "waiting" | "required" | "installing" | "restart
 const ACTIVE_PROGRESS = new Set(["starting", "downloading", "extracting", "copying", "verifying", "syncing"]);
 const RUNTIME_STATUS_TIMEOUT_MS = 90000;
 
-function formatBytes(value: number) {
-  if (!value) return "0 MB";
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatDuration(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "a moment";
-  if (seconds < 60) return `${Math.max(1, Math.round(seconds))}s`;
-  return `${Math.round(seconds / 60)} min`;
-}
-
 function isActiveProgress(progress?: RuntimeProgress) {
   return Boolean(progress?.active || (progress?.status && ACTIVE_PROGRESS.has(progress.status)));
 }
@@ -73,57 +62,35 @@ function isBackendConnectivityError(message: string) {
   return normalized.includes("local backend timed out") || normalized.includes("local backend is unreachable") || normalized.includes("failed to fetch");
 }
 
-function statusMessage(state: PromptState, payload: RuntimePayload | null, error: string) {
+function bannerMessage(state: PromptState, payload: RuntimePayload | null, error: string) {
   if (state === "waiting") {
     return error
-      ? `${error} Retrying automatically while the local backend starts.`
-      : "Waiting for the local backend to start before installing the required runtime pack.";
+      ? `${error} Retrying automatically.`
+      : "Waiting for local backend to start.";
   }
   if (state === "installing") {
-    return payload?.progress?.message || "Installing LanceDB, PyArrow, embeddings, and Playwright Chromium.";
+    const progress = payload?.progress;
+    if (!progress) return "Installing runtime pack…";
+    const message = progress.message || "Installing runtime pack…";
+    const percent = Number.isFinite(progress.percent) ? Math.min(100, Math.max(0, Math.round(progress.percent || 0))) : null;
+    if (percent !== null && percent > 0) return `${message} ${percent}%`;
+    return message;
   }
   if (state === "restart_required") {
-    return error || payload?.vector?.error || "The runtime pack installed successfully. Restart JustHireMe to finish loading native vector search.";
+    return error || payload?.vector?.error || "Runtime pack installed. Restart to finish loading.";
   }
   if (state === "restarting") {
-    return "Reopening JustHireMe so native vector search can load cleanly.";
+    return "Reopening JustHireMe…";
   }
   if (error) return error;
-  const vectorError = payload?.vector?.error || payload?.install_error;
-  if (vectorError) return vectorError;
-  const asset = payload?.runtime?.asset || "JustHireMe runtime pack";
-  return `${asset} installs LanceDB, vector search support, the local embedder, and Playwright Chromium in one download.`;
-}
-
-function progressLabel(state: PromptState, progress: RuntimeProgress | undefined, now: number) {
-  if (state === "checking") return "Checking required runtime pack.";
-  if (state === "waiting") return "Waiting for the local backend; retrying every few seconds.";
-  if (state === "restarting") return "Reopening JustHireMe.";
-  if (!progress) return "Preparing JustHireMe runtime pack.";
-
-  const message = progress.message || "Installing JustHireMe runtime pack.";
-  const percent = Number.isFinite(progress.percent) ? Math.min(100, Math.max(0, Math.round(progress.percent || 0))) : null;
-  const downloaded = progress.downloaded || 0;
-  const total = progress.total || 0;
-  const startedAt = progress.started_at ? progress.started_at * 1000 : 0;
-  const elapsedSeconds = startedAt ? Math.max(1, (now - startedAt) / 1000) : 0;
-  const bytesPerSecond = elapsedSeconds > 0 && downloaded > 0 ? downloaded / elapsedSeconds : 0;
-  const etaSeconds = total && bytesPerSecond > 0 ? Math.max(0, (total - downloaded) / bytesPerSecond) : null;
-
-  if (total && downloaded) {
-    const eta = etaSeconds !== null ? `, about ${formatDuration(etaSeconds)} left` : "";
-    return `${message} ${percent ?? 0}% - ${formatBytes(downloaded)} of ${formatBytes(total)}${eta}`;
-  }
-  if (downloaded) return `${message} ${formatBytes(downloaded)} downloaded - estimating time remaining.`;
-  if (percent !== null && percent > 0) return `${message} ${percent}%.`;
-  return message;
+  return "Runtime pack required for semantic matching.";
 }
 
 export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
   const [state, setState] = useState<PromptState>("checking");
   const [payload, setPayload] = useState<RuntimePayload | null>(null);
   const [error, setError] = useState("");
-  const [now, setNow] = useState(Date.now());
+  const [dismissed, setDismissed] = useState(false);
   const stateRef = useRef<PromptState>("checking");
   const installInFlightRef = useRef(false);
   const readyDispatchedRef = useRef(false);
@@ -133,16 +100,14 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
   const updateState = useCallback((next: PromptState) => {
     stateRef.current = next;
     setState(next);
+    // Un-dismiss when something important happens
+    if (next === "restart_required" || next === "error") {
+      setDismissed(false);
+    }
   }, []);
 
   useEffect(() => {
     stateRef.current = state;
-  }, [state]);
-
-  useEffect(() => {
-    if (state !== "installing") return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
   }, [state]);
 
   const markReady = useCallback(() => {
@@ -175,7 +140,7 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
       return;
     }
     if (next.progress?.status === "error") {
-      setError(next.progress.error || next.progress.message || next.install_error || "Resume matching runtime install failed.");
+      setError(next.progress.error || next.progress.message || next.install_error || "Runtime install failed.");
       updateState("error");
       return;
     }
@@ -228,7 +193,7 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
     statusRequestRef.current += 1;
     updateState("installing");
     setError("");
-    setNow(Date.now());
+    setDismissed(false);
     try {
       const response = await api("/api/v1/runtime/vector/install", { method: "POST", timeoutMs: 30000 });
       const next = await response.json().catch(() => ({})) as RuntimePayload & { detail?: string };
@@ -257,53 +222,57 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
     }
   };
 
-  const message = useMemo(() => statusMessage(state, payload, error), [state, payload, error]);
-  const label = useMemo(() => progressLabel(state, payload?.progress, now), [state, payload?.progress, now]);
+  const message = useMemo(() => bannerMessage(state, payload, error), [state, payload, error]);
   const progress = payload?.progress;
   const progressPercent = Number.isFinite(progress?.percent) ? Math.min(100, Math.max(0, Math.round(progress?.percent || 0))) : null;
   const needsRestart = runtimeNeedsRestart(payload);
   const isBusy = state === "checking" || state === "waiting" || state === "installing" || state === "restarting";
   const canInstall = !needsRestart && (state === "required" || (state === "error" && Boolean(payload) && payload?.required !== false));
-  const title = state === "waiting" ? "Starting local service" : needsRestart || state === "restarting" ? "Restart JustHireMe" : "Install required runtime pack";
 
+  // Don't render when ready, dismissed, or still checking
   if (state === "ready") return null;
+  if (dismissed && state !== "restart_required" && state !== "error") return null;
+  if (state === "checking") return null;
 
   return (
-    <div className="semantic-runtime-backdrop" role="presentation">
-      <section className="semantic-runtime-dialog" role="dialog" aria-modal="true" aria-labelledby="semantic-runtime-title">
-        <div className="semantic-runtime-mark" aria-hidden="true">S</div>
-        <div>
-          <div className="eyebrow">Required runtime pack</div>
-          <h2 id="semantic-runtime-title">{title}</h2>
-          <p className={state === "error" ? "update-error" : undefined}>{message}</p>
-          {isBusy && (
-            <div className={`update-progress ${progressPercent === null || state !== "installing" ? "is-indeterminate" : ""}`}>
-              <div style={progressPercent !== null && state === "installing" ? { width: `${progressPercent}%` } : undefined} />
-              <span>{label}</span>
-            </div>
-          )}
-          {payload?.sync?.status === "ok" && (
-            <p className="semantic-runtime-note">Identity graph vectors synced: {payload.sync.synced ?? 0}</p>
-          )}
+    <div className="semantic-runtime-banner" role="status" aria-live="polite">
+      <div className="semantic-runtime-banner-content">
+        <div className="semantic-runtime-banner-icon" aria-hidden="true">S</div>
+        <div className="semantic-runtime-banner-text">
+          <span className={state === "error" ? "update-error" : undefined}>{message}</span>
         </div>
-        <div className="semantic-runtime-actions">
+        {isBusy && state === "installing" && (
+          <div className={`semantic-runtime-banner-progress ${progressPercent === null ? "is-indeterminate" : ""}`}>
+            <div style={progressPercent !== null ? { width: `${progressPercent}%` } : undefined} />
+          </div>
+        )}
+        <div className="semantic-runtime-banner-actions">
           {needsRestart && (
-            <button className="btn btn-accent" onClick={() => void restartApp()} disabled={state === "restarting"}>
-              {state === "restarting" ? "Restarting..." : "Restart"}
+            <button className="btn btn-accent btn-sm" onClick={() => void restartApp()} disabled={state === "restarting"}>
+              {state === "restarting" ? "Restarting…" : "Restart"}
             </button>
           )}
           {canInstall && (
-            <button className="btn btn-accent" onClick={install} disabled={isBusy}>
-              Install now
+            <button className="btn btn-accent btn-sm" onClick={install} disabled={isBusy}>
+              Install
             </button>
           )}
           {(state === "waiting" || state === "error") && (
-            <button className="btn btn-ghost" onClick={() => void loadStatus()}>
-              Retry check
+            <button className="btn btn-ghost btn-sm" onClick={() => void loadStatus()}>
+              Retry
+            </button>
+          )}
+          {!needsRestart && state !== "error" && (
+            <button
+              className="btn btn-ghost btn-sm semantic-runtime-dismiss"
+              onClick={() => setDismissed(true)}
+              aria-label="Dismiss"
+            >
+              ✕
             </button>
           )}
         </div>
-      </section>
+      </div>
     </div>
   );
 }

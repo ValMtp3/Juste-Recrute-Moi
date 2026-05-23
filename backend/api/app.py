@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import LOCAL_ORIGIN_RE, require_http_token
 from api.dependencies import get_event_bus
-from api.routers import automation, diagnostics, discovery, events, generation, health, ingestion, internal, leads, misc, profile, runtime, settings
+from api.routers import automation, diagnostics, discovery, events, generation, health, ingestion, internal, leads, misc, profile, runtime, settings, templates
 from api.websocket import register_websocket
 from core.telemetry import record_exception
 from core.version import APP_VERSION
@@ -76,6 +76,7 @@ def create_app(
         app.include_router(settings.create_router(scheduler, ghost_tick))
     if connection_manager is not None and logger is not None:
         app.include_router(ingestion.create_router(connection_manager, logger))
+    app.include_router(templates.create_router(logger))
     if connection_manager is not None:
         app.include_router(automation.create_router(connection_manager))
     if connection_manager is not None and logger is not None:

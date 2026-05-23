@@ -101,3 +101,57 @@ async def get_vector_runtime():
 async def install_vector_runtime_endpoint():
     _ensure_install_job()
     return _runtime_payload()
+
+
+# ── Embedding provider endpoints ─────────────────────────────────────────
+
+@router.get("/embeddings")
+async def get_embedding_status():
+    """Return the current embedding provider status."""
+    from data.vector.embeddings import embedding_status
+    return embedding_status()
+
+
+@router.post("/embeddings/provider")
+async def set_embedding_provider(body: dict):
+    """Set the preferred embedding provider (onnx, openai, hash)."""
+    from data.sqlite.settings import save_settings
+    from data.vector.embeddings import embedding_status, reset_onnx_session
+
+    provider = str(body.get("provider") or "onnx").strip().lower()
+    if provider not in {"onnx", "openai", "hash"}:
+        provider = "onnx"
+
+    save_settings({"embedding_provider": provider})
+    # Reset cached state so the new provider takes effect
+    reset_onnx_session()
+    return embedding_status()
+
+
+_ONNX_DOWNLOAD_JOB: threading.Thread | None = None
+
+
+def _onnx_download_running() -> bool:
+    return bool(_ONNX_DOWNLOAD_JOB and _ONNX_DOWNLOAD_JOB.is_alive())
+
+
+@router.post("/embeddings/onnx/download")
+async def download_onnx_model_endpoint():
+    """Download the ONNX embedding model in the background."""
+    global _ONNX_DOWNLOAD_JOB
+
+    from data.vector.embeddings import download_onnx_model, embedding_status, reset_onnx_session
+
+    if _onnx_download_running():
+        return {"status": "already_running", **embedding_status()}
+
+    def _worker():
+        result = download_onnx_model()
+        if result.get("status") == "ok":
+            reset_onnx_session()
+
+    _ONNX_DOWNLOAD_JOB = threading.Thread(
+        target=_worker, name="jhm-onnx-download", daemon=True
+    )
+    _ONNX_DOWNLOAD_JOB.start()
+    return {"status": "downloading", **embedding_status()}

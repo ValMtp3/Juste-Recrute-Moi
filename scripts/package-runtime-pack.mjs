@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const packageJson = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
 const backendDir = join(repoRoot, "backend");
 const pythonVersion = readFileSync(join(backendDir, ".python-version"), "utf8").trim();
 const python = process.platform === "win32"
@@ -19,6 +20,16 @@ const stageDir = join(stageRoot, "runtime-pack");
 const vectorStageDir = join(stageDir, "vector-runtime");
 const browserStageDir = join(stageDir, "browser-runtime", "ms-playwright");
 const releaseAssetsDir = join(repoRoot, "release-assets");
+
+const ONNX_MODEL_NAME = "all-MiniLM-L6-v2";
+const ONNX_HF_REPO = `sentence-transformers/${ONNX_MODEL_NAME}`;
+const ONNX_MODEL_FILES = [
+  { hfPath: "onnx/model.onnx", local: "model.onnx" },
+  { hfPath: "tokenizer.json", local: "tokenizer.json" },
+  { hfPath: "tokenizer_config.json", local: "tokenizer_config.json" },
+  { hfPath: "config.json", local: "config.json" },
+];
+const onnxStageDir = join(stageDir, "models", ONNX_MODEL_NAME);
 
 const vectorEntries = [
   "lancedb",
@@ -228,6 +239,30 @@ print("Vector runtime import/connect probe passed.")
   process.stdout.write(output);
 }
 
+function downloadOnnxModel() {
+  mkdirSync(onnxStageDir, { recursive: true });
+  for (const { hfPath, local } of ONNX_MODEL_FILES) {
+    const target = join(onnxStageDir, local);
+    if (existsSync(target) && statSync(target).size > 0) {
+      console.log(`ONNX model file already staged: ${local}`);
+      continue;
+    }
+    const url = `https://huggingface.co/${ONNX_HF_REPO}/resolve/main/${hfPath}`;
+    console.log(`Downloading ONNX model file: ${local} from ${url}`);
+    // Use Python urllib since Node fetch may not follow redirects cleanly for large files
+    const code = `
+import urllib.request, sys
+urllib.request.urlretrieve(sys.argv[1], sys.argv[2])
+print(f"Downloaded {sys.argv[2]}")
+`;
+    run(python, ["-c", code, url, target], { cwd: repoRoot });
+    if (!existsSync(target) || statSync(target).size === 0) {
+      throw new Error(`ONNX model download failed for ${local}`);
+    }
+  }
+  console.log(`ONNX embedding model staged: ${onnxStageDir} (${formatMb(bytes(onnxStageDir))})`);
+}
+
 if (!existsSync(sitePackages)) {
   throw new Error(`Python site-packages not found: ${sitePackages}`);
 }
@@ -271,7 +306,10 @@ cpSync(browserRuntimeSource, browserStageDir, {
   },
 });
 
+downloadOnnxModel();
+
 writeFileSync(join(vectorStageDir, "vector-runtime-manifest.json"), `${JSON.stringify({
+  version: packageJson.version,
   platform: platformName(),
   builtAt: new Date().toISOString(),
   source: "backend/.venv/site-packages",
@@ -279,6 +317,7 @@ writeFileSync(join(vectorStageDir, "vector-runtime-manifest.json"), `${JSON.stri
 }, null, 2)}\n`, "utf8");
 
 writeFileSync(join(stageDir, "runtime-pack-manifest.json"), `${JSON.stringify({
+  version: packageJson.version,
   platform: platformName(),
   builtAt: new Date().toISOString(),
   source: "GitHub Actions release build",
@@ -293,7 +332,9 @@ writeFileSync(join(stageDir, "runtime-pack-manifest.json"), `${JSON.stringify({
       optimization: "full Chromium executable only; Playwright headless-shell, ffmpeg, and install helpers are excluded",
     },
     embeddings: {
-      mode: "built-in local embedder",
+      mode: "onnx-local",
+      model: ONNX_MODEL_NAME,
+      path: `models/${ONNX_MODEL_NAME}`,
       externalDownloadRequired: false,
     },
   },

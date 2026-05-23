@@ -643,11 +643,17 @@ fn spawn_sidecar(handle: AppHandle, restart_count: u8) -> Result<(), String> {
     let mut sidecar_cmd = sidecar_cmd;
     sidecar_cmd = sidecar_cmd.args(["--no-services"]);
     sidecar_cmd = sidecar_cmd.env("PYTHONUNBUFFERED", "1");
+    sidecar_cmd = sidecar_cmd.env("JHM_APP_VERSION", handle.package_info().version.to_string());
     if let Ok(app_data_dir) = handle.path().app_data_dir() {
         let _ = std::fs::create_dir_all(&app_data_dir);
         let app_data = app_data_dir.to_string_lossy().to_string();
+        // In debug mode, keep current_dir as backend_dir so main.py is found.
+        // In release mode, the bundled sidecar runs from app_data_dir.
+        #[cfg(not(debug_assertions))]
+        {
+            sidecar_cmd = sidecar_cmd.current_dir(&app_data_dir);
+        }
         sidecar_cmd = sidecar_cmd
-            .current_dir(&app_data_dir)
             .env("LOCALAPPDATA", app_data.clone())
             .env("JHM_APP_DATA_DIR", app_data);
     }

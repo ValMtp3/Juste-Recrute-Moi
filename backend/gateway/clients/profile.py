@@ -68,7 +68,7 @@ class ProfileHttpClient(BaseServiceClient):
         return await self._request("POST", "/internal/v1/profile/ingest/resume", json={"raw": raw, "pdf_path": pdf_path}, timeout=180.0)
 
     async def ingest_github(self, username: str, *, token: str | None = None, max_repos: int = 100) -> dict:
-        return await self._request("POST", "/internal/v1/profile/ingest/github", json={"username": username, "token": token, "max_repos": max_repos}, timeout=180.0)
+        return await self._request("POST", "/internal/v1/profile/ingest/github", json={"username": username, "token": token, "max_repos": max_repos}, timeout=360.0)
 
     async def ingest_linkedin(self, zip_bytes: bytes) -> dict:
         zip_b64 = base64.b64encode(zip_bytes).decode("ascii")

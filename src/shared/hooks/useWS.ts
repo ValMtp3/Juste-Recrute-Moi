@@ -108,6 +108,12 @@ export function useWS() {
       current.onclose = null;
       current.close();
     }
+    // L4: cancel any pending reconnect timer before (re)connecting so a stale
+    // backoff callback can't fire a duplicate connection later.
+    if (retryTimerRef.current !== null) {
+      window.clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
     manuallyClosedRef.current = false;
     setConn("connecting");
     const ws = new WebSocket(`ws://127.0.0.1:${p}/ws?token=${encodeURIComponent(token)}`);
@@ -303,7 +309,10 @@ export function useWS() {
       if (poll !== undefined) window.clearInterval(poll);
       unlisten?.();
       manuallyClosedRef.current = true;
-      if (retryTimerRef.current !== null) window.clearTimeout(retryTimerRef.current);
+      if (retryTimerRef.current !== null) {
+        window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
       if (wsRef.current) wsRef.current.onclose = null;
       wsRef.current?.close();
     };

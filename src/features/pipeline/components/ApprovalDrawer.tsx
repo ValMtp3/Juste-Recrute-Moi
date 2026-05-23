@@ -30,6 +30,9 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [versionErr, setVersionErr] = useState<string | null>(null);
   const [generatedLead, setGeneratedLead] = useState<Lead | null>(null);
+  type TemplateOption = { id: string; name: string; is_default: boolean };
+  const [templates, setTemplates] = useState<TemplateOption[]>([]);
+  const [templateId, setTemplateId] = useState<string>("");
   const generateControllerRef = useRef<AbortController | null>(null);
   const pipelineControllerRef = useRef<AbortController | null>(null);
   const j = generatedLead ? { ...initialLead, ...generatedLead } : initialLead;
@@ -38,6 +41,24 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     generateControllerRef.current?.abort();
     pipelineControllerRef.current?.abort();
   }, []);
+
+  // Load the saved resume templates so the user can pick which one this job's
+  // resume should mimic. Defaults to the template marked default (empty id ->
+  // backend resolves default -> legacy setting -> built-in layout).
+  useEffect(() => {
+    let alive = true;
+    api("/api/v1/templates")
+      .then(r => r.json())
+      .then(d => {
+        if (!alive) return;
+        const items: TemplateOption[] = d.templates || [];
+        setTemplates(items);
+        const fallback = items.find(t => t.is_default) || items[0];
+        if (fallback) setTemplateId(prev => prev || fallback.id);
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [api]);
 
   const resumeReady = Boolean(j.resume_asset || j.asset);
   const coverReady = Boolean(j.cover_letter_asset);
@@ -155,7 +176,8 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     const controller = new AbortController();
     generateControllerRef.current = controller;
     try {
-      const r = await api(`/api/v1/leads/${j.job_id}/generate`, { method: "POST", signal: controller.signal, timeoutMs: GENERATION_TIMEOUT_MS });
+      const query = templateId ? `?template_id=${encodeURIComponent(templateId)}` : "";
+      const r = await api(`/api/v1/leads/${j.job_id}/generate${query}`, { method: "POST", signal: controller.signal, timeoutMs: GENERATION_TIMEOUT_MS });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.detail || `Server returned ${r.status}`);
       if (body.lead) setGeneratedLead(body.lead as Lead);
@@ -332,6 +354,23 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                 <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>Resume and cover letter are generated separately for this role.</div>
               </div>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+                {templates.length > 0 && (
+                  <select
+                    value={templateId}
+                    onChange={e => setTemplateId(e.target.value)}
+                    disabled={generating || pipelineRunning}
+                    title="Resume template to mimic for this job"
+                    style={{
+                      padding: "5px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700,
+                      border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink-2)",
+                      cursor: generating || pipelineRunning ? "not-allowed" : "pointer", maxWidth: 220,
+                    }}
+                  >
+                    {templates.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}{t.is_default ? " (default)" : ""}</option>
+                    ))}
+                  </select>
+                )}
                 {pdfBlobUrl && (
                   <button onClick={openPdf} title="Open PDF in system viewer" style={{
                     display: "flex", alignItems: "center", gap: 5,

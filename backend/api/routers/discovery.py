@@ -198,8 +198,10 @@ async def run_scan(
     job_store = get_job_runner()
     job = job_store.create("scan", {})
     job_store.update(job.job_id, status="running", progress=5)
-    cfg = repo.settings.get_settings()
-    profile = profile_for_discovery(repo.profile.get_profile(), cfg)
+    # H4: these are synchronous SQLite reads; run them off the event loop so a
+    # slow/locked DB doesn't block all other coroutines.
+    cfg = await asyncio.to_thread(repo.settings.get_settings)
+    profile = profile_for_discovery(await asyncio.to_thread(repo.profile.get_profile), cfg)
     if not has_profile_discovery_signal(profile) and not has_explicit_discovery_targets(cfg):
         msg = "Scan skipped: add a target role, profile skills, work history, or explicit job source first."
         await manager.broadcast({"type": "agent", "event": "scan_skipped", "msg": msg})
@@ -503,7 +505,7 @@ def create_router(
 
     @router.post("/free-sources/scan")
     async def free_sources_scan(repo: Repository = Depends(get_repository)):
-        cfg = repo.settings.get_settings()
+        cfg = await asyncio.to_thread(repo.settings.get_settings)  # H4: off event loop
         profile = profile_for_discovery(await asyncio.to_thread(repo.profile.get_profile), cfg)
         leads, usage, errors = await run_free_source_scan(manager, cfg, "job", profile, force=True)
         return {"status": "done", "leads": len(leads), "usage": usage, "errors": errors[:8]}

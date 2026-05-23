@@ -37,6 +37,47 @@ def sys_platform() -> str:
     return platform.system().lower()
 
 
+def _app_version() -> str:
+    """Return the app version from the JHM_APP_VERSION env var set by Tauri."""
+    return os.environ.get("JHM_APP_VERSION", "")
+
+
+def _version_stamp_path() -> Path:
+    return _data_root() / "runtime-pack-version"
+
+
+def _installed_runtime_version() -> str:
+    """Read the version stamp written after a successful runtime pack install."""
+    stamp = _version_stamp_path()
+    if stamp.exists():
+        try:
+            return stamp.read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+    return ""
+
+
+def _write_version_stamp() -> None:
+    """Write the current app version as the installed runtime pack version."""
+    version = _app_version()
+    if not version:
+        return
+    stamp = _version_stamp_path()
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(version, encoding="utf-8")
+
+
+def _runtime_pack_is_stale() -> bool:
+    """Return True if the installed runtime pack was built for a different app version."""
+    app_version = _app_version()
+    if not app_version:
+        return False  # No version info available (dev mode), skip staleness check
+    installed = _installed_runtime_version()
+    if not installed:
+        return False  # No stamp yet — first install, not stale
+    return installed != app_version
+
+
 def _data_root() -> Path:
     configured = os.environ.get("JHM_APP_DATA_DIR")
     if configured:
@@ -231,15 +272,21 @@ def _archive_payload_dir(extract_dir: Path) -> Path | None:
     return None
 
 
-def _runtime_pack_payloads(extract_dir: Path) -> tuple[Path | None, Path | None]:
+def _runtime_pack_payloads(extract_dir: Path) -> tuple[Path | None, Path | None, Path | None]:
+    """Return (vector_payload, browser_payload, models_payload) from extracted pack."""
     candidates = [extract_dir, *[path for path in extract_dir.rglob("*") if path.is_dir()]]
     for candidate in candidates:
         vector_payload = candidate / "vector-runtime"
         browser_payload = candidate / "browser-runtime" / "ms-playwright"
+        models_payload = candidate / "models"
         if (vector_payload / "lancedb").exists() and (vector_payload / "pyarrow").exists():
-            return vector_payload, browser_payload if browser_payload.exists() else None
+            return (
+                vector_payload,
+                browser_payload if browser_payload.exists() else None,
+                models_payload if models_payload.exists() else None,
+            )
 
-    return _archive_payload_dir(extract_dir), None
+    return _archive_payload_dir(extract_dir), None, None
 
 
 def _safe_extract(archive_path: Path, extract_dir: Path) -> None:
@@ -377,9 +424,10 @@ def install_vector_runtime() -> Path:
     with _INSTALL_LOCK:
         runtime_dir = vector_runtime_dir()
         browser_dir = browser_runtime_dir()
-        vector_ready_before = vector_runtime_ready(runtime_dir)
-        vector_files_complete_before = vector_runtime_files_complete(runtime_dir)
-        browser_ready_before = browser_runtime_ready(browser_dir)
+        stale = _runtime_pack_is_stale()
+        vector_ready_before = vector_runtime_ready(runtime_dir) and not stale
+        vector_files_complete_before = vector_runtime_files_complete(runtime_dir) and not stale
+        browser_ready_before = browser_runtime_ready(browser_dir) and not stale
         if vector_ready_before and vector_files_complete_before and (browser_ready_before or _legacy_vector_runtime_override()):
             _set_progress(
                 status="installed",
@@ -389,6 +437,7 @@ def install_vector_runtime() -> Path:
                 total=0,
                 error="",
             )
+            _write_version_stamp()
             return runtime_dir
 
         runtime_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -438,7 +487,7 @@ def install_vector_runtime() -> Path:
                     _set_progress(status="error", message=error, error=error)
                     raise RuntimeError(error) from exc
 
-                vector_payload, browser_payload = _runtime_pack_payloads(extract_dir)
+                vector_payload, browser_payload, models_payload = _runtime_pack_payloads(extract_dir)
                 if vector_payload is None:
                     error = "Downloaded runtime pack did not contain LanceDB and PyArrow."
                     _set_progress(status="error", message=error, error=error)
@@ -487,7 +536,23 @@ def install_vector_runtime() -> Path:
                         percent=98,
                     )
 
-            _set_progress(status="verifying", message="Verifying JustHireMe runtime pack.", percent=98)
+                # Copy ONNX embedding model if bundled in the pack
+                if models_payload is not None:
+                    models_dest = _data_root() / "models"
+                    _set_progress(
+                        status="copying",
+                        message="Installing ONNX embedding model.",
+                        percent=98,
+                    )
+                    _copy_payload(
+                        models_payload,
+                        models_dest,
+                        message="Installing ONNX embedding model.",
+                        start_percent=98,
+                        end_percent=99,
+                    )
+
+            _set_progress(status="verifying", message="Verifying JustHireMe runtime pack.", percent=99)
             add_vector_runtime_to_path(runtime_dir)
             if not vector_runtime_ready(runtime_dir):
                 error = "Vector runtime installation finished, but LanceDB or PyArrow could not be imported."
@@ -497,6 +562,7 @@ def install_vector_runtime() -> Path:
                 error = "Runtime pack installation finished, but Playwright Chromium was not found."
                 _set_progress(status="error", message=error, error=error)
                 raise RuntimeError(error)
+            _write_version_stamp()
             _set_progress(
                 status="installed",
                 message="Required JustHireMe runtime pack is ready.",
@@ -517,25 +583,31 @@ def install_vector_runtime() -> Path:
 def vector_runtime_status() -> dict:
     runtime_dir = vector_runtime_dir()
     browser_dir = browser_runtime_dir()
-    vector_ready = vector_runtime_ready(runtime_dir)
-    browser_ready = browser_runtime_ready(browser_dir)
+    stale = _runtime_pack_is_stale()
+    vector_ready = vector_runtime_ready(runtime_dir) and not stale
+    browser_ready = browser_runtime_ready(browser_dir) and not stale
     ready = vector_ready and (browser_ready or _legacy_vector_runtime_override())
     if ready and runtime_dir.exists():
         status = "installed"
     elif ready:
         status = "bundled"
+    elif stale:
+        status = "stale"
     else:
         status = "missing"
     return {
         "status": status,
         "ready": ready,
         "required": True,
+        "stale": stale,
         "dir": str(runtime_dir),
         "asset": runtime_pack_asset_name(),
         "url": runtime_pack_url(),
+        "installed_version": _installed_runtime_version(),
+        "app_version": _app_version(),
         "vector": {
             "ready": vector_ready,
-            "files_complete": vector_runtime_files_complete(runtime_dir),
+            "files_complete": vector_runtime_files_complete(runtime_dir) and not stale,
             "dir": str(runtime_dir),
             "legacy_asset": vector_runtime_asset_name(),
             "legacy_url": vector_runtime_url(),

@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JustHireMe - Interactive Architecture Map</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+:root{--bg:#0a0a0f;--bg2:#0e0e18;--bg-card:#12121a;--bg-card-hover:#1a1a28;--bg-overlay:rgba(10,10,15,0.88);--border:#1e1e2e;--border-glow:#3b3b5c;--text:#e8e8f0;--text-dim:#8888a0;--text-muted:#555570;--accent:#6366f1;--accent-glow:#818cf8;--accent2:#a78bfa;--green:#34d399;--orange:#fb923c;--red:#f87171;--cyan:#22d3ee;--pink:#f472b6;--yellow:#fbbf24;--teal:#2dd4bf;--purple:#a78bfa;--blue:#60a5fa;--font:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono',monospace;--radius:12px;--shadow:0 4px 24px rgba(0,0,0,0.4);--tr:0.3s cubic-bezier(0.4,0,0.2,1)}
+*{margin:0;padding:0;box-sizing:border-box}html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.6;overflow-x:hidden}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border-glow);border-radius:3px}
+
+.hero{position:relative;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden;padding:2rem}
+.hero canvas{position:absolute;inset:0;z-index:0}
+.hero-content{position:relative;z-index:2;max-width:800px}
+.hero h1{font-size:clamp(2.8rem,7vw,5.5rem);font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,var(--accent-glow),var(--cyan),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:1rem;line-height:1.05}
+.hero .sub{font-size:1.15rem;color:var(--text-dim);max-width:600px;margin:0 auto 2.5rem}
+.hero-stats{display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:3rem}
+.hero-stat{text-align:center;padding:1rem 1.5rem;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius);backdrop-filter:blur(8px);min-width:110px;transition:var(--tr)}
+.hero-stat:hover{border-color:var(--accent);transform:translateY(-2px)}
+.hero-stat .num{font-size:2.2rem;font-weight:800;font-family:var(--mono);background:linear-gradient(135deg,var(--accent-glow),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-stat .label{font-size:0.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.12em;margin-top:0.25rem}
+.scroll-hint{position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);z-index:2;animation:bounce 2s infinite;color:var(--text-muted);font-size:0.8rem;display:flex;flex-direction:column;align-items:center;gap:0.5rem}
+@keyframes bounce{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(8px)}}
+.nav{position:sticky;top:0;z-index:100;background:var(--bg-overlay);backdrop-filter:blur(16px) saturate(1.3);border-bottom:1px solid var(--border);padding:0 1rem}
+.nav-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:0.15rem;overflow-x:auto;scrollbar-width:none;padding:0.5rem 0}
+.nav-inner::-webkit-scrollbar{display:none}
+.nav-btn{padding:0.45rem 0.85rem;border:none;background:none;color:var(--text-dim);font-family:var(--font);font-size:0.78rem;font-weight:500;cursor:pointer;white-space:nowrap;border-radius:8px;transition:var(--tr)}
+.nav-btn:hover{color:var(--text);background:rgba(255,255,255,0.05)}
+.nav-btn.active{color:var(--accent-glow);background:rgba(99,102,241,0.12)}
+section{max-width:1400px;margin:0 auto;padding:5rem 2rem 3rem}
+.section-header{margin-bottom:2.5rem}
+.section-tag{display:inline-block;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.15em;color:var(--accent-glow);background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);padding:0.25rem 0.75rem;border-radius:99px;margin-bottom:0.75rem}
+.section-header h2{font-size:2rem;font-weight:800;letter-spacing:-0.02em;margin-bottom:0.5rem}
+.section-header p{color:var(--text-dim);font-size:0.92rem;max-width:620px}
+.card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;transition:var(--tr)}
+.card:hover{border-color:var(--border-glow);background:var(--bg-card-hover)}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem}
+.card-title{font-size:0.95rem;font-weight:700;margin-bottom:0.4rem;display:flex;align-items:center;gap:0.5rem}
+.card-icon{width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:0.95rem;flex-shrink:0}
+.card-desc{color:var(--text-dim);font-size:0.82rem;line-height:1.5}
+.card-meta{margin-top:0.6rem;display:flex;flex-wrap:wrap;gap:0.35rem}
+.tag{display:inline-block;font-size:0.62rem;font-weight:600;padding:0.15rem 0.45rem;border-radius:4px;font-family:var(--mono)}
+.tag-accent{background:rgba(99,102,241,0.15);color:var(--accent-glow)}
+.tag-green{background:rgba(52,211,153,0.12);color:var(--green)}
+.tag-orange{background:rgba(251,146,60,0.12);color:var(--orange)}
+.tag-red{background:rgba(248,113,113,0.12);color:var(--red)}
+.tag-cyan{background:rgba(34,211,238,0.12);color:var(--cyan)}
+.tag-purple{background:rgba(167,139,250,0.12);color:var(--purple)}
+.tag-pink{background:rgba(244,114,182,0.12);color:var(--pink)}
+.tag-yellow{background:rgba(251,191,36,0.12);color:var(--yellow)}
+.tag-blue{background:rgba(96,165,250,0.12);color:var(--blue)}
+.arch-layer{padding:0.8rem;border-radius:var(--radius);margin-bottom:0.5rem;cursor:pointer;transition:var(--tr);border:1px solid transparent}
+.arch-layer:hover{transform:scale(1.005)}
+.arch-layer.active{box-shadow:0 0 30px rgba(99,102,241,0.15)}
+.arch-layer-title{font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem;display:flex;align-items:center;gap:0.5rem}
+.arch-boxes{display:flex;flex-wrap:wrap;gap:0.5rem}
+.arch-box{padding:0.45rem 0.8rem;border-radius:8px;font-size:0.72rem;font-weight:600;cursor:pointer;transition:var(--tr);border:1px solid rgba(255,255,255,0.08)}
+.arch-box:hover{transform:translateY(-2px);filter:brightness(1.2)}
+.arch-box.selected{box-shadow:0 0 20px currentColor;transform:translateY(-2px)}
+.arch-arrows{text-align:center;color:var(--text-muted);font-size:1rem;padding:0.3rem 0;letter-spacing:0.3rem;opacity:0.4}
+.arch-detail{overflow:hidden;max-height:0;transition:max-height 0.5s ease,opacity 0.3s ease,padding 0.3s ease;opacity:0;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);margin:0.5rem 0}
+.arch-detail.open{max-height:600px;opacity:1;padding:1.25rem}
+.arch-detail h4{font-size:0.9rem;font-weight:700;margin-bottom:0.5rem;color:var(--cyan)}
+.arch-detail p{font-size:0.8rem;color:var(--text-dim);margin-bottom:0.4rem}
+.arch-detail code{font-family:var(--mono);font-size:0.72rem;background:rgba(255,255,255,0.05);padding:0.15rem 0.4rem;border-radius:4px}
+.timeline{position:relative;padding-left:2.5rem}
+.timeline::before{content:'';position:absolute;left:0.9rem;top:0;bottom:0;width:2px;background:linear-gradient(to bottom,var(--accent),var(--cyan),var(--green))}
+.tl-phase{margin-bottom:1.5rem}
+.tl-phase-title{font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;padding:0.3rem 0.7rem;border-radius:6px;display:inline-block;margin-bottom:0.75rem;margin-left:-0.5rem}
+.tl-step{position:relative;margin-bottom:0.5rem;padding:0.8rem 1rem;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:var(--tr);opacity:0;transform:translateX(-10px)}
+.tl-step.visible{opacity:1;transform:translateX(0)}
+.tl-step:hover{border-color:var(--border-glow);background:var(--bg-card-hover)}
+.tl-step::before{content:'';position:absolute;left:-1.85rem;top:1rem;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);z-index:1}
+.tl-step-num{font-size:0.65rem;font-weight:700;color:var(--accent-glow);font-family:var(--mono)}
+.tl-step-fn{font-size:0.82rem;font-weight:600;margin:0.2rem 0}
+.tl-step-desc{font-size:0.75rem;color:var(--text-dim)}
+.tl-step-detail{max-height:0;overflow:hidden;transition:max-height 0.4s ease;font-size:0.75rem;color:var(--text-dim)}
+.tl-step.expanded .tl-step-detail{max-height:200px;padding-top:0.5rem}
+.tl-step-file{font-family:var(--mono);font-size:0.68rem;color:var(--cyan);margin-top:0.3rem}
+.tabs{display:flex;gap:0.25rem;margin-bottom:1.5rem;flex-wrap:wrap}
+.tab-btn{padding:0.5rem 1rem;border:1px solid var(--border);background:var(--bg-card);color:var(--text-dim);font-family:var(--font);font-size:0.8rem;font-weight:600;cursor:pointer;border-radius:8px;transition:var(--tr)}
+.tab-btn:hover{border-color:var(--border-glow);color:var(--text)}
+.tab-btn.active{background:rgba(99,102,241,0.12);border-color:var(--accent);color:var(--accent-glow)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+.acc-item{border:1px solid var(--border);border-radius:var(--radius);margin-bottom:0.5rem;overflow:hidden;background:var(--bg-card)}
+.acc-header{padding:0.8rem 1rem;cursor:pointer;font-size:0.85rem;font-weight:600;display:flex;align-items:center;justify-content:space-between;transition:var(--tr)}
+.acc-header:hover{background:var(--bg-card-hover)}
+.acc-header .arrow{transition:transform 0.3s;font-size:0.7rem;color:var(--text-muted)}
+.acc-item.open .acc-header .arrow{transform:rotate(180deg)}
+.acc-body{max-height:0;overflow:hidden;transition:max-height 0.4s ease}
+.acc-item.open .acc-body{max-height:2000px}
+.acc-body-inner{padding:0 1rem 1rem}
+.method{display:inline-block;font-size:0.6rem;font-weight:700;font-family:var(--mono);padding:0.15rem 0.4rem;border-radius:4px;min-width:38px;text-align:center;margin-right:0.4rem}
+.method-get{background:rgba(52,211,153,0.15);color:var(--green)}
+.method-post{background:rgba(99,102,241,0.15);color:var(--accent-glow)}
+.method-put{background:rgba(251,191,36,0.15);color:var(--yellow)}
+.method-del{background:rgba(248,113,113,0.15);color:var(--red)}
+.method-ws{background:rgba(167,139,250,0.15);color:var(--purple)}
+.endpoint{font-family:var(--mono);font-size:0.72rem;color:var(--text)}
+.ep-desc{font-size:0.72rem;color:var(--text-muted);margin-left:0.5rem}
+.ep-row{padding:0.35rem 0;border-bottom:1px solid rgba(255,255,255,0.03);display:flex;align-items:center;flex-wrap:wrap;gap:0.25rem}
+.filter-bar{display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:1.5rem}
+.filter-btn{padding:0.4rem 0.8rem;border:1px solid var(--border);background:var(--bg-card);color:var(--text-dim);font-family:var(--font);font-size:0.72rem;font-weight:600;cursor:pointer;border-radius:6px;transition:var(--tr)}
+.filter-btn:hover{border-color:var(--border-glow)}
+.filter-btn.active{border-color:var(--accent);color:var(--accent-glow);background:rgba(99,102,241,0.1)}
+.filter-btn[data-sev="critical"].active{border-color:var(--red);color:var(--red);background:rgba(248,113,113,0.1)}
+.filter-btn[data-sev="high"].active{border-color:var(--orange);color:var(--orange);background:rgba(251,146,60,0.1)}
+.filter-btn[data-sev="medium"].active{border-color:var(--yellow);color:var(--yellow);background:rgba(251,191,36,0.1)}
+.filter-btn[data-sev="low"].active{border-color:var(--text-muted);color:var(--text-dim)}
+.pain-card{background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;margin-bottom:0.5rem;transition:var(--tr)}
+.pain-card.hidden{display:none}
+.pain-card:hover{border-color:var(--border-glow)}
+.pain-sev{font-size:0.6rem;font-weight:700;padding:0.15rem 0.45rem;border-radius:4px;text-transform:uppercase;font-family:var(--mono)}
+.sev-critical{background:rgba(248,113,113,0.15);color:var(--red)}
+.sev-high{background:rgba(251,146,60,0.15);color:var(--orange)}
+.sev-medium{background:rgba(251,191,36,0.15);color:var(--yellow)}
+.sev-low{background:rgba(136,136,160,0.15);color:var(--text-dim)}
+.pain-title{font-size:0.85rem;font-weight:600;margin:0.4rem 0 0.2rem}
+.pain-file{font-family:var(--mono);font-size:0.68rem;color:var(--cyan)}
+.pain-desc{font-size:0.78rem;color:var(--text-dim);margin-top:0.3rem}
+.pain-fix{max-height:0;overflow:hidden;transition:max-height 0.3s;font-size:0.75rem;color:var(--green);margin-top:0.3rem}
+.pain-card.show-fix .pain-fix{max-height:100px}
+.pain-fix-toggle{font-size:0.68rem;color:var(--accent-glow);cursor:pointer;margin-top:0.4rem;border:none;background:none;font-family:var(--font);font-weight:600}
+.flow-steps{display:flex;flex-wrap:wrap;gap:0.5rem;align-items:flex-start}
+.flow-step{flex:1;min-width:140px;max-width:200px;padding:0.8rem;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);text-align:center;opacity:0;transform:translateY(15px);transition:all 0.5s ease}
+.flow-step.visible{opacity:1;transform:translateY(0)}
+.flow-step-num{font-size:0.6rem;font-weight:700;color:var(--accent-glow);font-family:var(--mono)}
+.flow-step-title{font-size:0.78rem;font-weight:600;margin:0.3rem 0}
+.flow-step-desc{font-size:0.68rem;color:var(--text-dim)}
+.flow-arrow{color:var(--text-muted);font-size:1.2rem;align-self:center;flex-shrink:0;opacity:0;transition:opacity 0.4s}
+.flow-arrow.visible{opacity:0.5}
+.summary-stats{display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.summary-stat{padding:0.4rem 0.8rem;border-radius:8px;font-size:0.75rem;font-weight:700;font-family:var(--mono)}
+.svc-card{cursor:pointer}
+.svc-expand{max-height:0;overflow:hidden;transition:max-height 0.5s ease}
+.svc-card.open .svc-expand{max-height:1200px}
+.svc-flow{display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;align-items:center}
+.svc-flow-step{padding:0.3rem 0.6rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;font-size:0.7rem;font-weight:500}
+.svc-flow-arrow{color:var(--text-muted);font-size:0.8rem}
+.score-bar-wrap{margin:0.3rem 0}
+.score-bar-label{font-size:0.7rem;font-weight:600;display:flex;justify-content:space-between}
+.score-bar{height:6px;background:rgba(255,255,255,0.06);border-radius:3px;margin-top:0.2rem;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:3px;transition:width 1s ease}
+.db-field{font-size:0.7rem;padding:0.2rem 0;border-bottom:1px solid rgba(255,255,255,0.03);display:flex;gap:0.4rem;align-items:center;font-family:var(--mono)}
+.db-badge{font-size:0.55rem;padding:0.1rem 0.3rem;border-radius:3px;font-weight:700}
+@media(max-width:768px){section{padding:3rem 1rem}.hero h1{font-size:2.2rem}.hero-stats{gap:0.5rem}.hero-stat{min-width:80px;padding:0.6rem 0.8rem}.hero-stat .num{font-size:1.5rem}.card-grid{grid-template-columns:1fr}.flow-steps{flex-direction:column;align-items:stretch}.flow-step{max-width:100%}}
+.fade-in{opacity:0;transform:translateY(20px);transition:all 0.6s ease}
+.fade-in.visible{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+<div class="hero" id="hero">
+  <canvas id="particles"></canvas>
+  <div class="hero-content">
+    <h1>JustHireMe</h1>
+    <p class="sub">AI-powered job hunting desktop app. Tauri + React + FastAPI + 3 databases + 20 LLM providers. A complete architecture deep-dive.</p>
+    <div class="hero-stats">
+      <div class="hero-stat"><div class="num" data-target="74">0</div><div class="label">Endpoints</div></div>
+      <div class="hero-stat"><div class="num" data-target="14">0</div><div class="label">Services</div></div>
+      <div class="hero-stat"><div class="num" data-target="3">0</div><div class="label">Databases</div></div>
+      <div class="hero-stat"><div class="num" data-target="20">0</div><div class="label">AI Providers</div></div>
+      <div class="hero-stat"><div class="num" data-target="7">0</div><div class="label">Views</div></div>
+      <div class="hero-stat"><div class="num" data-target="62">0</div><div class="label">Known Issues</div></div>
+    </div>
+  </div>
+  <div class="scroll-hint">
+    <span>Scroll to explore</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+  </div>
+</div>
+<nav class="nav" id="nav"><div class="nav-inner" id="navInner"></div></nav>
+<section id="sec-overview">
+  <div class="section-header"><div class="section-tag">Architecture</div><h2>High-Level Overview</h2><p>Six architectural layers, from the desktop shell down to external services. Click any box for details.</p></div>
+  <div id="archLayers"></div><div id="archDetail" class="arch-detail"></div>
+</section>
+<section id="sec-lifecycle">
+  <div class="section-header"><div class="section-tag">Boot Sequence</div><h2>App Lifecycle</h2><p>The exact 16-step boot sequence from double-click to rendered UI.</p></div>
+  <div class="timeline" id="timeline"></div>
+</section>
+<section id="sec-frontend">
+  <div class="section-header"><div class="section-tag">UI Layer</div><h2>Frontend Architecture</h2><p>React 19 with a custom view-state pattern. No router, no global store.</p></div>
+  <h3 style="font-size:1rem;margin-bottom:1rem;color:var(--accent-glow)">7 Views</h3>
+  <div class="card-grid" id="viewCards"></div>
+  <h3 style="font-size:1rem;margin:2rem 0 1rem;color:var(--accent-glow)">State Management</h3>
+  <div class="card" style="padding:1.5rem">
+    <div class="card-desc">
+      <strong style="color:var(--text)">App.tsx (root)</strong> owns all state via hooks: <code style="font-family:var(--mono);font-size:0.72rem;background:rgba(255,255,255,0.05);padding:0.1rem 0.3rem;border-radius:3px">useAppShellState()</code>, <code style="font-family:var(--mono);font-size:0.72rem;background:rgba(255,255,255,0.05);padding:0.1rem 0.3rem;border-radius:3px">useWS()</code>, <code style="font-family:var(--mono);font-size:0.72rem;background:rgba(255,255,255,0.05);padding:0.1rem 0.3rem;border-radius:3px">useLeads()</code>, <code style="font-family:var(--mono);font-size:0.72rem;background:rgba(255,255,255,0.05);padding:0.1rem 0.3rem;border-radius:3px">useDueFollowups()</code>, <code style="font-family:var(--mono);font-size:0.72rem;background:rgba(255,255,255,0.05);padding:0.1rem 0.3rem;border-radius:3px">useGraphStats()</code>.
+      Props are drilled into all 7 views. Custom <code style="font-family:var(--mono);font-size:0.72rem;background:rgba(255,255,255,0.05);padding:0.1rem 0.3rem;border-radius:3px">window.dispatchEvent()</code> for inter-component comms. No React Router -- a simple string state selects the current view.
+    </div>
+    <div class="card-meta" style="margin-top:0.75rem">
+      <span class="tag tag-accent">No Global Store</span><span class="tag tag-orange">Props Drilling</span><span class="tag tag-cyan">Custom Events</span><span class="tag tag-purple">No Router</span>
+    </div>
+  </div>
+</section>
+<section id="sec-backend">
+  <div class="section-header"><div class="section-tag">Services</div><h2>Backend Services</h2><p>6 core domain services + the LLM client abstraction. Click to expand.</p></div>
+  <div id="serviceCards" style="display:grid;gap:0.75rem"></div>
+</section>
+<section id="sec-agents">
+  <div class="section-header"><div class="section-tag">Scoring Engine</div><h2>Ranking &amp; Agents</h2><p>Multi-criteria lead scoring with 6 weighted dimensions and feedback learning.</p></div>
+  <div class="card" style="padding:1.5rem"><div id="scoringBars"></div><p style="font-size:0.78rem;color:var(--text-dim);margin-top:1rem">Weights shown are for semantic-enabled mode (total=100). When semantic is unavailable, weights redistribute: Stack 27%, Evidence 20%, Role 18%, Seniority 20%, Logistics 15% (total=100). Score caps: wrong-field max 15, seniority 30-48, stack 42-52. Feedback learning adjusts weights by +/- delta based on user thumbs-up/down.</p></div>
+</section>
+<section id="sec-api">
+  <div class="section-header"><div class="section-tag">REST + WS</div><h2>API Endpoints</h2><p>74+ endpoints across 10 router groups. Click to expand each group.</p></div>
+  <div id="apiAccordion"></div>
+</section>
+<section id="sec-databases">
+  <div class="section-header"><div class="section-tag">Persistence</div><h2>Database Architecture</h2><p>Three specialized databases: relational, graph, and vector.</p></div>
+  <div class="tabs" id="dbTabs"></div><div id="dbPanels"></div>
+</section>
+<section id="sec-flows">
+  <div class="section-header"><div class="section-tag">Pipelines</div><h2>Data Flows</h2><p>6 critical data pipelines. Select a flow to trace it step by step.</p></div>
+  <div class="tabs" id="flowTabs"></div><div id="flowPanels"></div>
+</section>
+<section id="sec-pain">
+  <div class="section-header"><div class="section-tag">Technical Debt</div><h2>Pain Points &amp; Opportunities</h2><p>62 findings across 6 severity/category dimensions. Filter and explore.</p></div>
+  <div class="summary-stats" id="painSummary"></div><div class="filter-bar" id="painFilters"></div><div id="painCards"></div>
+</section>
+<section id="sec-integrations">
+  <div class="section-header"><div class="section-tag">External</div><h2>Integrations</h2><p>External services that JustHireMe connects to.</p></div>
+  <div class="card-grid" id="integrationCards"></div>
+</section>
+<section id="sec-auth">
+  <div class="section-header"><div class="section-tag">Security</div><h2>Auth &amp; Security</h2><p>Token-based auth, CORS, rate limiting, and update verification.</p></div>
+  <div class="card-grid" id="authCards"></div>
+</section>
+<section id="sec-tauri">
+  <div class="section-header"><div class="section-tag">Desktop</div><h2>Tauri Desktop Shell</h2><p>Tauri v2 wraps the app for desktop distribution.</p></div>
+  <div class="card-grid" id="tauriCards"></div>
+</section>
+<footer style="text-align:center;padding:3rem;color:var(--text-muted);font-size:0.75rem;border-top:1px solid var(--border)">JustHireMe Architecture Map &mdash; Generated from codebase audit</footer>
+<script>
+var NAV_SECTIONS=[
+{id:'sec-overview',label:'Overview'},{id:'sec-lifecycle',label:'Lifecycle'},{id:'sec-frontend',label:'Frontend'},
+{id:'sec-backend',label:'Backend'},{id:'sec-agents',label:'Agents'},{id:'sec-api',label:'API'},
+{id:'sec-databases',label:'Databases'},{id:'sec-flows',label:'Data Flows'},{id:'sec-pain',label:'Pain Points'},
+{id:'sec-integrations',label:'Integrations'},{id:'sec-auth',label:'Auth'},{id:'sec-tauri',label:'Tauri'}
+];
+var ARCH_LAYERS=[
+{name:'Tauri v2 Desktop Shell',color:'var(--purple)',bg:'rgba(167,139,250,0.08)',border:'rgba(167,139,250,0.2)',
+ boxes:['Sidecar Manager','Auto-Updater','IPC Bridge','Notifications'],
+ details:{
+   'Sidecar Manager':{desc:'Spawns and manages the Python backend process. Reads PID files to cleanup stale processes, parses stdout for PORT and TOKEN, emits Tauri events.',files:['src-tauri/src/lib.rs'],why:'The bridge between Rust desktop shell and Python backend.'},
+   'Auto-Updater':{desc:'Checks GitHub releases for new versions. Downloads and installs updates via Tauri updater plugin with ed25519 signature verification.',files:['src-tauri/src/lib.rs','src-tauri/tauri.conf.json'],why:'Desktop apps need self-update capability since there is no app store.'},
+   'IPC Bridge':{desc:'Tauri invoke commands expose port, token, and sidecar status to the React frontend via IPC.',files:['src-tauri/src/lib.rs','src/lib/tauri.ts'],why:'The frontend cannot directly access OS-level resources without IPC.'},
+   'Notifications':{desc:'Desktop notifications via Tauri notification plugin for scan completions, errors, etc.',files:['src-tauri/src/lib.rs'],why:'Background tasks need to alert the user when not focused.'}
+ }},
+{name:'Frontend - React 19',color:'var(--accent-glow)',bg:'rgba(99,102,241,0.08)',border:'rgba(99,102,241,0.2)',
+ boxes:['7 Views','WebSocket Client','API Client','State Hooks','Custom Events'],
+ details:{
+   '7 Views':{desc:'Dashboard, Apply, Pipeline, Graph, Activity, Profile, Ingestion. Each is a major screen rendered based on view-state string.',files:['src/views/'],why:'Separated concerns - each view handles a distinct workflow.'},
+   'WebSocket Client':{desc:'useWS() hook manages real-time connection. Receives scan progress, lead updates, errors. Auto-reconnects up to 20 times.',files:['src/hooks/useWS.ts'],why:'Real-time updates without polling for live scan progress and events.'},
+   'API Client':{desc:'Centralized fetch wrapper with base URL, token injection, error normalization. 30s default timeout.',files:['src/lib/api.ts'],why:'Single source of truth for all HTTP communication with backend.'},
+   'State Hooks':{desc:'useAppShellState, useLeads, useDueFollowups, useGraphStats - all owned by App.tsx root component.',files:['src/App.tsx','src/hooks/'],why:'Centralized state without external state management library.'},
+   'Custom Events':{desc:'window.dispatchEvent() for cross-component communication. Used for triggering refreshes, navigating views, etc.',files:['src/App.tsx'],why:'Lightweight pub/sub without introducing a state management framework.'}
+ }},
+{name:'Gateway - FastAPI',color:'var(--cyan)',bg:'rgba(34,211,238,0.08)',border:'rgba(34,211,238,0.2)',
+ boxes:['FastAPI App','Auth Middleware','WS Manager','Event Bus','Rate Limiter','APScheduler'],
+ details:{
+   'FastAPI App':{desc:'build_gateway_app() creates the main ASGI application with CORS, exception handlers, and all router mounts.',files:['api/gateway.py'],why:'Central entry point for all HTTP/WS traffic.'},
+   'Auth Middleware':{desc:'Bearer token verification on every request. Token generated at boot and shared via stdout IPC.',files:['api/gateway.py','api/auth.py'],why:'Prevents unauthorized access to the local API.'},
+   'WS Manager':{desc:'ConnectionManager handles WebSocket lifecycle - connect, disconnect, broadcast, send_personal. Single connection expected.',files:['api/ws.py'],why:'Real-time bidirectional communication with the frontend.'},
+   'Event Bus':{desc:'InProcessEventBus for decoupled service-to-service communication. Currently exists but not fully wired.',files:['api/events.py'],why:'Future-proofing for microservices migration.'},
+   'Rate Limiter':{desc:'SlowAPI rate limiting - 5 requests per 60 seconds on expensive endpoints. Configurable.',files:['api/gateway.py'],why:'Prevents accidental LLM cost explosions from rapid-fire requests.'},
+   'APScheduler':{desc:'Background job scheduler for ghost mode (auto-scan every 6 hours) and other periodic tasks.',files:['api/scheduler.py'],why:'Autonomous operation without user intervention.'}
+ }},
+{name:'Services',color:'var(--green)',bg:'rgba(52,211,153,0.08)',border:'rgba(52,211,153,0.2)',
+ boxes:['Profile','Discovery','Ranking','Generation','Automation','Graph','LLM Client','Help'],
+ details:{
+   'Profile':{desc:'Resume, LinkedIn, GitHub, and portfolio ingestion. Skill normalization, structured parsing with LLM + fallback heuristics.',files:['profile/ingestor.py','profile/linkedin_parser.py'],why:'Central identity - everything depends on knowing the candidate.'},
+   'Discovery':{desc:'Job board scanning via 6+ source adapters. Apify, HN, Reddit, RSS, X, ATS connectors.',files:['discovery/service.py','discovery/sources/'],why:'The input pipeline - without discovery, no leads to process.'},
+   'Ranking':{desc:'Multi-criteria scoring (6 weighted dimensions) with feedback learning and LLM evaluation.',files:['ranking/scoring_engine.py','ranking/evaluator.py'],why:'The brain - determines which jobs are worth applying to.'},
+   'Generation':{desc:'Resume tailoring, cover letter, outreach drafting. PDF rendering via fpdf2. Version storage.',files:['generation/generators/package.py','generation/drafting.py'],why:'Produces the actual application materials.'},
+   'Automation':{desc:'Browser-based auto-apply via Playwright. DOM fill + vision fallback with LLM coordinate clicks.',files:['automation/actuator.py','automation/service.py'],why:'Closes the loop - actually submits applications.'},
+   'Graph':{desc:'Knowledge graph with 8 node types, 9 relationship types. Kuzu-backed for complex traversals.',files:['data/graph/connection.py','data/graph/queries.py'],why:'Connects skills, projects, experience for richer matching.'},
+   'LLM Client':{desc:'Multi-provider abstraction via Instructor. 20+ providers, structured output, per-step overrides, retry with exponential backoff.',files:['llm/client.py'],why:'Provider flexibility - switch AI without code changes.'},
+   'Help':{desc:'Contextual help system for onboarding and in-app guidance.',files:['api/routers/help.py'],why:'User experience - reduces friction for new users.'}
+ }},
+{name:'Data Layer',color:'var(--yellow)',bg:'rgba(251,191,36,0.08)',border:'rgba(251,191,36,0.2)',
+ boxes:['SQLite WAL','Kuzu Graph','LanceDB Vector','File System'],
+ details:{
+   'SQLite WAL':{desc:'Main relational store. WAL mode for concurrent reads. 4 tables: leads (39 fields), events, settings, error_log.',files:['data/sqlite/connection.py'],why:'Simple, embedded, zero-config relational storage.'},
+   'Kuzu Graph':{desc:'Embedded graph database. 8 node types, 9 relationship types. Stores candidate knowledge graph.',files:['data/graph/connection.py'],why:'Graph queries for skill-project-experience relationships.'},
+   'LanceDB Vector':{desc:'Vector store for semantic search. Sentence Transformers embeddings for skill/job matching.',files:['data/vector/store.py'],why:'Semantic similarity search beyond keyword matching.'},
+   'File System':{desc:'Generated PDFs, uploaded resumes, cached data stored on local filesystem.',files:['data/filesystem.py'],why:'Binary assets that do not belong in databases.'}
+ }},
+{name:'External Services',color:'var(--pink)',bg:'rgba(244,114,182,0.08)',border:'rgba(244,114,182,0.2)',
+ boxes:['20+ LLM Providers','Apify','ATS Platforms','Job Sources','Playwright','Sentence Transformers'],
+ details:{
+   '20+ LLM Providers':{desc:'OpenAI, Anthropic, Google, Mistral, Groq, Ollama, OpenRouter, DeepSeek, xAI, Cerebras, Sambanova, and more via OpenAI-compatible API.',files:['llm/client.py'],why:'User choice - pick the best/cheapest model for each task.'},
+   'Apify':{desc:'Web scraping platform used for job board data extraction. Configurable actors per board.',files:['discovery/sources/apify.py'],why:'Reliable, scalable scraping without managing infrastructure.'},
+   'ATS Platforms':{desc:'Direct integration with applicant tracking systems for job data.',files:['discovery/sources/ats.py'],why:'Higher quality data than scraping public job boards.'},
+   'Job Sources':{desc:'HackerNews (Who is Hiring), Reddit job subs, X/Twitter job posts, RSS feeds.',files:['discovery/sources/hackernews.py','discovery/sources/reddit.py'],why:'Diverse sourcing beyond traditional job boards.'},
+   'Playwright':{desc:'Chromium automation for form filling, resume upload, and application submission.',files:['automation/actuator.py'],why:'Automates the manual apply process end-to-end.'},
+   'Sentence Transformers':{desc:'HuggingFace embedding models for vectorizing skills, job descriptions, and projects.',files:['data/vector/store.py'],why:'Local semantic embeddings without API costs.'}
+ }}
+];
+
+var LIFECYCLE=[
+{phase:'A',phaseTitle:'Tauri Boot',color:'var(--purple)',steps:[
+  {num:1,fn:'run()',file:'src-tauri/src/lib.rs',desc:'Init plugins: shell, updater, process, opener, notification',error:'Plugin init failure crashes app'},
+  {num:2,fn:'manage()',file:'src-tauri/src/lib.rs',desc:'Register state: SidecarPort, ApiTokenState, SidecarChild, SidecarError',error:'State registration is infallible'},
+  {num:3,fn:'cleanup_stale_sidecar()',file:'src-tauri/src/lib.rs',desc:'Reads sidecar.pid file, kills leftover Python processes from previous runs',error:'Missing PID file is non-fatal'},
+  {num:4,fn:'spawn_sidecar(handle, 0)',file:'src-tauri/src/lib.rs',desc:'Spawns Python backend as child process with environment setup',error:'Retries up to 3 times with backoff'},
+  {num:5,fn:'parse stdout',file:'src-tauri/src/lib.rs',desc:'Reads stdout line-by-line for PORT:<number> and JHM_TOKEN=<token>',error:'Waits indefinitely on stdout events'},
+  {num:6,fn:'emit()',file:'src-tauri/src/lib.rs',desc:'Emit Tauri events: sidecar-port, sidecar-token to frontend',error:'Frontend falls back to polling'}
+]},
+{phase:'B',phaseTitle:'Python Backend Boot',color:'var(--cyan)',steps:[
+  {num:7,fn:'module init',file:'backend/main.py',desc:'Initialize scheduler, generate API token, create ConnectionManager',error:'Fatal on scheduler init failure'},
+  {num:8,fn:'build_gateway_app()',file:'backend/main.py',desc:'Create FastAPI app with CORS middleware, exception handlers, mount routers',error:'Invalid router config crashes boot'},
+  {num:9,fn:'create_lifespan()',file:'backend/main.py',desc:'Run init_sql() for DB migrations, start APScheduler',error:'DB init failure is fatal'},
+  {num:10,fn:'print()',file:'backend/main.py',desc:'Print PORT:<port> and JHM_TOKEN=<token> to stdout for Tauri to capture',error:'If stdout is blocked, Tauri times out'},
+  {num:11,fn:'uvicorn.run()',file:'backend/main.py',desc:'Start HTTP/WS server on 127.0.0.1:<port> using OS-assigned free port',error:'Uses _free_port() for OS-assigned port'}
+]},
+{phase:'C',phaseTitle:'React Frontend Mount',color:'var(--accent-glow)',steps:[
+  {num:12,fn:'createRoot().render()',file:'src/main.tsx',desc:'Mount <App/> component to DOM root',error:'Caught by ErrorBoundary'},
+  {num:13,fn:'useWS()',file:'src/hooks/useWS.ts',desc:'IPC invoke calls to get port and token from Tauri',error:'Fallback: polls localhost ports'},
+  {num:14,fn:'waitForBackendReady()',file:'src/lib/api.ts',desc:'Polls GET /health up to 60 times with 1s interval',error:'Shows "Backend starting..." overlay'},
+  {num:15,fn:'new WebSocket()',file:'src/hooks/useWS.ts',desc:'Connect to ws://127.0.0.1:{port}/ws?token={token}',error:'Auto-reconnect up to 20 times'},
+  {num:16,fn:'render()',file:'src/App.tsx',desc:'Render main UI or OnboardingWizard based on profile state',error:'ErrorBoundary shows crash screen'}
+]}
+];
+var VIEWS=[
+{name:'Dashboard',icon:'☰',color:'var(--accent-glow)',desc:'Command center. Scan controls, hot leads count, upcoming follow-ups, quick stats.'},
+{name:'Apply',icon:'✍',color:'var(--green)',desc:'Paste a job URL, evaluate fit, generate tailored resume and cover letter, keyword coverage analysis.'},
+{name:'Pipeline',icon:'⚙',color:'var(--cyan)',desc:'6 tabs: All/Hot/New/Rated/Ready/Applied/Discarded. Search, filter, bulk operations, lead management.'},
+{name:'Graph',icon:'⬢',color:'var(--purple)',desc:'Interactive knowledge graph visualization. 2D, 3D, and atlas rendering modes for skills/projects/experience.'},
+{name:'Activity',icon:'⏱',color:'var(--orange)',desc:'Live event log with filtered tabs. Every system action is recorded and browsable.'},
+{name:'Profile',icon:'✎',color:'var(--pink)',desc:'Edit skills, experience, projects inline. The source of truth for candidate identity.'},
+{name:'Ingestion',icon:'⇩',color:'var(--yellow)',desc:'Multi-tab import: Resume PDF, LinkedIn export, GitHub profile, portfolio URL, raw JSON.'}
+];
+var SERVICES=[
+{name:'Profile Service',icon:'👤',color:'var(--pink)',what:'Resume/LinkedIn/GitHub/portfolio ingestion, skill normalization',why:'Central identity - everything depends on knowing who the candidate is',
+ how:['PDF text extract','LLM structured parse','Fallback heuristic parse','Merge profiles','Kuzu graph sync','LanceDB embedding'],
+ files:['profile/ingestor.py','linkedin_parser.py','github_ingestor.py']},
+{name:'Discovery Service',icon:'🔍',color:'var(--cyan)',what:'Job board scanning via 6+ source adapters',why:'The input pipeline - without discovery, no leads to process',
+ how:['Configure targets','Apify adapter','HN adapter','Reddit adapter','RSS adapter','X adapter','ATS adapter','Quality gate','Signal score','Persist','WS broadcast'],
+ files:['discovery/service.py','sources/apify.py','sources/hackernews.py','sources/reddit.py']},
+{name:'Ranking Service',icon:'🏆',color:'var(--yellow)',what:'Multi-criteria lead scoring with learning',why:'The brain - determines which jobs are worth applying to',
+ how:['Role alignment (15%)','Stack coverage (20%)','Evidence quality (18%)','Seniority fit (20%)','Logistics (12%)','Semantic match (15%)','Weight and cap','Feedback delta'],
+ files:['ranking/scoring_engine.py','evaluator.py']},
+{name:'Generation Service',icon:'📄',color:'var(--green)',what:'Resume tailoring, cover letter, outreach, PDF rendering',why:'The output - produces actual application materials',
+ how:['Context assembly','Project ranking','JD keyword extract','LLM draft (structured)','Normalize output','PDF render (fpdf2)','Version store'],
+ files:['generation/generators/package.py','drafting.py']},
+{name:'Automation Service',icon:'🤖',color:'var(--orange)',what:'Browser-based auto-apply via Playwright',why:'Closes the loop - actually submits applications',
+ how:['Launch Chromium','Navigate to URL','DOM-based form fill','14 CSS selectors','Vision fallback','Screenshot + LLM','Coordinate clicks','Resume upload','Submit','Mark applied'],
+ files:['automation/actuator.py','service.py']},
+{name:'Graph Service',icon:'🕐',color:'var(--purple)',what:'Knowledge graph queries and relationship sync',why:'Connects skills, projects, experience for richer matching',
+ how:['8 node types','15 relationship types','Kuzu queries','Relationship sync','Traversals'],
+ files:['data/graph/connection.py','data/graph/queries.py']},
+{name:'LLM Client',icon:'🧠',color:'var(--accent-glow)',what:'Multi-provider abstraction via Instructor',why:'Provider flexibility - switch AI without code changes',
+ how:['20+ providers','OpenAI-compatible API','Instructor structured output','Per-step overrides','Retry with backoff','120s timeout'],
+ files:['llm/client.py']}
+];
+var SCORING=[
+{label:'Stack Coverage',pct:20,color:'var(--cyan)',note:'27% when semantic unavailable'},
+{label:'Seniority Fit',pct:20,color:'var(--purple)'},
+{label:'Evidence Quality',pct:18,color:'var(--green)',note:'20% when semantic unavailable'},
+{label:'Role Alignment',pct:15,color:'var(--accent-glow)',note:'18% when semantic unavailable'},
+{label:'Semantic Match',pct:15,color:'var(--pink)',note:'0% when unavailable, redistributed'},
+{label:'Logistics',pct:12,color:'var(--orange)',note:'15% when semantic unavailable'}
+];
+
+var API_GROUPS=[
+{name:'Health',count:3,endpoints:[
+  {m:'GET',p:'/health',d:'Basic health check'},{m:'GET',p:'/health/detailed',d:'Detailed health with DB/LLM status'},{m:'GET',p:'/health/version',d:'App version info'}
+]},
+{name:'Profile',count:18,endpoints:[
+  {m:'GET',p:'/profile',d:'Get current profile'},{m:'PUT',p:'/profile',d:'Update profile fields'},{m:'POST',p:'/profile/ingest/resume',d:'Ingest resume PDF'},
+  {m:'POST',p:'/profile/ingest/linkedin',d:'Ingest LinkedIn export'},{m:'POST',p:'/profile/ingest/github',d:'Ingest GitHub profile'},
+  {m:'POST',p:'/profile/ingest/portfolio',d:'Crawl portfolio URL'},{m:'POST',p:'/profile/ingest/json',d:'Ingest raw JSON profile'},
+  {m:'GET',p:'/profile/skills',d:'List all skills'},{m:'PUT',p:'/profile/skills',d:'Update skills'},
+  {m:'GET',p:'/profile/experience',d:'List experience'},{m:'PUT',p:'/profile/experience',d:'Update experience'},
+  {m:'GET',p:'/profile/projects',d:'List projects'},{m:'PUT',p:'/profile/projects',d:'Update projects'},
+  {m:'GET',p:'/profile/education',d:'List education'},{m:'PUT',p:'/profile/education',d:'Update education'},
+  {m:'GET',p:'/profile/certifications',d:'List certifications'},{m:'GET',p:'/profile/completeness',d:'Profile completeness score'},
+  {m:'POST',p:'/profile/merge',d:'Merge multiple ingested profiles'}
+]},
+{name:'Ingestion',count:4,endpoints:[
+  {m:'POST',p:'/ingest/resume',d:'Upload and parse resume PDF'},{m:'POST',p:'/ingest/linkedin',d:'Parse LinkedIn data export'},
+  {m:'POST',p:'/ingest/github/{username}',d:'Fetch and parse GitHub profile'},{m:'POST',p:'/ingest/portfolio',d:'Crawl and parse portfolio site'}
+]},
+{name:'Leads / CRM',count:12,endpoints:[
+  {m:'GET',p:'/leads',d:'Get leads (paginated, limit=200 default, but page=None returns all)'},{m:'GET',p:'/leads/{id}',d:'Get single lead'},{m:'POST',p:'/leads',d:'Create manual lead'},
+  {m:'PUT',p:'/leads/{id}',d:'Update lead fields'},{m:'DELETE',p:'/leads/{id}',d:'Soft-delete lead'},{m:'POST',p:'/leads/{id}/rate',d:'Rate/score a lead'},
+  {m:'POST',p:'/leads/{id}/evaluate',d:'LLM evaluation of lead fit'},{m:'POST',p:'/leads/{id}/discard',d:'Move lead to discarded'},
+  {m:'POST',p:'/leads/{id}/followup',d:'Schedule follow-up'},{m:'GET',p:'/leads/stats',d:'Lead statistics'},
+  {m:'GET',p:'/leads/due-followups',d:'Get due follow-ups'},{m:'POST',p:'/leads/bulk',d:'Bulk operations on leads'}
+]},
+{name:'Discovery',count:7,endpoints:[
+  {m:'POST',p:'/discovery/scan',d:'Start job scan'},{m:'GET',p:'/discovery/scan/status',d:'Scan progress'},
+  {m:'POST',p:'/discovery/scan/stop',d:'Stop running scan'},{m:'GET',p:'/discovery/sources',d:'List configured sources'},
+  {m:'PUT',p:'/discovery/sources',d:'Update source config'},{m:'GET',p:'/discovery/history',d:'Scan history'},
+  {m:'POST',p:'/discovery/scan/ghost',d:'Start ghost mode scan'}
+]},
+{name:'Generation',count:3,endpoints:[
+  {m:'POST',p:'/generate/package',d:'Generate resume + cover letter'},{m:'POST',p:'/generate/outreach',d:'Generate outreach message'},
+  {m:'GET',p:'/generate/versions/{lead_id}',d:'Get generated versions for lead'}
+]},
+{name:'Automation',count:4,endpoints:[
+  {m:'POST',p:'/automation/apply',d:'Auto-apply to a lead'},{m:'GET',p:'/automation/status',d:'Automation status'},
+  {m:'POST',p:'/automation/stop',d:'Stop running automation'},{m:'GET',p:'/automation/form/{lead_id}',d:'Read application form fields'}
+]},
+{name:'Settings',count:8,endpoints:[
+  {m:'GET',p:'/settings',d:'Get all settings'},{m:'PUT',p:'/settings',d:'Update settings'},{m:'GET',p:'/settings/llm',d:'LLM provider config'},
+  {m:'PUT',p:'/settings/llm',d:'Update LLM config'},{m:'GET',p:'/settings/sources',d:'Job source config'},
+  {m:'PUT',p:'/settings/sources',d:'Update source config'},{m:'POST',p:'/settings/test-llm',d:'Test LLM connection'},
+  {m:'GET',p:'/settings/export',d:'Export all settings'}
+]},
+{name:'Graph and Vector',count:4,endpoints:[
+  {m:'GET',p:'/graph/stats',d:'Graph node/edge counts'},{m:'GET',p:'/graph/data',d:'Full graph data for visualization'},
+  {m:'POST',p:'/graph/sync',d:'Re-sync profile to graph'},{m:'POST',p:'/vector/search',d:'Semantic search across vectors'}
+]},
+{name:'Real-time and Misc',count:5,endpoints:[
+  {m:'WS',p:'/ws',d:'WebSocket for real-time events'},{m:'GET',p:'/events',d:'Get event log'},
+  {m:'GET',p:'/events/stream',d:'SSE event stream'},{m:'POST',p:'/help/context',d:'Get contextual help'},
+  {m:'GET',p:'/misc/updates',d:'Check for app updates'}
+]}
+];
+var DB_DATA={
+sqlite:{tables:[
+  {name:'leads',count:48,fields:['id INTEGER PK','url TEXT','company TEXT','title TEXT','location TEXT','salary_min REAL','salary_max REAL','source TEXT','status TEXT','kind TEXT','score REAL','rating INTEGER','match_points JSON','gaps JSON','keywords JSON','resume_path TEXT','cover_letter_path TEXT','outreach TEXT','applied_at TEXT','created_at TEXT','updated_at TEXT','discarded_at TEXT','followup_due_at TEXT','followup_note TEXT','notes TEXT','description TEXT','requirements TEXT','raw_html TEXT','remote BOOLEAN','seniority TEXT','stack JSON','company_size TEXT','industry TEXT','benefits JSON','ats_url TEXT','contact_email TEXT','contact_name TEXT','archived BOOLEAN','evaluation JSON','+ 9 legacy migration columns']},
+  {name:'events',count:4,fields:['id INTEGER PK','job_id INTEGER FK','action TEXT','ts TEXT']},
+  {name:'settings',count:2,fields:['key TEXT PK','val TEXT']},
+  {name:'error_log',count:7,fields:['id INTEGER PK','error_type TEXT','error_message TEXT','source TEXT','count INTEGER','first_seen TEXT','last_seen TEXT']}
+]},
+kuzu:{
+  nodes:['Candidate (name, email, summary, location)','Skill (name, category, proficiency)','Project (name, description, url, impact)','Experience (company, title, start, end, description)','Certification (name, issuer, date)','Education (institution, degree, field, year)','Achievement (description, metric, context)','JobLead (title, company, url, score)'],
+  rels:['WORKED_AS: Candidate -> Experience','BUILT: Candidate -> Project','HAS_SKILL: Candidate -> Skill','HAS_CERTIFICATION: Candidate -> Certification','HAS_EDUCATION: Candidate -> Education','HAS_ACHIEVEMENT: Candidate -> Achievement','EXP_UTILIZES: Experience -> Skill','PROJ_UTILIZES: Project -> Skill','CERTIFIES: Certification -> Skill','EDUCATES: Education -> Skill','ACHIEVEMENT_USES: Achievement -> Skill','REQUIRES: JobLead -> Skill','RELATED_SKILL: Skill -> Skill','SIMILAR_PROJECT: Project -> Project','PROJECT_SUPPORTS_EXPERIENCE: Project -> Experience']
+},
+lancedb:{desc:'Vector store using LanceDB (embedded). Sentence Transformers model (all-MiniLM-L6-v2) generates 384-dim embeddings. Stores vectorized skills, project descriptions, job descriptions, and profile summaries for semantic similarity search. Used by ranking service for the semantic match criterion (15% weight).'}
+};
+
+var FLOWS=[
+{name:'Profile Ingestion',steps:[
+  {title:'Input',desc:'PDF/LinkedIn/GitHub/Portfolio/JSON upload',tags:['FastAPI','multipart']},
+  {title:'Parse',desc:'Extract raw text from document format',tags:['pdfminer','BeautifulSoup']},
+  {title:'LLM Extract',desc:'Structured output parsing via Instructor',tags:['LLM','Instructor']},
+  {title:'Fallback Merge',desc:'Heuristic parsing + merge with existing profile',tags:['regex','merge']},
+  {title:'Graph Sync',desc:'Upsert nodes and relationships in Kuzu',tags:['Kuzu','Cypher']},
+  {title:'Vector Embed',desc:'Generate embeddings for semantic search',tags:['Transformers','LanceDB']}
+]},
+{name:'Job Discovery',steps:[
+  {title:'Configure',desc:'Set target boards, keywords, locations',tags:['Settings','SQLite']},
+  {title:'Source Adapters',desc:'6 adapters scan concurrently',tags:['Apify','HN','Reddit','RSS']},
+  {title:'Quality Gate',desc:'Filter duplicates, spam, expired posts',tags:['dedup','heuristic']},
+  {title:'Signal Score',desc:'Initial relevance scoring',tags:['keyword','location']},
+  {title:'Persist',desc:'Store leads in SQLite + event log',tags:['SQLite','events']},
+  {title:'WS Broadcast',desc:'Push new leads to frontend in real-time',tags:['WebSocket','JSON']}
+]},
+{name:'Lead Evaluation',steps:[
+  {title:'Deterministic Score',desc:'6 weighted criteria calculation',tags:['scoring_engine']},
+  {title:'LLM Evaluation',desc:'AI-powered fit assessment',tags:['LLM','Instructor']},
+  {title:'Semantic Match',desc:'Vector similarity with profile',tags:['LanceDB','cosine']},
+  {title:'Feedback Learning',desc:'Adjust weights from user thumbs',tags:['delta','learning']},
+  {title:'Score Update',desc:'Persist final composite score',tags:['SQLite','UPDATE']}
+]},
+{name:'Asset Generation',steps:[
+  {title:'Context Assembly',desc:'Gather profile, JD, company info',tags:['profile','lead']},
+  {title:'Project Ranking',desc:'Rank projects by relevance to JD',tags:['scoring','semantic']},
+  {title:'LLM Draft',desc:'Generate resume + cover letter',tags:['LLM','structured']},
+  {title:'Normalize',desc:'Clean and format output text',tags:['regex','templates']},
+  {title:'PDF Render',desc:'Generate PDF with fpdf2',tags:['fpdf2','fonts']},
+  {title:'Version Store',desc:'Save with version history',tags:['filesystem','SQLite']}
+]},
+{name:'Auto-Apply',steps:[
+  {title:'Launch Browser',desc:'Start Playwright Chromium instance',tags:['Playwright','browser']},
+  {title:'Navigate',desc:'Go to application URL',tags:['HTTP','page.goto']},
+  {title:'DOM Fill',desc:'14 CSS selectors for form fields',tags:['CSS','querySelector']},
+  {title:'Vision Fallback',desc:'Screenshot + LLM for unknown forms',tags:['LLM','vision']},
+  {title:'Resume Upload',desc:'Attach generated PDF to form',tags:['file input','upload']},
+  {title:'Submit',desc:'Click submit + verify confirmation',tags:['click','verify']},
+  {title:'Mark Applied',desc:'Update lead status in database',tags:['SQLite','UPDATE']}
+]},
+{name:'Ghost Mode',steps:[
+  {title:'Profile Validate',desc:'Ensure profile is complete enough',tags:['validator','profile']},
+  {title:'Scan',desc:'Run discovery with saved config',tags:['APScheduler','6h']},
+  {title:'Evaluate',desc:'Auto-score all new leads',tags:['ranking','batch']},
+  {title:'Generate',desc:'Create materials for top leads',tags:['generation','top-N']},
+  {title:'Apply',desc:'Auto-apply to qualifying leads',tags:['automation','Playwright']},
+  {title:'Broadcast',desc:'Notify user of results',tags:['WebSocket','notification']}
+]}
+];
+
+var PAIN_POINTS=[
+{id:1,sev:'critical',cat:'Performance',title:'LLM client creates new SDK client per call',file:'llm/client.py',desc:'No connection reuse. Every LLM call instantiates a new HTTP client with fresh TLS handshake.',fix:'Create client pool keyed by provider, reuse across calls.'},
+{id:2,sev:'critical',cat:'Bug',title:'Race condition on Kuzu graph connection',file:'data/graph/connection.py',desc:'RLock with 1.5s timeout. Concurrent graph operations can deadlock under load.',fix:'Use connection pool or serialize graph writes via queue.'},
+{id:3,sev:'medium',cat:'Performance',title:'get_all_leads() pagination optional, default unbounded',file:'api/routers/leads.py',desc:'Pagination params exist (page, limit=200) but when page=None, returns all leads. Default path still loads everything into memory.',fix:'Make pagination mandatory or enforce a hard max limit.'},
+{id:4,sev:'critical',cat:'Performance',title:'14+ synchronous SQLite calls in async handlers',file:'api/routers/leads.py',desc:'Blocks the asyncio event loop. Every DB call stalls all concurrent requests.',fix:'Use run_in_executor() or aiosqlite for async DB access.'},
+{id:5,sev:'critical',cat:'Bug',title:'Synchronous DB in async read_lead_form handler',file:'api/routers/automation.py',desc:'Same event loop blocking issue in automation router.',fix:'Wrap in asyncio.to_thread() or use async DB driver.'},
+{id:6,sev:'critical',cat:'Performance',title:'No indexes on frequently queried columns',file:'data/sqlite/connection.py',desc:'Status, score, created_at, source columns have no indexes. Full table scans.',fix:'Add CREATE INDEX statements in init_sql().'},
+{id:7,sev:'high',cat:'Tech Debt',title:'148 suppressed exception catch blocks',file:'backend/**',desc:'Broad except blocks that swallow errors silently. Makes debugging nearly impossible.',fix:'Replace with specific exception types, add logging.'},
+{id:8,sev:'high',cat:'Performance',title:'120s LLM timeout with 4-thread pool',file:'llm/client.py',desc:'4 hanging LLM calls = zero throughput. All workers blocked for 2 minutes.',fix:'Use async HTTP client, increase thread pool, add circuit breaker.'},
+{id:9,sev:'high',cat:'Bug',title:'sync_profile_relationships re-acquires RLock',file:'data/graph/connection.py',desc:'Nested lock acquisition inside already-locked section. Can deadlock.',fix:'Refactor to single lock scope or use reentrant-safe pattern.'},
+{id:10,sev:'high',cat:'Security',title:'Path traversal risk in PDF endpoint',file:'api/routers/leads.py',desc:'File path from user input used to serve PDF without sanitization.',fix:'Validate path is within allowed directory, use pathlib.resolve().'},
+{id:11,sev:'high',cat:'Security',title:'Manual lead creation has no rate limiting',file:'api/routers/leads.py',desc:'Creating leads triggers LLM evaluation. Unlimited spend risk.',fix:'Add rate limiting to POST /leads endpoint.'},
+{id:12,sev:'high',cat:'Performance',title:'O(n^2) graph relationship building',file:'data/graph/connection.py',desc:'Nested loops comparing all skills/projects. Quadratic with profile size.',fix:'Use indexed lookups or batch Cypher queries.'},
+{id:13,sev:'high',cat:'Tech Debt',title:'Generation router 270+ lines deeply nested',file:'api/routers/generation.py',desc:'Single function with 6+ levels of nesting. Unmaintainable.',fix:'Extract into service methods with single-responsibility.'},
+{id:14,sev:'high',cat:'Tech Debt',title:'Hardcoded API URLs duplicated in settings',file:'api/routers/settings.py',desc:'Same URLs appear in multiple places. Change one, miss others.',fix:'Centralize in config constants module.'},
+{id:15,sev:'high',cat:'UX',title:'Rate limit 5 req/60s too restrictive',file:'api/gateway.py',desc:'Normal usage easily hits this. Opening pipeline + clicking leads = rate limited.',fix:'Increase to 30/60s or use token bucket algorithm.'},
+{id:16,sev:'high',cat:'Tech Debt',title:'Massive code duplication across 9 LLM branches',file:'llm/client.py',desc:'Each provider has nearly identical code with minor URL/key differences.',fix:'Extract common pattern, use config-driven provider setup.'},
+{id:17,sev:'high',cat:'Tech Debt',title:'Magic numbers in scoring logic',file:'ranking/scoring_engine.py',desc:'36, 60, 24, 30, 38, 42, 45, 48, 52, 15, 240, 700 undocumented.',fix:'Extract to named constants with comments explaining derivation.'},
+{id:18,sev:'high',cat:'Bug',title:'No AbortController on frontend API calls',file:'src/lib/api.ts',desc:'Unmounted components still receive setState calls. Memory leak + React warnings.',fix:'Add AbortController, cancel on unmount in useEffect cleanup.'},
+{id:19,sev:'high',cat:'Tech Debt',title:'Bare except with no logging in settings',file:'api/routers/settings.py',desc:'Errors silently swallowed. User sees generic failure.',fix:'Log exception, return specific error message.'},
+{id:20,sev:'high',cat:'Tech Debt',title:'8 broad except blocks in health checks',file:'api/routers/health.py',desc:'Health endpoint reports healthy even when subsystems fail.',fix:'Catch specific exceptions, report subsystem status individually.'},
+{id:21,sev:'medium',cat:'Performance',title:'Ghost mode broadcasts per-lead events',file:'discovery/service.py',desc:'1000+ leads = 1000+ WebSocket messages. Frontend lag.',fix:'Batch events, send summary after scan completes.'},
+{id:22,sev:'medium',cat:'Tech Debt',title:'7 broad except blocks in discovery router',file:'api/routers/discovery.py',desc:'Scan errors hidden from user. Silent failures.',fix:'Log and surface specific error types.'},
+{id:23,sev:'medium',cat:'Performance',title:'get_all_leads filters in Python after loading all',file:'api/routers/leads.py',desc:'Loads entire table then filters in memory. SQL WHERE is faster.',fix:'Push filters to SQL query with parameterized WHERE clauses.'},
+{id:24,sev:'medium',cat:'Performance',title:'Portfolio crawl 5-minute timeout',file:'profile/ingestor.py',desc:'Generous timeout blocks the request for potentially 5 minutes.',fix:'Use background task, return immediately with status polling.'},
+{id:25,sev:'medium',cat:'Missing Feature',title:'No full-text search on leads',file:'data/sqlite/connection.py',desc:'FTS5 available in SQLite but unused. Text search is LIKE-based.',fix:'Create FTS5 virtual table for leads description/title.'},
+{id:26,sev:'medium',cat:'Tech Debt',title:'Lead TypedDict incomplete: 10 of 39 fields',file:'api/types.py',desc:'Type safety only covers 25% of lead fields. Bugs from typos.',fix:'Complete the TypedDict with all 39 fields.'},
+{id:27,sev:'medium',cat:'UX',title:'WebSocket gives up after 20 retries',file:'src/hooks/useWS.ts',desc:'No recovery button. User must restart app to reconnect.',fix:'Add manual reconnect button after max retries.'},
+{id:28,sev:'medium',cat:'Bug',title:'Temp files from upload may leak on crash',file:'api/routers/profile.py',desc:'Uploaded files stored in temp dir, not cleaned on exception.',fix:'Use tempfile context manager with finally cleanup.'},
+{id:29,sev:'medium',cat:'Security',title:'CORS middleware configuration needs review',file:'api/gateway.py',desc:'CORS allows broad origins. Should be localhost-only for desktop app.',fix:'Restrict to 127.0.0.1 and localhost origins only.'},
+{id:30,sev:'medium',cat:'Tech Debt',title:'3 parallel dicts for LLM provider config',file:'llm/client.py',desc:'Provider URLs, keys, and model names in separate dicts. Easy to desync.',fix:'Single provider config dataclass with all fields.'},
+{id:31,sev:'medium',cat:'Performance',title:'OpenAI embeddings API call is synchronous',file:'data/vector/store.py',desc:'Blocks event loop during embedding generation.',fix:'Use async OpenAI client or run_in_executor.'},
+{id:32,sev:'medium',cat:'Performance',title:'In-memory filtering instead of SQL WHERE',file:'api/routers/leads.py',desc:'Multiple endpoints load all data then filter in Python.',fix:'Build dynamic SQL queries with proper WHERE clauses.'},
+{id:33,sev:'medium',cat:'Missing Feature',title:'No event pagination or date filtering',file:'api/routers/events.py',desc:'Events endpoint returns all events. Grows unbounded.',fix:'Add pagination + date range filter parameters.'},
+{id:34,sev:'medium',cat:'Tech Debt',title:'Lazy __getattr__ pattern for app attribute',file:'api/gateway.py',desc:'IDE cannot autocomplete. Runtime AttributeError if typo.',fix:'Use explicit attribute assignment in __init__.'},
+{id:35,sev:'medium',cat:'UX',title:'30s default timeout for all API calls',file:'src/lib/api.ts',desc:'Quick lookups and slow LLM calls share same timeout.',fix:'Per-endpoint timeout configuration.'},
+{id:36,sev:'medium',cat:'Bug',title:'_parse_fallback silently returns empty models',file:'profile/ingestor.py',desc:'Fallback parser returns empty profile on any parsing error.',fix:'Return partial results with error indicators.'},
+{id:37,sev:'medium',cat:'Performance',title:'row_get O(n) lookup per field access',file:'data/sqlite/connection.py',desc:'Linear scan through column names on every field access.',fix:'Build column index dict once per query.'},
+{id:38,sev:'medium',cat:'Tech Debt',title:'No structured logging, just f-string log.info()',file:'backend/**',desc:'No correlation IDs, no structured fields. Hard to search/filter.',fix:'Use structlog or python-json-logger.'},
+{id:39,sev:'medium',cat:'Tech Debt',title:'Legacy monolithic test file alongside domain tests',file:'tests/',desc:'Old test_all.py coexists with new domain-specific test files.',fix:'Migrate remaining tests, delete monolith.'},
+{id:40,sev:'medium',cat:'UX',title:'ErrorBoundary offers no recovery action',file:'src/components/ErrorBoundary.tsx',desc:'Crash screen has no retry button. Must restart app.',fix:'Add retry button that remounts the component tree.'},
+{id:41,sev:'medium',cat:'Bug',title:'Brittle URL parsing for X/Twitter',file:'discovery/sources/twitter.py',desc:'Hardcoded URL patterns break when X changes URL format.',fix:'Use robust URL parsing with fallback patterns.'},
+{id:42,sev:'medium',cat:'Tech Debt',title:'Ollama dummy key "ollama" hardcoded',file:'llm/client.py',desc:'Placeholder API key for local Ollama. Not harmful but messy.',fix:'Use empty string or None with explicit local-mode flag.'},
+{id:43,sev:'low',cat:'Tech Debt',title:'Hardcoded default job board URLs',file:'discovery/sources/apify.py',desc:'Default URLs baked into source code.',fix:'Move to settings with defaults in config file.'},
+{id:44,sev:'low',cat:'Tech Debt',title:'Duplicate GitHub release URL in two files',file:'src-tauri/tauri.conf.json',desc:'Same release URL in Tauri config and settings router.',fix:'Single source of truth in environment variable.'},
+{id:45,sev:'low',cat:'Tech Debt',title:'Hardcoded HuggingFace model download URL',file:'data/vector/store.py',desc:'Model URL in source code. Breaks if HF changes paths.',fix:'Make configurable in settings.'},
+{id:46,sev:'low',cat:'Missing Feature',title:'Frontend test coverage thin: 10 test files',file:'src/__tests__/',desc:'Major app with minimal test coverage.',fix:'Add integration tests for critical user flows.'},
+{id:47,sev:'low',cat:'Tech Debt',title:'7 suppressed exceptions in misc router',file:'api/routers/misc.py',desc:'Non-critical but hides potential issues.',fix:'Log warnings for suppressed exceptions.'},
+{id:48,sev:'low',cat:'Tech Debt',title:'Inconsistent error handling across ingest endpoints',file:'api/routers/profile.py',desc:'Some endpoints return 400, others 500 for similar errors.',fix:'Standardize error response format.'},
+{id:49,sev:'low',cat:'UX',title:'Inconsistent error messages to users',file:'frontend/**',desc:'Some errors show stack traces, others show nothing.',fix:'Create error message catalog with user-friendly text.'},
+{id:50,sev:'low',cat:'Missing Feature',title:'No circuit breaker for external API calls',file:'llm/client.py',desc:'Failed provider keeps getting retried. No fallback.',fix:'Implement circuit breaker pattern with fallback provider.'},
+{id:51,sev:'low',cat:'Security',title:'API keys stored in SQLite plaintext',file:'data/sqlite/connection.py',desc:'Roadmap item: migrate to OS keychain.',fix:'Use keyring library for OS-level secret storage.'},
+{id:52,sev:'low',cat:'Tech Debt',title:'Unfinished microservices migration',file:'api/supervisor.py',desc:'Supervisor process exists but is unused. Dead code.',fix:'Remove or complete the migration.'},
+{id:53,sev:'low',cat:'Tech Debt',title:'InProcessEventBus exists but not wired',file:'api/events.py',desc:'Event bus code written but nothing publishes to it.',fix:'Wire up or remove to reduce confusion.'},
+{id:54,sev:'low',cat:'Performance',title:'JSON parsing on every field access',file:'api/routers/leads.py',desc:'match_points, gaps parsed from JSON string repeatedly.',fix:'Parse once on load, cache parsed result.'},
+{id:55,sev:'low',cat:'Missing Feature',title:'No database backup/export functionality',file:'data/',desc:'No way to backup or export user data.',fix:'Add SQLite backup + export to portable format.'},
+{id:56,sev:'low',cat:'Bug',title:'HTTP polling alongside WebSocket',file:'src/hooks/',desc:'Redundant polling causes UI flicker when both update state.',fix:'Disable polling when WebSocket is connected.'},
+{id:57,sev:'low',cat:'Tech Debt',title:'Date parsing hack replaces "present" with "2099-12"',file:'profile/ingestor.py',desc:'Magic date for current employment. Will break in 2099.',fix:'Use None/null with explicit "current" flag.'},
+{id:58,sev:'low',cat:'Tech Debt',title:'Global exception handler returns generic 500',file:'api/gateway.py',desc:'All unhandled errors become same message.',fix:'Add error categorization with appropriate status codes.'},
+{id:59,sev:'low',cat:'Missing Feature',title:'No health check for LanceDB',file:'api/routers/health.py',desc:'SQLite and Kuzu checked, but vector store is not.',fix:'Add LanceDB connectivity check to health endpoint.'},
+{id:60,sev:'low',cat:'Tech Debt',title:'8 generator files with same pattern: no base class',file:'generation/generators/',desc:'Duplicated structure across all generators.',fix:'Extract BaseGenerator abstract class.'},
+{id:61,sev:'low',cat:'Missing Feature',title:'No request/response logging middleware',file:'api/gateway.py',desc:'No audit trail of API calls.',fix:'Add middleware logging method, path, status, duration.'},
+{id:62,sev:'low',cat:'Security',title:'_BLOCKED_HOSTS check bypassable via DNS',file:'discovery/sources/',desc:'Block list uses hostname comparison. DNS rebinding bypasses it.',fix:'Resolve hostname, check IP against blocked ranges.'}
+];
+
+var INTEGRATIONS=[
+{name:'OpenAI / GPT',icon:'🤖',color:'var(--green)',what:'Primary LLM provider for structured output',how:'OpenAI Python SDK via Instructor wrapper',file:'llm/client.py'},
+{name:'Anthropic / Claude',icon:'🔮',color:'var(--orange)',what:'Alternative LLM provider for evaluation and generation',how:'Anthropic SDK with OpenAI-compatible adapter',file:'llm/client.py'},
+{name:'Google / Gemini',icon:'🌐',color:'var(--blue)',what:'Google AI models for cost-effective bulk operations',how:'Google GenAI SDK',file:'llm/client.py'},
+{name:'Apify',icon:'🕷',color:'var(--cyan)',what:'Web scraping platform for job board data extraction',how:'Apify API client with configurable actors per board',file:'discovery/sources/apify.py'},
+{name:'Playwright',icon:'🎭',color:'var(--purple)',what:'Browser automation for application form filling',how:'Playwright Python with Chromium, headless/headed modes',file:'automation/actuator.py'},
+{name:'HuggingFace',icon:'🤗',color:'var(--yellow)',what:'Sentence Transformers for local embedding generation',how:'sentence-transformers library, all-MiniLM-L6-v2 model',file:'data/vector/store.py'},
+{name:'GitHub API',icon:'🔧',color:'var(--text-dim)',what:'Fetch user repos, languages, contributions for profile',how:'GitHub REST API with personal access token',file:'profile/github_ingestor.py'},
+{name:'Tauri Updater',icon:'🔄',color:'var(--pink)',what:'Desktop app auto-update from GitHub releases',how:'Tauri updater plugin with ed25519 signature verification',file:'src-tauri/tauri.conf.json'}
+];
+var AUTH_ITEMS=[
+{name:'Bearer Token',icon:'🔒',color:'var(--green)',desc:'Random token generated at backend boot. Shared via stdout IPC to Tauri, then to React via invoke. Every HTTP request must include Authorization: Bearer <token> header.'},
+{name:'WebSocket Auth',icon:'🔌',color:'var(--cyan)',desc:'Token passed as query parameter on WS connect: ws://127.0.0.1:{port}/ws?token={token}. Validated on upgrade handshake.'},
+{name:'Internal Service Auth',icon:'🔐',color:'var(--purple)',desc:'Services communicate in-process (no network). No inter-service auth needed since everything runs in a single Python process.'},
+{name:'CORS Policy',icon:'🌍',color:'var(--orange)',desc:'CORS middleware configured in FastAPI. Should be restricted to localhost origins only for desktop app security.'},
+{name:'Rate Limiting',icon:'⏱',color:'var(--yellow)',desc:'SlowAPI rate limiter at 5 requests per 60 seconds on expensive endpoints (LLM calls, scans). Prevents accidental cost explosions.'},
+{name:'Update Verification',icon:'✅',color:'var(--pink)',desc:'Tauri updater verifies ed25519 signatures on downloaded update bundles before installation. Public key embedded in tauri.conf.json.'}
+];
+var TAURI_ITEMS=[
+{name:'Sidecar Lifecycle',icon:'⚙',color:'var(--purple)',desc:'Python backend runs as a child process (sidecar). Tauri manages spawn, health monitoring, graceful shutdown, and crash recovery with up to 3 retry attempts.'},
+{name:'IPC Commands',icon:'🔌',color:'var(--cyan)',desc:'Tauri invoke commands: get_sidecar_port(), get_api_token(), get_sidecar_error(). Frontend calls these via @tauri-apps/api.'},
+{name:'Events',icon:'📡',color:'var(--green)',desc:'Tauri event system: sidecar-port, sidecar-token, sidecar-error, sidecar-restart. Frontend listens via event.listen().'},
+{name:'Plugins',icon:'🔌',color:'var(--orange)',desc:'5 Tauri plugins: shell (sidecar spawning), updater (auto-update), process (exit/restart), opener (open URLs), notification (desktop alerts).'},
+{name:'Window Config',icon:'💻',color:'var(--accent-glow)',desc:'Single window, 1200x800 default, 900x600 minimum. Title bar hidden, custom drag region. Decorations on macOS.'},
+{name:'Runtime Pack',icon:'📦',color:'var(--pink)',desc:'Ships bundled Python runtime + all pip dependencies. No user-installed Python required. ~150MB installed size.'}
+];
+
+/* ===================== RENDER ===================== */
+// NAV
+var navInner=document.getElementById('navInner');
+NAV_SECTIONS.forEach(function(s){
+  var b=document.createElement('button');
+  b.className='nav-btn';b.textContent=s.label;b.dataset.target=s.id;
+  b.onclick=function(){document.getElementById(s.id).scrollIntoView({behavior:'smooth'});};
+  navInner.appendChild(b);
+});
+
+// ARCH LAYERS
+var archEl=document.getElementById('archLayers');
+var detailEl=document.getElementById('archDetail');
+var selectedBox=null;
+ARCH_LAYERS.forEach(function(layer,li){
+  var div=document.createElement('div');
+  div.className='arch-layer';
+  div.style.background=layer.bg;div.style.borderColor=layer.border;
+  var boxesHtml=layer.boxes.map(function(b){return '<div class="arch-box" data-layer="'+li+'" data-box="'+b+'" style="background:'+layer.bg+';color:'+layer.color+';border-color:'+layer.border+'">'+b+'</div>';}).join('');
+  div.innerHTML='<div class="arch-layer-title" style="color:'+layer.color+'"><span style="font-size:1.1rem">&#9670;</span> '+layer.name+'</div><div class="arch-boxes">'+boxesHtml+'</div>';
+  archEl.appendChild(div);
+  if(li<ARCH_LAYERS.length-1){var ar=document.createElement('div');ar.className='arch-arrows';ar.textContent='▼ ▼ ▼';archEl.appendChild(ar);}
+});
+archEl.addEventListener('click',function(e){
+  var box=e.target.closest('.arch-box');if(!box)return;
+  var li=parseInt(box.dataset.layer),name=box.dataset.box;
+  var layer=ARCH_LAYERS[li];
+  var info=layer.details[name];
+  if(selectedBox===box){selectedBox.classList.remove('selected');detailEl.classList.remove('open');detailEl.innerHTML='';selectedBox=null;return;}
+  document.querySelectorAll('.arch-box.selected').forEach(function(b){b.classList.remove('selected');});
+  box.classList.add('selected');selectedBox=box;
+  if(info){
+    detailEl.innerHTML='<h4>'+name+'</h4><p>'+info.desc+'</p><p style="margin-top:0.5rem"><strong style="color:var(--text);font-size:0.8rem">Why:</strong> <span style="font-size:0.78rem;color:var(--text-dim)">'+info.why+'</span></p><p style="margin-top:0.5rem"><strong style="color:var(--text);font-size:0.8rem">Key files:</strong> '+info.files.map(function(f){return '<code>'+f+'</code>';}).join(' ')+'</p>';
+    detailEl.classList.add('open');
+  }
+});
+
+// TIMELINE
+var tlEl=document.getElementById('timeline');
+var phaseColors={A:'var(--purple)',B:'var(--cyan)',C:'var(--accent-glow)'};
+var phaseBgs={A:'rgba(167,139,250,0.12)',B:'rgba(34,211,238,0.12)',C:'rgba(99,102,241,0.12)'};
+LIFECYCLE.forEach(function(phase){
+  var phDiv=document.createElement('div');phDiv.className='tl-phase';
+  phDiv.innerHTML='<div class="tl-phase-title" style="background:'+phaseBgs[phase.phase]+';color:'+phaseColors[phase.phase]+'">Phase '+phase.phase+': '+phase.phaseTitle+'</div>';
+  phase.steps.forEach(function(step){
+    var s=document.createElement('div');s.className='tl-step';
+    s.innerHTML='<div class="tl-step-num">Step '+step.num+'</div><div class="tl-step-fn">'+step.fn+'</div><div class="tl-step-desc">'+step.desc+'</div><div class="tl-step-detail"><div class="tl-step-file">'+step.file+'</div><div style="margin-top:0.3rem;color:var(--orange);font-size:0.72rem">Error path: '+step.error+'</div></div>';
+    s.onclick=function(){s.classList.toggle('expanded');};
+    phDiv.appendChild(s);
+  });
+  tlEl.appendChild(phDiv);
+});
+
+// VIEWS
+var viewGrid=document.getElementById('viewCards');
+VIEWS.forEach(function(v){
+  var c=document.createElement('div');c.className='card';
+  c.innerHTML='<div class="card-title"><span class="card-icon" style="background:'+v.color+'22;color:'+v.color+'">'+v.icon+'</span>'+v.name+'</div><div class="card-desc">'+v.desc+'</div>';
+  viewGrid.appendChild(c);
+});
+
+// SERVICES
+var svcEl=document.getElementById('serviceCards');
+SERVICES.forEach(function(svc){
+  var c=document.createElement('div');c.className='card svc-card';c.style.cursor='pointer';
+  var flowHtml=svc.how.map(function(s,i){return '<span class="svc-flow-step">'+s+'</span>'+(i<svc.how.length-1?'<span class="svc-flow-arrow">→</span>':'');}).join('');
+  c.innerHTML='<div class="card-title"><span class="card-icon" style="background:'+svc.color+'22;color:'+svc.color+'">'+svc.icon+'</span>'+svc.name+'<span class="arrow" style="margin-left:auto;font-size:0.7rem;color:var(--text-muted)">▼</span></div><div class="card-desc"><strong>What:</strong> '+svc.what+'</div><div class="svc-expand"><div style="padding-top:0.75rem"><p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:0.4rem"><strong style="color:var(--text)">Why:</strong> '+svc.why+'</p><p style="font-size:0.78rem;color:var(--text-dim);margin-bottom:0.5rem"><strong style="color:var(--text)">How:</strong></p><div class="svc-flow">'+flowHtml+'</div><div class="card-meta" style="margin-top:0.75rem">'+svc.files.map(function(f){return '<span class="tag tag-cyan">'+f+'</span>';}).join('')+'</div></div></div>';
+  c.onclick=function(){c.classList.toggle('open');};
+  svcEl.appendChild(c);
+});
+
+// SCORING
+var scoreEl=document.getElementById('scoringBars');
+SCORING.forEach(function(s){
+  var d=document.createElement('div');d.className='score-bar-wrap';
+  d.innerHTML='<div class="score-bar-label"><span>'+s.label+(s.note?' <span style="color:var(--text-muted);font-weight:400;font-size:0.6rem">('+s.note+')</span>':'')+'</span><span style="color:'+s.color+'">'+s.pct+'%</span></div><div class="score-bar"><div class="score-bar-fill" style="width:0;background:'+s.color+'" data-w="'+Math.round(s.pct*100/20)+'%"></div></div>';
+  scoreEl.appendChild(d);
+});
+
+// API ACCORDION
+var apiEl=document.getElementById('apiAccordion');
+API_GROUPS.forEach(function(g){
+  var item=document.createElement('div');item.className='acc-item';
+  var mClass=function(m){return{GET:'method-get',POST:'method-post',PUT:'method-put',DELETE:'method-del',WS:'method-ws'}[m]||'method-get';};
+  var epsHtml=g.endpoints.map(function(ep){return '<div class="ep-row"><span class="method '+mClass(ep.m)+'">'+ep.m+'</span><span class="endpoint">'+ep.p+'</span><span class="ep-desc">'+ep.d+'</span></div>';}).join('');
+  item.innerHTML='<div class="acc-header"><span>'+g.name+' <span style="color:var(--text-muted);font-size:0.75rem">('+g.count+')</span></span><span class="arrow">▼</span></div><div class="acc-body"><div class="acc-body-inner">'+epsHtml+'</div></div>';
+  item.querySelector('.acc-header').onclick=function(){item.classList.toggle('open');};
+  apiEl.appendChild(item);
+});
+
+// DB TABS
+var dbTabsEl=document.getElementById('dbTabs');
+var dbPanelsEl=document.getElementById('dbPanels');
+['SQLite','Kuzu','LanceDB'].forEach(function(name,i){
+  var btn=document.createElement('button');btn.className='tab-btn'+(i===0?' active':'');btn.textContent=name;btn.dataset.tab='db-'+i;
+  btn.onclick=function(){
+    dbTabsEl.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');
+    dbPanelsEl.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active');});
+    document.getElementById('db-'+i).classList.add('active');
+  };
+  dbTabsEl.appendChild(btn);
+});
+var sqlHtml='<div class="card-grid">';
+DB_DATA.sqlite.tables.forEach(function(t){
+  sqlHtml+='<div class="card"><div class="card-title">'+t.name+' <span style="color:var(--text-muted);font-size:0.72rem;font-weight:400">('+t.count+' fields)</span></div>';
+  t.fields.forEach(function(f){
+    var isPk=f.indexOf('PK')>-1,isFk=f.indexOf('FK')>-1;
+    var parts=f.split(' ');
+    sqlHtml+='<div class="db-field">'+parts[0]+' <span style="color:var(--text-muted)">'+parts.slice(1).join(' ')+'</span>'+(isPk?'<span class="db-badge" style="background:rgba(99,102,241,0.2);color:var(--accent-glow)">PK</span>':'')+(isFk?'<span class="db-badge" style="background:rgba(251,146,60,0.2);color:var(--orange)">FK</span>':'')+'</div>';
+  });
+  sqlHtml+='</div>';
+});
+sqlHtml+='</div>';
+var sqlPanel=document.createElement('div');sqlPanel.id='db-0';sqlPanel.className='tab-panel active';sqlPanel.innerHTML=sqlHtml;dbPanelsEl.appendChild(sqlPanel);
+
+var kuzuHtml='<div class="card-grid"><div class="card"><div class="card-title" style="color:var(--cyan)">Node Types (8)</div>';
+DB_DATA.kuzu.nodes.forEach(function(n){kuzuHtml+='<div class="db-field">'+n+'</div>';});
+kuzuHtml+='</div><div class="card"><div class="card-title" style="color:var(--purple)">Relationships (15)</div>';
+DB_DATA.kuzu.rels.forEach(function(r){kuzuHtml+='<div class="db-field">'+r+'</div>';});
+kuzuHtml+='</div></div>';
+var kuzuPanel=document.createElement('div');kuzuPanel.id='db-1';kuzuPanel.className='tab-panel';kuzuPanel.innerHTML=kuzuHtml;dbPanelsEl.appendChild(kuzuPanel);
+
+var lancePanel=document.createElement('div');lancePanel.id='db-2';lancePanel.className='tab-panel';
+lancePanel.innerHTML='<div class="card" style="max-width:700px"><div class="card-title" style="color:var(--green)">Vector Store</div><div class="card-desc">'+DB_DATA.lancedb.desc+'</div><div class="card-meta" style="margin-top:1rem"><span class="tag tag-green">all-MiniLM-L6-v2</span><span class="tag tag-cyan">384 dimensions</span><span class="tag tag-purple">cosine similarity</span><span class="tag tag-accent">embedded</span></div></div>';
+dbPanelsEl.appendChild(lancePanel);
+
+// FLOWS
+var flowTabsEl=document.getElementById('flowTabs');
+var flowPanelsEl=document.getElementById('flowPanels');
+FLOWS.forEach(function(flow,fi){
+  var btn=document.createElement('button');btn.className='tab-btn'+(fi===0?' active':'');btn.textContent=flow.name;btn.dataset.tab='flow-'+fi;
+  btn.onclick=function(){
+    flowTabsEl.querySelectorAll('.tab-btn').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');
+    flowPanelsEl.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active');});
+    var panel=document.getElementById('flow-'+fi);panel.classList.add('active');
+    panel.querySelectorAll('.flow-step,.flow-arrow').forEach(function(el,i){
+      el.classList.remove('visible');
+      setTimeout(function(){el.classList.add('visible');},i*150);
+    });
+  };
+  flowTabsEl.appendChild(btn);
+  var panel=document.createElement('div');panel.id='flow-'+fi;panel.className='tab-panel'+(fi===0?' active':'');
+  var stepsHtml='<div class="flow-steps">';
+  flow.steps.forEach(function(s,si){
+    stepsHtml+='<div class="flow-step'+(fi===0?' visible':'')+'"><div class="flow-step-num">Step '+(si+1)+'</div><div class="flow-step-title">'+s.title+'</div><div class="flow-step-desc">'+s.desc+'</div><div class="card-meta" style="margin-top:0.4rem;justify-content:center">'+s.tags.map(function(t){return '<span class="tag tag-accent">'+t+'</span>';}).join('')+'</div></div>';
+    if(si<flow.steps.length-1)stepsHtml+='<div class="flow-arrow'+(fi===0?' visible':'')+'">→</div>';
+  });
+  stepsHtml+='</div>';
+  panel.innerHTML=stepsHtml;
+  flowPanelsEl.appendChild(panel);
+});
+
+// PAIN POINTS
+var painSummEl=document.getElementById('painSummary');
+var painFilterEl=document.getElementById('painFilters');
+var painCardsEl=document.getElementById('painCards');
+var sevCounts={critical:0,high:0,medium:0,low:0};
+var catSet={};
+PAIN_POINTS.forEach(function(p){sevCounts[p.sev]++;catSet[p.cat]=true;});
+[{s:'critical',c:'var(--red)',bg:'rgba(248,113,113,0.15)'},{s:'high',c:'var(--orange)',bg:'rgba(251,146,60,0.15)'},{s:'medium',c:'var(--yellow)',bg:'rgba(251,191,36,0.15)'},{s:'low',c:'var(--text-dim)',bg:'rgba(136,136,160,0.15)'}].forEach(function(x){
+  var sp=document.createElement('span');sp.className='summary-stat';sp.style.background=x.bg;sp.style.color=x.c;
+  sp.textContent=sevCounts[x.s]+' '+x.s.charAt(0).toUpperCase()+x.s.slice(1);painSummEl.appendChild(sp);
+});
+var activeSev=null,activeCat=null;
+function filterPain(){
+  document.querySelectorAll('.pain-card').forEach(function(c){
+    var matchSev=!activeSev||c.dataset.sev===activeSev;
+    var matchCat=!activeCat||c.dataset.cat===activeCat;
+    if(matchSev&&matchCat){c.classList.remove('hidden');}else{c.classList.add('hidden');}
+  });
+}
+['critical','high','medium','low'].forEach(function(s){
+  var b=document.createElement('button');b.className='filter-btn';b.dataset.sev=s;b.textContent=s.charAt(0).toUpperCase()+s.slice(1);
+  b.onclick=function(){
+    if(activeSev===s){activeSev=null;b.classList.remove('active');}
+    else{activeSev=s;painFilterEl.querySelectorAll('[data-sev]').forEach(function(x){x.classList.remove('active');});b.classList.add('active');}
+    filterPain();
+  };
+  painFilterEl.appendChild(b);
+});
+var sep=document.createElement('span');sep.style.cssText='width:1px;height:24px;background:var(--border);margin:0 0.3rem;align-self:center';painFilterEl.appendChild(sep);
+Object.keys(catSet).sort().forEach(function(cat){
+  var b=document.createElement('button');b.className='filter-btn';b.dataset.cat=cat;b.textContent=cat;
+  b.onclick=function(){
+    if(activeCat===cat){activeCat=null;b.classList.remove('active');}
+    else{activeCat=cat;painFilterEl.querySelectorAll('[data-cat]').forEach(function(x){x.classList.remove('active');});b.classList.add('active');}
+    filterPain();
+  };
+  painFilterEl.appendChild(b);
+});
+PAIN_POINTS.forEach(function(p){
+  var c=document.createElement('div');c.className='pain-card';c.dataset.sev=p.sev;c.dataset.cat=p.cat;
+  c.innerHTML='<div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap"><span class="pain-sev sev-'+p.sev+'">'+p.sev+'</span><span class="tag tag-accent">'+p.cat+'</span></div><div class="pain-title">#'+p.id+': '+p.title+'</div><div class="pain-file">'+p.file+'</div><div class="pain-desc">'+p.desc+'</div><div class="pain-fix">Fix: '+p.fix+'</div><button class="pain-fix-toggle" onclick="event.stopPropagation();this.parentElement.classList.toggle(\'show-fix\');this.textContent=this.parentElement.classList.contains(\'show-fix\')?\'Hide fix\':\'Show fix\'">Show fix</button>';
+  painCardsEl.appendChild(c);
+});
+
+// INTEGRATIONS
+var intEl=document.getElementById('integrationCards');
+INTEGRATIONS.forEach(function(ig){
+  var c=document.createElement('div');c.className='card';
+  c.innerHTML='<div class="card-title"><span class="card-icon" style="background:'+ig.color+'22;color:'+ig.color+'">'+ig.icon+'</span>'+ig.name+'</div><div class="card-desc"><strong>What:</strong> '+ig.what+'</div><div class="card-desc" style="margin-top:0.3rem"><strong>How:</strong> '+ig.how+'</div><div class="card-meta"><span class="tag tag-cyan">'+ig.file+'</span></div>';
+  intEl.appendChild(c);
+});
+
+// AUTH
+var authEl=document.getElementById('authCards');
+AUTH_ITEMS.forEach(function(a){
+  var c=document.createElement('div');c.className='card';
+  c.innerHTML='<div class="card-title"><span class="card-icon" style="background:'+a.color+'22;color:'+a.color+'">'+a.icon+'</span>'+a.name+'</div><div class="card-desc">'+a.desc+'</div>';
+  authEl.appendChild(c);
+});
+
+// TAURI
+var tauriEl=document.getElementById('tauriCards');
+TAURI_ITEMS.forEach(function(t){
+  var c=document.createElement('div');c.className='card';
+  c.innerHTML='<div class="card-title"><span class="card-icon" style="background:'+t.color+'22;color:'+t.color+'">'+t.icon+'</span>'+t.name+'</div><div class="card-desc">'+t.desc+'</div>';
+  tauriEl.appendChild(c);
+});
+
+/* ===================== INTERACTIONS ===================== */
+
+// Particle animation
+var canvas=document.getElementById('particles');
+var ctx=canvas.getContext('2d');
+var particles=[];
+function resizeCanvas(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+resizeCanvas();window.addEventListener('resize',resizeCanvas);
+for(var i=0;i<80;i++){particles.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,vx:(Math.random()-0.5)*0.5,vy:(Math.random()-0.5)*0.5,r:Math.random()*2+1});}
+function drawParticles(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(var i=0;i<particles.length;i++){
+    var p=particles[i];
+    p.x+=p.vx;p.y+=p.vy;
+    if(p.x<0||p.x>canvas.width)p.vx*=-1;
+    if(p.y<0||p.y>canvas.height)p.vy*=-1;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+    ctx.fillStyle='rgba(99,102,241,0.4)';ctx.fill();
+  }
+  for(var i=0;i<particles.length;i++){
+    for(var j=i+1;j<particles.length;j++){
+      var dx=particles[i].x-particles[j].x,dy=particles[i].y-particles[j].y;
+      var dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<120){
+        ctx.beginPath();ctx.moveTo(particles[i].x,particles[i].y);ctx.lineTo(particles[j].x,particles[j].y);
+        ctx.strokeStyle='rgba(99,102,241,'+(0.15*(1-dist/120))+')';ctx.lineWidth=0.5;ctx.stroke();
+      }
+    }
+  }
+  requestAnimationFrame(drawParticles);
+}
+drawParticles();
+
+// Counter animation
+var counterObs=new IntersectionObserver(function(entries){
+  entries.forEach(function(entry){
+    if(entry.isIntersecting){
+      entry.target.querySelectorAll('.num[data-target]').forEach(function(el){
+        var target=parseInt(el.dataset.target);var current=0;
+        var step=Math.ceil(target/40);
+        var timer=setInterval(function(){current+=step;if(current>=target){current=target;clearInterval(timer);}el.textContent=current+'+';},30);
+      });
+      counterObs.unobserve(entry.target);
+    }
+  });
+},{threshold:0.3});
+document.querySelectorAll('.hero-stats').forEach(function(el){counterObs.observe(el);});
+
+// Scroll nav tracking
+var sections=NAV_SECTIONS.map(function(s){return document.getElementById(s.id);});
+var navBtns=document.querySelectorAll('.nav-btn');
+function updateNav(){
+  var current='';
+  sections.forEach(function(sec,i){if(sec&&sec.getBoundingClientRect().top<=200)current=NAV_SECTIONS[i].id;});
+  navBtns.forEach(function(b){if(b.dataset.target===current){b.classList.add('active');}else{b.classList.remove('active');}});
+}
+window.addEventListener('scroll',updateNav,{passive:true});
+
+// Timeline animation
+var tlObs=new IntersectionObserver(function(entries){
+  entries.forEach(function(entry){
+    if(entry.isIntersecting){
+      var steps=entry.target.querySelectorAll('.tl-step');
+      steps.forEach(function(s,i){setTimeout(function(){s.classList.add('visible');},i*120);});
+      tlObs.unobserve(entry.target);
+    }
+  });
+},{threshold:0.1});
+document.querySelectorAll('.tl-phase').forEach(function(p){tlObs.observe(p);});
+
+// Scoring bars animation
+var scoreObs=new IntersectionObserver(function(entries){
+  entries.forEach(function(entry){
+    if(entry.isIntersecting){
+      entry.target.querySelectorAll('.score-bar-fill').forEach(function(bar){
+        setTimeout(function(){bar.style.width=bar.dataset.w;},200);
+      });
+      scoreObs.unobserve(entry.target);
+    }
+  });
+},{threshold:0.3});
+var scoringEl=document.getElementById('scoringBars');
+if(scoringEl)scoreObs.observe(scoringEl);
+
+// Initial flow animation
+setTimeout(function(){
+  var firstPanel=document.getElementById('flow-0');
+  if(firstPanel){firstPanel.querySelectorAll('.flow-step,.flow-arrow').forEach(function(el,i){setTimeout(function(){el.classList.add('visible');},i*150);});}
+},500);
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import logging
 
 import asyncio
 import os
+from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import Field
@@ -11,9 +12,38 @@ from api.dependencies import get_automation_service, get_job_runner, get_reposit
 from core.types import StrictBody
 from data.repository import Repository
 
+_log = logging.getLogger(__name__)
+
 
 class FormReadBody(StrictBody):
     url: str = Field(default="", max_length=2000)
+
+
+def resolve_cover_letter_text(asset_path: str, logger) -> str:
+    """Resolve cover letter *text* from a stored asset path (H3).
+
+    The asset path may point at a ``.pdf`` or ``.md`` artifact. Form-fill needs
+    the text, so we prefer the ``.md`` sibling and only read text-like files —
+    never the raw PDF bytes, and never the path string itself. Returns "" (with
+    a warning) when no readable text file exists.
+    """
+    if not asset_path:
+        return ""
+    asset = Path(asset_path)
+    md_path = asset.with_suffix(".md")
+    for candidate in (md_path, asset):
+        try:
+            if candidate.suffix.lower() in {".md", ".txt"} and candidate.is_file():
+                return candidate.read_text(encoding="utf-8")
+        except OSError as exc:
+            logger.warning("could not read cover letter %s: %s", candidate, exc)
+            return ""
+    logger.warning(
+        "no readable cover letter text for asset %s (.pdf exists=%s)",
+        asset_path,
+        asset.is_file() and asset.suffix.lower() == ".pdf",
+    )
+    return ""
 
 
 def asset_ready(path: str) -> bool:
@@ -139,18 +169,7 @@ def create_router(manager) -> APIRouter:
             "current_company": cfg.get("current_company", ""),
         }
 
-        cover_letter = lead.get("cover_letter_asset", "")
-        if cover_letter and os.path.isfile(cover_letter):
-            try:
-                md_path = cover_letter.replace(".pdf", ".md")
-                if os.path.isfile(md_path):
-                    with open(md_path, encoding="utf-8") as file:
-                        cover_letter = file.read()
-                else:
-                    cover_letter = ""
-            except Exception as log_exc:
-                logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/automation.py:read_lead_form: %s', log_exc)
-                cover_letter = ""
+        cover_letter = resolve_cover_letter_text(lead.get("cover_letter_asset", ""), _log)
 
         return await service.read_form(url, identity, cover_letter=cover_letter)
 

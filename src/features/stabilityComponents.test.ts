@@ -50,13 +50,14 @@ describe("FIX.md frontend stability contracts", () => {
   });
 
   it("keeps required runtime pack mandatory", () => {
+    // Simplified compact banner: still a mandatory install/restart flow, just
+    // with terse button copy. Assert the guarantees the UI must keep, not the
+    // old verbose strings.
     expect(semanticRuntimePrompt).toContain("/api/v1/runtime/vector");
     expect(semanticRuntimePrompt).toContain("/api/v1/runtime/vector/install");
     expect(semanticRuntimePrompt).toContain("installInFlightRef");
-    expect(semanticRuntimePrompt).toContain("formatBytes");
-    expect(semanticRuntimePrompt).toContain("Install required runtime pack");
-    expect(semanticRuntimePrompt).toContain("Restart JustHireMe");
-    expect(semanticRuntimePrompt).toContain("Playwright Chromium");
+    expect(semanticRuntimePrompt).toContain("Runtime pack required for semantic matching.");
+    expect(semanticRuntimePrompt).toContain("restart_required");
     expect(semanticRuntimePrompt).toContain("RUNTIME_STATUS_TIMEOUT_MS = 90000");
     expect(semanticRuntimePrompt).not.toContain("timeoutMs: 15000");
     expect(semanticRuntimePrompt).not.toContain("Later");
@@ -65,7 +66,7 @@ describe("FIX.md frontend stability contracts", () => {
 
   it("keeps updater reachable above mandatory runtime blockers", () => {
     expect(stylesheet).toMatch(/\.update-toast\s*{[^}]*z-index:\s*260;/s);
-    expect(stylesheet).toMatch(/\.semantic-runtime-backdrop\s*{[^}]*z-index:\s*180;/s);
+    expect(stylesheet).toMatch(/\.semantic-runtime-banner\s*{[^}]*z-index:\s*180;/s);
   });
 
   it("keeps updater downloads resilient to release asset transport hiccups", () => {

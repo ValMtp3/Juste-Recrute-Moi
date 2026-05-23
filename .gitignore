@@ -96,3 +96,7 @@ test_resume_output.pdf
 # User-generated documents
 *.pdf
 !docs/**/*.pdf
+
+# Test scratch + migration lock artifacts
+backend/tests/.scratch-templates/
+*.migration.lock

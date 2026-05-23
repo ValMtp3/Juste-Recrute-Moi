@@ -85,10 +85,15 @@ def create_ghost_tick(manager):
         for lead in discovered:
             try:
                 result = await ranking_service.evaluate_lead(lead, profile)
+                # H1: background re-scoring must not overwrite a status the user
+                # changed (approved/applied/interviewing) during this slow eval
+                # loop. preserve_status keeps the lead's current status; the
+                # in-memory `approved` list below drives the rest of the cycle.
                 await asyncio.to_thread(
                     repo.leads.update_lead_score,
                     lead["job_id"], result["score"], result["reason"],
                     result.get("match_points", []), result.get("gaps", []),
+                    preserve_status=True,
                 )
                 await manager.broadcast({"type": "LEAD_UPDATED", "data": {**lead, **result}})
                 if result["score"] >= 85:

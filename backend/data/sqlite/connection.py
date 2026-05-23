@@ -192,6 +192,11 @@ def _lock_file(lock_file) -> None:
         import msvcrt
 
         msvcrt_module = cast(Any, msvcrt)
+        # H2: the lock file is opened "a+", so the cursor sits at EOF. msvcrt
+        # locks `nbytes` from the *current* position, so without seek(0) two
+        # processes lock different byte offsets and never actually exclude each
+        # other. Always lock byte 0.
+        lock_file.seek(0)
         msvcrt_module.locking(lock_file.fileno(), msvcrt_module.LK_LOCK, 1)
     else:
         import fcntl
@@ -204,6 +209,8 @@ def _unlock_file(lock_file) -> None:
         import msvcrt
 
         msvcrt_module = cast(Any, msvcrt)
+        # H2: unlock the same byte 0 region that _lock_file locked.
+        lock_file.seek(0)
         msvcrt_module.locking(lock_file.fileno(), msvcrt_module.LK_UNLCK, 1)
     else:
         import fcntl

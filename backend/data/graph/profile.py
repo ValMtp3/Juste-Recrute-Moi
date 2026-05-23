@@ -302,6 +302,94 @@ def _prune_orphan_project_stack_skills(profile: dict) -> dict:
     return profile
 
 
+# --- Deletion filtering for the graph-stats read path -----------------------
+# The Knowledge page reads /api/v1/graph, whose `graph` (raw Kùzu snapshot) and
+# `embedding` (raw LanceDB rows) fields previously bypassed the deletion
+# tombstones that the Profile page applies via apply_profile_deletions(). That
+# asymmetry let a deleted item linger on the Knowledge page and resurrect the
+# profile on the next repair sync. These helpers reuse the SAME tombstone token
+# logic (_is_deleted) so every read path agrees on what is deleted.
+
+_CREDENTIAL_SUBTITLE_KEYS = {
+    "education": "education",
+    "certification": "certifications",
+    "certifications": "certifications",
+    "achievement": "achievements",
+    "achievements": "achievements",
+}
+
+_EMBEDDING_SOURCE_KEYS = {
+    "skills": ["skills"],
+    "projects": ["projects"],
+    "experiences": ["exp"],
+    "credentials": ["education", "certifications", "achievements"],
+}
+
+
+def _strip_node_prefix(node_id) -> str:
+    text = str(node_id or "")
+    return text.split(":", 1)[1] if ":" in text else text
+
+
+def _graph_node_is_deleted(node, db_path: str | None = None) -> bool:
+    if not isinstance(node, dict):
+        return False
+    node_type = str(node.get("type") or "").strip().lower()
+    raw_id = _strip_node_prefix(node.get("id"))
+    label = node.get("label")
+    subtitle = node.get("subtitle")
+    if node_type == "skill":
+        return _is_deleted("skills", raw_id, label, db_path=db_path)
+    if node_type == "project":
+        return _is_deleted("projects", raw_id, label, db_path=db_path)
+    if node_type == "experience":
+        role = str(label or "")
+        company = str(subtitle or "")
+        joined = " at ".join(part for part in [role, company] if part)
+        return _is_deleted("exp", raw_id, role, company, role + company, joined, db_path=db_path)
+    if node_type == "credential":
+        key = _CREDENTIAL_SUBTITLE_KEYS.get(str(subtitle or "").strip().lower())
+        keys = [key] if key else ["education", "certifications", "achievements"]
+        return any(_is_deleted(item, raw_id, label, db_path=db_path) for item in keys)
+    return False
+
+
+def filter_graph_deletions(graph: dict | None, db_path: str | None = None) -> dict:
+    """Drop tombstoned nodes (and edges that reference them) from a graph snapshot."""
+    if not isinstance(graph, dict):
+        return graph or {}
+    nodes = graph.get("nodes") or []
+    edges = graph.get("edges") or []
+    kept_nodes = [node for node in nodes if not _graph_node_is_deleted(node, db_path)]
+    if len(kept_nodes) == len(nodes):
+        return graph
+    kept_ids = {str(node.get("id")) for node in kept_nodes if isinstance(node, dict)}
+    kept_edges = [
+        edge for edge in edges
+        if isinstance(edge, dict) and str(edge.get("source")) in kept_ids and str(edge.get("target")) in kept_ids
+    ]
+    return {**graph, "nodes": kept_nodes, "edges": kept_edges}
+
+
+def filter_embedding_deletions(embedding: dict | None, db_path: str | None = None) -> dict:
+    """Drop tombstoned points from an embedding-space payload."""
+    if not isinstance(embedding, dict):
+        return embedding or {}
+    points = embedding.get("points") or []
+    kept = []
+    for point in points:
+        if not isinstance(point, dict):
+            kept.append(point)
+            continue
+        keys = _EMBEDDING_SOURCE_KEYS.get(str(point.get("source") or "").strip().lower())
+        if keys and any(_is_deleted(key, point.get("id"), point.get("label"), db_path=db_path) for key in keys):
+            continue
+        kept.append(point)
+    if len(kept) == len(points):
+        return embedding
+    return {**embedding, "points": kept, "available": bool(kept)}
+
+
 def load_profile_snapshot(db_path: str | None = None) -> dict:
     try:
         raw = get_setting(PROFILE_SNAPSHOT_KEY, "", db_path) if db_path else get_setting(PROFILE_SNAPSHOT_KEY)
@@ -778,6 +866,21 @@ def sync_vectors_from_graph() -> dict:
         add_profile_vec("profile:default", "Complete profile", "\n".join(profile_parts))
         synced += 1
     return {"status": "ok", "synced": synced, "deleted_bad_rows": deleted_bad_rows}
+
+
+def rebuild_profile_correlations(db_path: str | None = None) -> dict:
+    """Rebuild derived graph correlations and re-embed the profile.
+
+    Ingest paths create direct edges per item (HAS_SKILL / PROJ_UTILIZES /
+    EXP_UTILIZES) but NOT the derived correlation edges (RELATED_SKILL,
+    SIMILAR_PROJECT, PROJECT_SUPPORTS_EXPERIENCE, credential->skill). Those are
+    only produced by sync_profile_relationships(). Run this after an ingest so
+    correlations and vector tables reflect the freshly imported profile in one
+    pass, instead of waiting for a manual Knowledge-page repair sync.
+    """
+    relationships = sync_profile_relationships()
+    vectors = sync_vectors_from_graph()
+    return {"status": "ok", "relationships": relationships, "vectors": vectors}
 
 
 def _candidate_id() -> str | None:

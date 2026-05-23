@@ -30,6 +30,11 @@ SETTINGS_SCHEMA = {
         ],
         "default": "",
     },
+    "embedding_provider": {
+        "type": "str",
+        "allowed": ["onnx", "openai", "hash"],
+        "default": "onnx",
+    },
 }
 
 

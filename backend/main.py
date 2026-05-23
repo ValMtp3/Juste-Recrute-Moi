@@ -56,7 +56,24 @@ def build_gateway_app(*, enable_services: bool = False):
     )
 
 
-app = build_gateway_app(enable_services=False)
+_GATEWAY_APP_SINGLETON = None
+
+
+def __getattr__(name: str):
+    """Lazily build the gateway app on first attribute access (PEP 562).
+
+    Building at module import time created a second app + scheduler that
+    uvicorn never ran (it builds its own in ``__main__``), leaking resources
+    and calling ``ensure_ghost_job``/``init_sql`` twice. Tests and tooling that
+    do ``from main import app`` still work, but the app is only constructed
+    once, on demand, and cached.
+    """
+    global _GATEWAY_APP_SINGLETON
+    if name == "app":
+        if _GATEWAY_APP_SINGLETON is None:
+            _GATEWAY_APP_SINGLETON = build_gateway_app(enable_services=False)
+        return _GATEWAY_APP_SINGLETON
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _parse_args():

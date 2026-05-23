@@ -59,6 +59,18 @@ hidden = [
 if include_graph:
     hidden += ["kuzu"]
 
+# ONNX local embeddings (lightweight, ~22 MB total)
+try:
+    import onnxruntime
+    hidden += ["onnxruntime"]
+except ImportError:
+    pass
+try:
+    import tokenizers
+    hidden += ["tokenizers"]
+except ImportError:
+    pass
+
 if include_browser:
     hidden += collect_submodules("playwright")
 
@@ -73,6 +85,9 @@ if include_vector:
 
 datas = (
     [(str(backend_root / "data" / "sqlite" / "migrations"), "data/sqlite/migrations")]
+    # C3: ship the profile import template so the /ingest/profile/template
+    # endpoint can read it in a packaged build.
+    + [(str(backend_root / "data" / "profile_schema_example.json"), "data")]
 )
 
 if include_browser:

@@ -26,13 +26,19 @@ LEAD_COLUMN_NAMES = tuple(part.strip() for part in LEAD_SELECT_COLUMNS.split(","
 def row_get(row, key: str, default=None):
     try:
         return row[key]
-    except Exception as exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/data/sqlite/leads.py:row_get: %s', exc)
-        try:
-            return row[LEAD_COLUMN_NAMES.index(key)]
-        except Exception as log_exc:
-            logging.getLogger(__name__).warning('suppressed exception in backend/data/sqlite/leads.py:row_get: %s', log_exc)
-            return default
+    except (KeyError, IndexError, TypeError):
+        # row has no string-key access (e.g. a positional tuple) — fall back to
+        # the known column order. This is an expected path, so don't warn.
+        pass
+    try:
+        return row[LEAD_COLUMN_NAMES.index(key)]
+    except ValueError:
+        # L3: `key` is not a known lead column. This indicates schema drift, so
+        # log it at DEBUG to keep it visible in diagnostics without spamming.
+        logging.getLogger(__name__).debug("row_get: unknown lead column %r (schema drift?)", key)
+        return default
+    except (IndexError, TypeError):
+        return default
 
 
 def json_list(value: str | list) -> list:

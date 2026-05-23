@@ -1,17 +1,23 @@
 """Semantic similarity between a JD and the candidate's embedded profile.
 
-The profile already stores per-skill and per-project embeddings in LanceDB
-(see ``agents.ingestor._vectors``). This module embeds the incoming JD with the
-same SentenceTransformer (``all-MiniLM-L6-v2``) and runs cosine search over
-those tables. Searches are scoped to the candidate profile passed into the
-evaluator, so stale vector rows cannot win just because they are close to the JD.
-The result is exposed as a 0-100 ``Semantic fit`` signal that the deterministic
-scoring engine blends with its keyword-based criteria.
+The profile stores per-skill and per-project embeddings in LanceDB (see
+``agents.ingestor._vectors``).  This module embeds the incoming JD with the
+active embedding provider (ONNX local, OpenAI API, or hash fallback — see
+``data.vector.embeddings``) and runs cosine search over those tables.
 
-Everything here is wrapped to fail soft. When LanceDB or the transformer model
-is unavailable, ``semantic_fit`` falls back to an in-process hashed embedding
-over the current profile payload, so matching still has a semantic signal before
-the vector store is warmed.
+When the Kuzu graph is available, the candidate profile is *enriched* before
+embedding: skills carry evidence scores from project/experience edges, related
+skills are expanded, and industry domains are inferred.  This lets the semantic
+signal capture "React — proven across 3 projects" rather than just "React".
+
+Searches are scoped to the candidate profile passed into the evaluator, so stale
+vector rows cannot win just because they are close to the JD.  The result is
+exposed as a 0-100 ``Semantic fit`` signal that the deterministic scoring engine
+blends with its keyword-based criteria.
+
+Everything here is wrapped to fail soft.  When LanceDB, the embedding model,
+or the graph is unavailable the pipeline cascades gracefully: graph enrichment
+→ flat profile, ONNX → hash, vector store → local hashed embedding.
 """
 from __future__ import annotations
 import logging
@@ -64,6 +70,11 @@ def _embedding_mode() -> str:
     except Exception as log_exc:
         logging.getLogger(__name__).warning('suppressed exception in backend/ranking/semantic.py:_embedding_mode: %s', log_exc)
         return ""
+
+
+def _is_semantic_provider(mode: str) -> bool:
+    """Return True if the active provider produces real semantic vectors."""
+    return mode in {"onnx", "openai", "sentence-transformer"}
 
 
 def _vec_store():
@@ -284,16 +295,36 @@ def _entry_title(value) -> str:
     return str(value or "").strip()
 
 
+def _try_graph_enrich(candidate_data: dict) -> dict:
+    """Attempt graph enrichment; return original data on failure."""
+    try:
+        from ranking.graph_enrichment import graph_enriched_profile
+        enriched = graph_enriched_profile(candidate_data)
+        if enriched.get("_graph_enriched"):
+            return enriched
+    except Exception as exc:
+        _log.debug("graph enrichment skipped in semantic pipeline: %s", exc)
+    return candidate_data
+
+
 def _local_profile_rows(candidate_data: dict | None) -> list[dict]:
     if not isinstance(candidate_data, dict):
         return []
 
+    # Try graph enrichment for richer skill/domain context
+    data = _try_graph_enrich(candidate_data)
+
     rows: list[dict] = []
     summary_parts = [
-        str(candidate_data.get("n") or "").strip(),
-        str(candidate_data.get("s") or "").strip(),
-        str(candidate_data.get("desired_position") or "").strip(),
+        str(data.get("n") or "").strip(),
+        str(data.get("s") or "").strip(),
+        str(data.get("desired_position") or "").strip(),
     ]
+    # Append domain context if available from graph enrichment
+    domain_text = str(data.get("_domain_text") or "").strip()
+    if domain_text:
+        summary_parts.append(domain_text)
+
     summary = "\n".join(part for part in summary_parts if part)
     if summary:
         rows.append({
@@ -303,24 +334,31 @@ def _local_profile_rows(candidate_data: dict | None) -> list[dict]:
             "text": f"Candidate profile\n{summary}",
         })
 
-    for skill in candidate_data.get("skills", []) or []:
+    for skill in data.get("skills", []) or []:
         if isinstance(skill, dict):
             name = str(skill.get("n") or skill.get("name") or "").strip()
             category = str(skill.get("cat") or skill.get("category") or "general").strip() or "general"
             row_id = str(skill.get("id") or "").strip() or _h(name)
+            # Include evidence context in the text for better semantic matching
+            evidence_sources = skill.get("evidence_sources", [])
+            evidence_text = ""
+            if evidence_sources:
+                evidence_text = "\nEvidence: " + "; ".join(evidence_sources[:3])
         else:
             name = str(skill or "").strip()
             category = "general"
             row_id = _h(name)
+            evidence_text = ""
         if name:
             rows.append({
                 "kind": "skill",
                 "id": row_id,
                 "label": name,
-                "text": f"Skill: {name}\nCategory: {category}",
+                "text": f"Skill: {name}\nCategory: {category}{evidence_text}",
+                "_evidence_score": skill.get("evidence_score", 0.3) if isinstance(skill, dict) else 0.3,
             })
 
-    for project in candidate_data.get("projects", []) or []:
+    for project in data.get("projects", []) or []:
         if not isinstance(project, dict):
             continue
         title = str(project.get("title") or project.get("name") or "").strip()
@@ -331,7 +369,7 @@ def _local_profile_rows(candidate_data: dict | None) -> list[dict]:
         if title or stack or impact:
             rows.append({"kind": "project", "id": row_id, "label": title or "Project", "text": text})
 
-    for exp in candidate_data.get("exp", []) or []:
+    for exp in data.get("exp", []) or []:
         if not isinstance(exp, dict):
             continue
         role = str(exp.get("role") or "").strip()
@@ -352,7 +390,7 @@ def _local_profile_rows(candidate_data: dict | None) -> list[dict]:
         ("achievements", "credential"),
         ("awards", "credential"),
     ):
-        for item in candidate_data.get(key, []) or []:
+        for item in data.get(key, []) or []:
             title = _entry_title(item)
             if title:
                 rows.append({
@@ -432,9 +470,20 @@ def _semantic_result(
     peak_signal = sum(maxes[name] * weight for name, _values, weight in active) / weight_total
 
     combined = 0.60 * avg_signal + 0.40 * peak_signal
-    # The built-in hashing embedder is deliberately lightweight and yields lower
-    # cosine values than sentence-transformer vectors for short tech text.
-    stretched = (combined - 0.06) / 0.30 if source == "local-profile" else (combined - 0.15) / 0.55
+
+    # Score stretching depends on the embedding provider. Real semantic models
+    # (ONNX/OpenAI) produce higher cosine similarity for matching content than
+    # the hash embedder, so their stretch windows differ.
+    mode = _embedding_mode()
+    if source == "local-profile" and not _is_semantic_provider(mode):
+        # Hash embedder: lower baselines, narrower useful range
+        stretched = (combined - 0.06) / 0.30
+    elif _is_semantic_provider(mode):
+        # ONNX or OpenAI: real semantic similarity, wider range
+        stretched = (combined - 0.20) / 0.55
+    else:
+        # Vector store with hash embeddings (legacy path)
+        stretched = (combined - 0.15) / 0.55
     score = max(0, min(100, round(stretched * 100)))
 
     raw = {
@@ -442,6 +491,10 @@ def _semantic_result(
         **{f"{name}_max": round(maxes.get(name, 0.0), 3) for name, _values, _weight in groups},
         "combined": round(combined, 3),
         "source": source,
+        # Surface the embedding provider so scores are interpretable: a
+        # hash-fallback score means the local runtime pack isn't installed and
+        # matching is degraded, not that the candidate is a poor fit.
+        "mode": mode,
     }
 
     return {
@@ -453,6 +506,7 @@ def _semantic_result(
         "profile_matches": profile_matches,
         "raw": raw,
         "source": source,
+        "mode": mode,
     }
 
 
@@ -487,7 +541,7 @@ def _prefer_local_result(
 
     vector_score = int(vector_result.get("score") or 0)
     local_score = int(local_result.get("score") or 0)
-    degraded_embeddings = embedding_mode in {"hashing", "lazy", ""}
+    degraded_embeddings = not _is_semantic_provider(embedding_mode)
 
     if degraded_embeddings and local_score >= vector_score:
         return True

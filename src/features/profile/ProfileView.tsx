@@ -108,7 +108,9 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.detail || `Delete failed (${res.status})`);
       setProfileErr(null);
-      void fetchProfile({ suppressError: true });
+      // Keep the per-row loader on until the backend-confirmed profile is
+      // reloaded, so a deleted item can never flicker back into the UI.
+      await fetchProfile({ suppressError: true });
       window.dispatchEvent(new CustomEvent("graph-refresh"));
     } catch (err: any) {
       console.error("Delete error:", err);

@@ -50,14 +50,47 @@ def _runtime_chromium_executable() -> str | None:
     return None
 
 
+def _system_browser_candidates() -> list[str]:
+    """Return platform-specific paths to Chrome, Chromium, Edge, and Brave."""
+    system = sys_platform()
+    if system == "windows":
+        return [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+            r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe",
+        ]
+    if system == "darwin":
+        return [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+            os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+            os.path.expanduser("~/Applications/Chromium.app/Contents/MacOS/Chromium"),
+        ]
+    # Linux
+    return [
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/microsoft-edge",
+        "/usr/bin/microsoft-edge-stable",
+        "/usr/bin/brave-browser",
+        "/usr/bin/brave-browser-stable",
+        "/snap/bin/chromium",
+        "/usr/local/bin/chromium",
+    ]
+
+
 def chromium_executable() -> str | None:
     candidates = [
         os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE", ""),
         _runtime_chromium_executable() or "",
-        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
-        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        *_system_browser_candidates(),
     ]
     for candidate in candidates:
         if candidate and os.path.exists(candidate):

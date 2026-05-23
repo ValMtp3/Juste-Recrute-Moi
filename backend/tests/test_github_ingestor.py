@@ -11,6 +11,13 @@ def _content(value: str) -> dict:
 def test_github_ingestor_imports_all_repos_and_enriches_top_without_token(monkeypatch):
     import profile.github_ingestor as gh
 
+    # Derive expectations from the module's caps so the test stays correct if the
+    # limits are tuned. Use more repos than the detail cap so truncation (and the
+    # "add a token" guidance) is still exercised.
+    detail_limit = gh.NO_TOKEN_DETAIL_REPO_LIMIT
+    llm_limit = min(detail_limit, gh.NO_TOKEN_LLM_REPO_LIMIT)
+    repo_count = detail_limit + 5
+
     repos = [
         {
             "name": f"repo-{index}",
@@ -27,7 +34,7 @@ def test_github_ingestor_imports_all_repos_and_enriches_top_without_token(monkey
             "archived": False,
             "fork": False,
         }
-        for index in range(25)
+        for index in range(repo_count)
     ]
 
     async def fake_fetch(url: str, token: str | None):
@@ -36,7 +43,7 @@ def test_github_ingestor_imports_all_repos_and_enriches_top_without_token(monkey
                 "login": "example-candidate",
                 "name": "Example Candidate",
                 "bio": "Builder",
-                "public_repos": 25,
+                "public_repos": repo_count,
                 "followers": 7,
                 "html_url": "https://github.com/example-candidate",
             }
@@ -68,17 +75,17 @@ def test_github_ingestor_imports_all_repos_and_enriches_top_without_token(monkey
     monkeypatch.setattr(gh, "_fetch", fake_fetch)
     monkeypatch.setattr(gh, "_extract_project", fake_extract)
 
-    result = asyncio.run(gh.ingest_github("example-candidate", max_repos=25))
+    result = asyncio.run(gh.ingest_github("example-candidate", max_repos=repo_count))
 
     assert result["github_user"]["login"] == "example-candidate"
-    assert result["stats"]["repos_fetched"] == 25
-    assert result["stats"]["projects_extracted"] == 25
-    assert result["stats"]["repos_enriched"] == 20
-    assert result["stats"]["file_indexes_read"] == 20
-    assert result["stats"]["readmes_read"] == 20
-    assert result["stats"]["languages_read"] == 20
-    assert result["stats"]["manifests_read"] == 40
-    assert result["stats"]["llm_projects"] == 6
+    assert result["stats"]["repos_fetched"] == repo_count
+    assert result["stats"]["projects_extracted"] == repo_count
+    assert result["stats"]["repos_enriched"] == detail_limit
+    assert result["stats"]["file_indexes_read"] == detail_limit
+    assert result["stats"]["readmes_read"] == detail_limit
+    assert result["stats"]["languages_read"] == detail_limit
+    assert result["stats"]["manifests_read"] == detail_limit * 2
+    assert result["stats"]["llm_projects"] == llm_limit
     assert any(skill["n"] == "FastAPI" for skill in result["skills"])
     assert any(skill["n"] == "React" for skill in result["skills"])
     assert "Add a GitHub token" in result["errors"][0]

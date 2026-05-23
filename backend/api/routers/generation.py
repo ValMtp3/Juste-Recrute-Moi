@@ -12,10 +12,29 @@ from data.repository import Repository
 
 _background_tasks: set[asyncio.Task] = set()
 
+# M4: how long to ask the client to wait before retrying a transient failure.
+_GENERATION_RETRY_AFTER_SECONDS = 30
+
 
 def _track_background_task(task: asyncio.Task) -> None:
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
+
+
+def _is_transient_generation_error(exc: Exception) -> bool:
+    """Classify a generation failure as transient (worth retrying) vs permanent.
+
+    Transient: network/timeout issues and retryable LLM errors (rate limit,
+    connection, 5xx) that survived the client's own retries. Permanent: bad
+    template, invalid lead, parsing errors — retrying won't help.
+    """
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError, ConnectionError)):
+        return True
+    try:
+        from llm.client import is_transient_llm_error
+    except ImportError:
+        return False
+    return is_transient_llm_error(exc)
 
 
 async def generate_one(
@@ -25,6 +44,7 @@ async def generate_one(
     repo: Repository | None = None,
     service=None,
     job_store=None,
+    template_id: str = "",
 ) -> dict:
     repo = repo or get_repository()
     service = service or get_generation_service()
@@ -44,7 +64,13 @@ async def generate_one(
         await manager.broadcast({"type": "agent", "event": "gen_error", "msg": blocked_reason})
         raise HTTPException(status_code=422, detail=blocked_reason)
 
-    template = repo.settings.get_setting("resume_template", "")
+    # Resolve the resume template: explicit selection -> default template ->
+    # legacy `resume_template` setting -> built-in layout (empty string).
+    try:
+        template = await asyncio.to_thread(repo.resume_templates.resolve_template_content, template_id)
+    except Exception as log_exc:
+        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/generation.py:generate_one: %s', log_exc)
+        template = repo.settings.get_setting("resume_template", "")
     await manager.broadcast({
         "type": "agent",
         "event": "gen_start",
@@ -128,11 +154,18 @@ async def generate_one(
         return enriched_lead
     except Exception as exc:
         job_store.update(job.job_id, status="failed", error=str(exc))
+        # M4: keep transient failures (network/rate-limit) in "tailoring" so the
+        # user can simply retry, and surface a retry_after hint. Only permanent
+        # failures (bad template/invalid lead) fall back to "discovered".
+        transient = _is_transient_generation_error(exc)
+        revert_status = "tailoring" if transient else "discovered"
         try:
-            repo.leads.update_lead_status(job_id, "discovered")
-            failed_lead = {**lead, "status": "discovered"}
+            repo.leads.update_lead_status(job_id, revert_status)
+            failed_lead = {**lead, "status": revert_status}
             failed_meta = dict(failed_lead.get("source_meta") or {})
             failed_meta["generation_error"] = str(exc)
+            if transient:
+                failed_meta["retry_after"] = _GENERATION_RETRY_AFTER_SECONDS
             failed_lead["source_meta"] = failed_meta
             await manager.broadcast({"type": "LEAD_UPDATED", "data": failed_lead})
         except Exception as log_exc:
@@ -143,7 +176,9 @@ async def generate_one(
             "event": "gen_error",
             "msg": f"Generation failed for {lead.get('title','?')}: {exc}",
         })
-        raise HTTPException(status_code=500, detail=f"Generation failed: {exc}") from exc
+        status_code = 503 if transient else 500
+        headers = {"Retry-After": str(_GENERATION_RETRY_AFTER_SECONDS)} if transient else None
+        raise HTTPException(status_code=status_code, detail=f"Generation failed: {exc}", headers=headers) from exc
 
 
 def create_router(*, manager) -> APIRouter:
@@ -153,16 +188,18 @@ def create_router(*, manager) -> APIRouter:
     @router.post("/leads/{job_id}/generate")
     async def generate_for_lead(
         job_id: str,
+        template_id: str = "",
         repo: Repository = Depends(get_repository),
         service=Depends(get_generation_service),
     ):
         require_rate_limit(generate_limiter)
-        lead = await generate_one(job_id, manager, repo=repo, service=service)
+        lead = await generate_one(job_id, manager, repo=repo, service=service, template_id=template_id)
         return {"status": "ready", "job_id": job_id, "lead": lead, "generation_job_id": lead.get("generation_job_id", "")}
 
     @router.post("/leads/{job_id}/generate/start")
     async def start_generate_for_lead(
         job_id: str,
+        template_id: str = "",
         repo: Repository = Depends(get_repository),
         service=Depends(get_generation_service),
         job_store=Depends(get_job_runner),
@@ -181,7 +218,7 @@ def create_router(*, manager) -> APIRouter:
 
         async def _run():
             try:
-                await generate_one(job_id, manager, repo=repo, service=service, job_store=job_store)
+                await generate_one(job_id, manager, repo=repo, service=service, job_store=job_store, template_id=template_id)
             except Exception as log_exc:
                 logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/generation.py:_run: %s', log_exc)
                 pass

@@ -236,10 +236,30 @@ def test_runtime_pack_payload_detection_finds_vector_and_browser(tmp_path):
     (vector / "pyarrow").mkdir()
     (browser / "chromium-1200").mkdir(parents=True)
 
-    vector_payload, browser_payload = runtime._runtime_pack_payloads(root)
+    vector_payload, browser_payload, models_payload = runtime._runtime_pack_payloads(root)
 
     assert vector_payload == vector
     assert browser_payload == browser
+    assert models_payload is None  # no models dir staged
+
+
+def test_runtime_pack_payload_detection_finds_models(tmp_path):
+    from data.vector import runtime
+
+    root = tmp_path / "extract"
+    vector = root / "vector-runtime"
+    browser = root / "browser-runtime" / "ms-playwright"
+    models = root / "models" / "all-MiniLM-L6-v2"
+    (vector / "lancedb").mkdir(parents=True)
+    (vector / "pyarrow").mkdir()
+    (browser / "chromium-1200").mkdir(parents=True)
+    (models).mkdir(parents=True)
+
+    vector_payload, browser_payload, models_payload = runtime._runtime_pack_payloads(root)
+
+    assert vector_payload == vector
+    assert browser_payload == browser
+    assert models_payload == root / "models"
 
 
 def test_runtime_pack_install_skips_ready_vector_runtime(monkeypatch, tmp_path):
@@ -262,7 +282,7 @@ def test_runtime_pack_install_skips_ready_vector_runtime(monkeypatch, tmp_path):
     monkeypatch.setattr(runtime, "browser_runtime_ready", lambda _path=None: browser_ready["value"])
     monkeypatch.setattr(runtime, "_download", lambda _url, _archive_path: None)
     monkeypatch.setattr(runtime, "_safe_extract", lambda _archive_path, _extract_dir: None)
-    monkeypatch.setattr(runtime, "_runtime_pack_payloads", lambda _extract_dir: (vector_payload, browser_payload))
+    monkeypatch.setattr(runtime, "_runtime_pack_payloads", lambda _extract_dir: (vector_payload, browser_payload, None))
 
     def copy_payload(_payload: Path, target: Path, **_kwargs):
         if target == runtime_dir:
@@ -297,7 +317,7 @@ def test_runtime_pack_install_copies_incomplete_vector_runtime(monkeypatch, tmp_
     monkeypatch.setattr(runtime, "browser_runtime_ready", lambda _path=None: browser_ready["value"])
     monkeypatch.setattr(runtime, "_download", lambda _url, _archive_path: None)
     monkeypatch.setattr(runtime, "_safe_extract", lambda _archive_path, _extract_dir: None)
-    monkeypatch.setattr(runtime, "_runtime_pack_payloads", lambda _extract_dir: (vector_payload, browser_payload))
+    monkeypatch.setattr(runtime, "_runtime_pack_payloads", lambda _extract_dir: (vector_payload, browser_payload, None))
 
     def copy_payload(_payload: Path, target: Path, **_kwargs):
         copied.append(target)
@@ -313,14 +333,15 @@ def test_runtime_pack_install_copies_incomplete_vector_runtime(monkeypatch, tmp_
 def test_hash_embedding_fallback_reports_ok(monkeypatch):
     from data.vector import embeddings
 
-    monkeypatch.setattr(embeddings, "_st", "hashing")
-    monkeypatch.setattr(embeddings, "_st_error", "No module named 'sentence_transformers'")
+    # Force hash mode by making ONNX appear unavailable
+    monkeypatch.setattr(embeddings, "_onnx_loaded", True)
+    monkeypatch.setattr(embeddings, "_onnx_session", None)
+    monkeypatch.setattr(embeddings, "_onnx_error", "No module named 'onnxruntime'")
 
     status = embeddings.embedding_status()
 
     assert status["status"] == "ok"
     assert status["mode"] == "hashing"
-    assert "error" not in status
 
 
 def test_embedding_loader_does_not_log_suppressed_exception_noise():

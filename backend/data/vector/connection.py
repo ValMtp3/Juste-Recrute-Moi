@@ -33,23 +33,66 @@ _vector_lock = threading.RLock()
 
 
 class NullVectorStore:
-    """No-op vector store so profile CRUD never fails because embeddings are unavailable."""
+    """No-op vector store so profile CRUD never fails because embeddings are unavailable.
+
+    Every operation is logged at WARNING level so dropped writes are visible
+    in diagnostics rather than silently swallowed.
+    """
 
     available = False
+    _null_log = logging.getLogger("data.vector.null")
 
     def __init__(self, reason: str = ""):
         self.reason = reason
 
     def list_tables(self):
+        self._null_log.warning("NullVectorStore.list_tables called — vector store unavailable (%s)", self.reason)
         return []
 
     def create_table(self, *_args, **_kwargs):
+        name = _args[0] if _args else _kwargs.get("name", "?")
+        self._null_log.warning("NullVectorStore.create_table(%s) — data dropped, vector store unavailable (%s)", name, self.reason)
         return None
 
     def open_table(self, *_args, **_kwargs):
+        name = _args[0] if _args else _kwargs.get("name", "?")
+        self._null_log.warning("NullVectorStore.open_table(%s) — returning null table, vector store unavailable (%s)", name, self.reason)
         return self
 
     def add(self, *_args, **_kwargs):
+        self._null_log.warning("NullVectorStore.add() — data dropped, vector store unavailable (%s)", self.reason)
+        return None
+
+    def delete(self, *_args, **_kwargs):
+        self._null_log.warning("NullVectorStore.delete() — no-op, vector store unavailable (%s)", self.reason)
+        return None
+
+    def search(self, *_args, **_kwargs):
+        self._null_log.warning("NullVectorStore.search() — returning empty results, vector store unavailable (%s)", self.reason)
+        return self
+
+    def metric(self, *_args, **_kwargs):
+        """Chained after search() — returns self so .limit()/.to_list() etc. keep chaining."""
+        return self
+
+    def limit(self, *_args, **_kwargs):
+        return self
+
+    def where(self, *_args, **_kwargs):
+        return self
+
+    def to_list(self):
+        return []
+
+    def to_pandas(self):
+        import types
+        # Return a minimal object with empty-DataFrame-like behavior
+        df = types.SimpleNamespace(empty=True, to_dict=lambda orient="records": [])
+        return df
+
+    def drop_table(self, *_args, **_kwargs):
+        name = _args[0] if _args else _kwargs.get("name", "?")
+        self._null_log.warning("NullVectorStore.drop_table(%s) — no-op, vector store unavailable (%s)", name, self.reason)
         return None
 
 
