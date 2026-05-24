@@ -1,8 +1,9 @@
-"""Shared, storage-free primitives for the profile graph layer.
+"""Shared primitives and graph/vector I/O wrappers for the profile layer.
 
-This module holds the pure helpers and constants used across the profile
+This module holds the helpers and constants used across the profile
 read/write/deletion/vector/correlation modules: ID hashing, the bulk-import
-context flag, profile-shape normalization, and small key/entry utilities.
+context flag, profile-shape normalization, small key/entry utilities, and the
+low-level Kùzu query wrappers (_safe_execute / _query_rows / _upsert_node).
 
 It must not import any of the profile_* sibling modules, so it sits at the
 base of the dependency graph (everything else may import from here).
@@ -17,7 +18,11 @@ import re
 from collections.abc import Iterable
 from urllib.parse import unquote
 
+from core.logging import get_logger
+from data.graph.connection import execute_query
 from data.vector import connection as vector_connection
+
+_log = get_logger(__name__)
 
 PROFILE_SNAPSHOT_KEY = "profile_snapshot_json"
 PROFILE_DELETIONS_KEY = "profile_deleted_items_json"
@@ -152,3 +157,43 @@ def _norm_key(value) -> str:
 
 def _dedupe_ids(ids: Iterable[str]) -> list[str]:
     return list(dict.fromkeys(str(item or "").strip() for item in ids if str(item or "").strip()))
+
+
+def _safe_execute(query: str, params: dict | None = None):
+    try:
+        return execute_query(query, params)
+    except Exception as exc:
+        _log.warning("graph query skipped: %s", exc)
+        return None
+
+
+def _query_rows(query: str, params: dict | None = None, *, require_result: bool = False) -> list[list]:
+    rows: list[list] = []
+    result = _safe_execute(query, params)
+    if result is None and require_result:
+        raise RuntimeError("graph query unavailable")
+    while result is not None and result.has_next():
+        rows.append(result.get_next())
+    return rows
+
+
+def _upsert_node(label: str, props: dict) -> bool:
+    pk = next(iter(props))
+    pk_params = {pk: props[pk]}
+    try:
+        result = execute_query(f"MATCH (n:{label}) WHERE n.{pk} = ${pk} RETURN n.{pk} LIMIT 1", pk_params)
+        if result is not None and result.has_next():
+            if len(props) > 1:
+                sets = ", ".join(f"n.{key} = ${key}" for key in props if key != pk)
+                execute_query(f"MATCH (n:{label}) WHERE n.{pk} = ${pk} SET {sets}", props)
+            return True
+        cols = ", ".join(f"{key}: ${key}" for key in props)
+        execute_query(f"CREATE (:{label} {{{cols}}})", props)
+        return True
+    except Exception as exc:
+        if "duplicated primary key" in str(exc).lower() and len(props) > 1:
+            sets = ", ".join(f"n.{key} = ${key}" for key in props if key != pk)
+            _safe_execute(f"MATCH (n:{label}) WHERE n.{pk} = ${pk} SET {sets}", props)
+            return True
+        _log.warning("graph node upsert skipped: %s", exc)
+        return False

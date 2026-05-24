@@ -66,8 +66,10 @@ class RegressionTests(unittest.TestCase):
             "exp": [{"id": "e1", "role": "Engineer", "co": "Acme", "period": "2024", "d": "Built systems"}],
         }
 
-        with mock.patch.object(profile, "load_profile_snapshot", return_value=snapshot), \
-             mock.patch.object(profile, "read_profile_from_graph", side_effect=RuntimeError("graph read failed")):
+        from data.graph import profile_read
+
+        with mock.patch.object(profile_read, "load_profile_snapshot", return_value=snapshot), \
+             mock.patch.object(profile_read, "read_profile_from_graph", side_effect=RuntimeError("graph read failed")):
             self.assertEqual(profile.get_profile(), snapshot)
 
     def test_public_profile_router_runs_sync_service_calls_off_event_loop(self):

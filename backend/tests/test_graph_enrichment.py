@@ -219,7 +219,9 @@ def test_safe_execute_catches_graph_busy(monkeypatch):
     def raise_busy(query, params=None):
         raise GraphBusyError("lock timed out")
 
-    monkeypatch.setattr(gp, "execute_query", raise_busy)
+    from data.graph import profile_base
+
+    monkeypatch.setattr(profile_base, "execute_query", raise_busy)
     result = gp._safe_execute("MATCH (n) RETURN n")
     assert result is None
 

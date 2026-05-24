@@ -2,6 +2,7 @@ import asyncio
 
 from profile.service import ProfileService
 from models.schema import C, S, E, P
+from data.graph import profile_base, profile_deletions, profile_read, profile_vectors
 
 
 def _sync_status():
@@ -420,10 +421,10 @@ def test_graph_profile_get_profile_merges_snapshot_with_existing_graph(monkeypat
     }
     saved = {}
 
-    monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: snapshot)
-    monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda **_kwargs: graph)
-    monkeypatch.setattr(graph_profile, "read_profile_from_vectors", lambda _db_path=None: {})
-    monkeypatch.setattr(graph_profile, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
+    monkeypatch.setattr(profile_read, "load_profile_snapshot", lambda _db_path=None: snapshot)
+    monkeypatch.setattr(profile_read, "read_profile_from_graph", lambda **_kwargs: graph)
+    monkeypatch.setattr(profile_read, "read_profile_from_vectors", lambda _db_path=None: {})
+    monkeypatch.setattr(profile_read, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
 
     merged = graph_profile.get_profile(prefer_snapshot=False)
 
@@ -443,8 +444,8 @@ def test_graph_profile_get_profile_prefers_saved_snapshot(monkeypatch):
         "exp": [],
     }
 
-    monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: snapshot)
-    monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda: (_ for _ in ()).throw(RuntimeError("graph read should not block profile load")))
+    monkeypatch.setattr(profile_read, "load_profile_snapshot", lambda _db_path=None: snapshot)
+    monkeypatch.setattr(profile_read, "read_profile_from_graph", lambda: (_ for _ in ()).throw(RuntimeError("graph read should not block profile load")))
 
     assert graph_profile.get_profile() == snapshot
 
@@ -468,10 +469,10 @@ def test_graph_profile_get_profile_hydrates_sparse_snapshot_from_graph(monkeypat
     }
     saved = {}
 
-    monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: snapshot)
-    monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda **_kwargs: graph)
-    monkeypatch.setattr(graph_profile, "read_profile_from_vectors", lambda _db_path=None: {})
-    monkeypatch.setattr(graph_profile, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
+    monkeypatch.setattr(profile_read, "load_profile_snapshot", lambda _db_path=None: snapshot)
+    monkeypatch.setattr(profile_read, "read_profile_from_graph", lambda **_kwargs: graph)
+    monkeypatch.setattr(profile_read, "read_profile_from_vectors", lambda _db_path=None: {})
+    monkeypatch.setattr(profile_read, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
 
     merged = graph_profile.get_profile()
 
@@ -523,13 +524,12 @@ def test_graph_profile_get_profile_hydrates_sparse_snapshot_from_vectors(monkeyp
     }
     saved = {}
 
-    from data.graph import profile_vectors
 
-    monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: snapshot)
-    monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda **_kwargs: graph_profile.empty_profile())
+    monkeypatch.setattr(profile_read, "load_profile_snapshot", lambda _db_path=None: snapshot)
+    monkeypatch.setattr(profile_read, "read_profile_from_graph", lambda **_kwargs: graph_profile.empty_profile())
     monkeypatch.setattr(profile_vectors, "_vec", lambda: FakeVec(tables))
-    monkeypatch.setattr(graph_profile, "get_setting", lambda _key, default="", *_args: default)
-    monkeypatch.setattr(graph_profile, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
+    monkeypatch.setattr(profile_deletions, "get_setting", lambda _key, default="", *_args: default)
+    monkeypatch.setattr(profile_read, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
 
     merged = graph_profile.get_profile()
 
@@ -583,7 +583,7 @@ def test_graph_profile_upsert_matches_with_primary_key_only(monkeypatch):
         calls.append((query, params))
         return EmptyResult()
 
-    monkeypatch.setattr(graph_profile, "execute_query", fake_execute)
+    monkeypatch.setattr(profile_base, "execute_query", fake_execute)
 
     assert graph_profile._upsert_node("Skill", {"id": "python", "n": "Python", "cat": "backend"}) is True
     assert calls[0][1] == {"id": "python"}
@@ -600,9 +600,9 @@ def test_graph_profile_get_profile_returns_snapshot_when_strict_graph_read_is_bu
         "exp": [],
     }
 
-    monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: snapshot)
-    monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("graph query unavailable")))
-    monkeypatch.setattr(graph_profile, "read_profile_from_vectors", lambda _db_path=None: {})
+    monkeypatch.setattr(profile_read, "load_profile_snapshot", lambda _db_path=None: snapshot)
+    monkeypatch.setattr(profile_read, "read_profile_from_graph", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("graph query unavailable")))
+    monkeypatch.setattr(profile_read, "read_profile_from_vectors", lambda _db_path=None: {})
 
     assert graph_profile.get_profile(prefer_snapshot=False) == snapshot
 
@@ -620,7 +620,7 @@ def test_graph_profile_manual_candidate_save_updates_snapshot(monkeypatch):
         def get_next(self):
             return next(rows, ["candidate-1"])
 
-    monkeypatch.setattr(graph_profile, "execute_query", lambda *_args, **_kwargs: Result())
+    monkeypatch.setattr(profile_base, "execute_query", lambda *_args, **_kwargs: Result())
     monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: {"n": "Old", "s": "", "skills": [], "projects": [], "exp": []})
     monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda: {"n": "Old", "s": "", "skills": [], "projects": [], "exp": []})
     monkeypatch.setattr(graph_profile, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
@@ -638,7 +638,7 @@ def test_graph_profile_manual_candidate_save_falls_back_when_graph_unavailable(m
 
     saved = {}
 
-    monkeypatch.setattr(graph_profile, "execute_query", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(profile_base, "execute_query", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: {"n": "Old", "s": "", "skills": [], "projects": [], "exp": []})
     monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda: (_ for _ in ()).throw(RuntimeError("graph locked")))
     monkeypatch.setattr(graph_profile, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
@@ -764,8 +764,8 @@ def test_graph_profile_deleted_project_does_not_rehydrate_from_graph(monkeypatch
 
     from data.graph import profile_deletions
 
-    monkeypatch.setattr(graph_profile, "get_setting", fake_get_setting)
-    monkeypatch.setattr(graph_profile, "_query_rows", fake_query_rows)
+    monkeypatch.setattr(profile_read, "get_setting", fake_get_setting)
+    monkeypatch.setattr(profile_read, "_query_rows", fake_query_rows)
     # Tombstone lookup moved to profile_deletions; patch its get_setting too.
     monkeypatch.setattr(profile_deletions, "get_setting", fake_get_setting)
 
@@ -777,7 +777,7 @@ def test_graph_profile_deleted_project_does_not_rehydrate_from_graph(monkeypatch
 def test_graph_profile_prunes_orphan_project_stack_skills(monkeypatch):
     from data.graph import profile as graph_profile
 
-    monkeypatch.setattr(graph_profile, "get_setting", lambda _key, default="", *_args: default)
+    monkeypatch.setattr(profile_deletions, "get_setting", lambda _key, default="", *_args: default)
 
     profile = graph_profile.apply_profile_deletions({
         "n": "Jane",
@@ -795,7 +795,7 @@ def test_graph_profile_prunes_orphan_project_stack_skills(monkeypatch):
 def test_graph_profile_keeps_project_stack_skills_still_used_by_projects(monkeypatch):
     from data.graph import profile as graph_profile
 
-    monkeypatch.setattr(graph_profile, "get_setting", lambda _key, default="", *_args: default)
+    monkeypatch.setattr(profile_deletions, "get_setting", lambda _key, default="", *_args: default)
 
     profile = graph_profile.apply_profile_deletions({
         "n": "Jane",
@@ -873,8 +873,8 @@ def test_graph_profile_delete_last_text_entry_allows_empty_snapshot(monkeypatch)
 def test_graph_profile_read_profile_tolerates_missing_query_results(monkeypatch):
     from data.graph import profile as graph_profile
 
-    monkeypatch.setattr(graph_profile, "execute_query", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(graph_profile, "get_setting", lambda _key, default="": default)
+    monkeypatch.setattr(profile_base, "execute_query", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(profile_read, "get_setting", lambda _key, default="": default)
 
     profile = graph_profile.read_profile_from_graph()
 
@@ -892,7 +892,7 @@ def test_graph_profile_manual_skill_save_falls_back_when_graph_write_fails(monke
     def locked_graph(*_args, **_kwargs):
         raise RuntimeError("graph locked")
 
-    monkeypatch.setattr(graph_profile, "execute_query", locked_graph)
+    monkeypatch.setattr(profile_base, "execute_query", locked_graph)
     monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: {"n": "Jane", "s": "", "skills": [], "projects": [], "exp": []})
     monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda: (_ for _ in ()).throw(RuntimeError("graph locked")))
     monkeypatch.setattr(graph_profile, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
@@ -916,7 +916,7 @@ def test_graph_profile_manual_skill_save_updates_snapshot(monkeypatch):
         def get_next(self):
             return []
 
-    monkeypatch.setattr(graph_profile, "execute_query", lambda *_args, **_kwargs: EmptyResult())
+    monkeypatch.setattr(profile_base, "execute_query", lambda *_args, **_kwargs: EmptyResult())
     monkeypatch.setattr(graph_profile, "load_profile_snapshot", lambda _db_path=None: {"n": "Jane", "s": "", "skills": [], "projects": [], "exp": []})
     monkeypatch.setattr(graph_profile, "read_profile_from_graph", lambda: {"n": "Jane", "s": "", "skills": [], "projects": [], "exp": []})
     monkeypatch.setattr(graph_profile, "save_profile_snapshot", lambda profile, _db_path=None: saved.update(profile))
