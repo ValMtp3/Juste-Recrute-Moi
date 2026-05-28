@@ -79,7 +79,7 @@ Service providers above may process data in regions including `[REGIONS — e.g.
 Depending on your location (GDPR/UK GDPR, CCPA/CPRA, and similar laws), you may have rights to access, correct, delete, port, or restrict processing of your personal data, and to object or withdraw consent. Because we hold almost no personal data about you:
 
 - For **Software data**, you exercise these rights directly on your device (edit/delete locally).
-- For **feedback or Site data** that may identify you, contact us using Section 13 and we will respond as required by law. See the [Data Compliance](data-compliance.md) document for details and timelines.
+- For **feedback or Site data** that may identify you, contact us using Section 13 and we will respond as required by applicable law (for example, within one month under GDPR/UK GDPR).
 
 ## 11. Security
 
@@ -91,7 +91,7 @@ JustHireMe is not directed to children under 16 and we do not knowingly collect 
 
 ## 13. Contact
 
-Privacy questions or requests: email `[PRIVACY CONTACT EMAIL]`, open an issue at https://github.com/vasu-devs/JustHireMe, or follow `SECURITY.md` for sensitive reports. For data-subject requests, see [Data Compliance](data-compliance.md).
+Privacy questions or data-subject requests (access, correction, deletion): email `[PRIVACY CONTACT EMAIL]`, open an issue at https://github.com/vasu-devs/JustHireMe, or follow `SECURITY.md` for sensitive reports. For local Software data, the fastest path is to manage or delete it directly in the app on your device.
 
 ## 14. Changes
 

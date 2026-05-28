@@ -13,8 +13,6 @@ mkdirSync(outDir, { recursive: true });
 const PAGES = [
   { md: "terms-of-use.md", out: "terms-of-use.html", title: "Terms of Use" },
   { md: "privacy-policy.md", out: "privacy-policy.html", title: "Privacy Policy" },
-  { md: "ip-and-dmca-policy.md", out: "ip-and-dmca-policy.html", title: "IP & Infringement Policy" },
-  { md: "data-compliance.md", out: "data-compliance.html", title: "Data Compliance" },
 ];
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

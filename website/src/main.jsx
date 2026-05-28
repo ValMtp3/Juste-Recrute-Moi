@@ -941,8 +941,6 @@ function App() {
         <span className="footer-legal">
           <a href="/legal/terms-of-use.html">Terms</a>
           <a href="/legal/privacy-policy.html">Privacy</a>
-          <a href="/legal/ip-and-dmca-policy.html">IP / DMCA</a>
-          <a href="/legal/data-compliance.html">Data Compliance</a>
         </span>
         <span>By Vasudev - vasudev.live - @vasu_devs - buymeacoffee.com/vasu.devs</span>
       </footer>

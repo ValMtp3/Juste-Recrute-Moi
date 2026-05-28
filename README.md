@@ -685,10 +685,8 @@ JustHireMe is local-first: your profile, leads, and generated documents stay on 
 | --- | --- |
 | [Terms of Use](docs/legal/terms-of-use.md) | Rules for using the app and site, your responsibilities, warranty/liability |
 | [Privacy Policy](docs/legal/privacy-policy.md) | What is and isn't collected (almost nothing leaves your machine) |
-| [IP & Infringement (DMCA) Policy](docs/legal/ip-and-dmca-policy.md) | Reporting infringement and the counter-notice process |
-| [Data Compliance](docs/legal/data-compliance.md) | GDPR/UK GDPR, CCPA/CPRA, data-subject rights, sub-processors |
 
-These policies govern use of the app and site; the source code is licensed separately under AGPL-3.0 (below). The documents contain `[BRACKETED]` placeholders the maintainer must complete (contact, governing law, DMCA agent) — see the [legal index](docs/legal/README.md).
+These policies govern use of the app and site; the source code is licensed separately under AGPL-3.0 (below). The documents contain `[BRACKETED]` placeholders the maintainer must complete (contact, governing law) — see the [legal index](docs/legal/README.md).
 
 ---
 

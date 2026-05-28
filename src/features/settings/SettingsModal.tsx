@@ -15,8 +15,6 @@ const LEGAL_BASE = "https://github.com/vasu-devs/JustHireMe/blob/main/docs/legal
 const LEGAL_LINKS: { label: string; href: string }[] = [
   { label: "Terms of Use", href: `${LEGAL_BASE}/terms-of-use.md` },
   { label: "Privacy Policy", href: `${LEGAL_BASE}/privacy-policy.md` },
-  { label: "IP / DMCA Policy", href: `${LEGAL_BASE}/ip-and-dmca-policy.md` },
-  { label: "Data Compliance", href: `${LEGAL_BASE}/data-compliance.md` },
 ];
 
 function LegalSettings() {
