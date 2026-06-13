@@ -146,6 +146,19 @@ def test_deterministic_fallback_parses_non_tech_resume():
     assert any("iv therapy" in s.lower() for s in nurse_role.s)
 
 
+def test_llm_fallback_returns_valid_model_not_broken_construct():
+    # When the LLM is unavailable, the fallback must be a VALID model. A bare
+    # model_construct() omits required fields and crashes downstream with
+    # "'C' object has no attribute 'n'".
+    from llm.client import _parse_fallback
+    from models.schema import C
+
+    fb = _parse_fallback("ignored", C)
+    assert fb.n == ""          # accessible, not missing
+    assert fb.skills == []
+    assert fb.loc == ""
+
+
 def test_deterministic_fallback_still_parses_tech_resume():
     from profile.ingest_parse import _parse_resume_heuristic
 

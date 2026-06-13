@@ -23,7 +23,10 @@ class P(BaseModel):
 
 
 class C(BaseModel):
-    n:        str
+    # Defaulted (not required) so an empty LLM fallback is still a valid model;
+    # the deterministic parser / merge fills in the real name when the LLM is
+    # unavailable. A required field here crashes downstream `.n` access.
+    n:        str      = ""
     s:        str      = ""
     # Free-text location from the CV (city/region/country), used to target
     # discovery to the candidate's region. Optional and field-agnostic.

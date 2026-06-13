@@ -671,9 +671,27 @@ def _call_raw_once(s: str, u: str, step: str | None = None) -> str:
 
 
 def _parse_fallback(u: str, m: type[BaseModel]):
-    """Minimal local fallback — no LLM, returns empty structured output."""
+    """Minimal local fallback — no LLM, returns an empty but VALID model.
+
+    The instance MUST be valid: callers access attributes on it (e.g. the
+    ingestor reads ``.n``), and a bare ``model_construct()`` omits required
+    fields, which then raises ``AttributeError`` downstream. So when the model
+    has required fields with no default, populate them with type-appropriate
+    empties instead of leaving them unset.
+    """
     try:
         return m()
+    except Exception:
+        pass
+    empties: dict = {str: "", int: 0, float: 0.0, bool: False, list: [], dict: {}, tuple: ()}
+    try:
+        kwargs = {}
+        for field_name, field_info in m.model_fields.items():
+            if field_info.is_required():
+                annotation = field_info.annotation
+                origin = getattr(annotation, "__origin__", None) or annotation
+                kwargs[field_name] = empties.get(origin, "")
+        return m(**kwargs)
     except Exception as log_exc:
         logging.getLogger(__name__).warning('suppressed exception in backend/llm/client.py:_parse_fallback: %s', log_exc)
         return m.model_construct()
