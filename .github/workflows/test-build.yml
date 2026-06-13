@@ -79,6 +79,12 @@ jobs:
       - name: Build backend sidecar
         run: npm run build:sidecar
 
+      # Actually start the frozen sidecar and wait for its FastAPI startup
+      # handshake. This catches packaging bugs (missing bundled modules that
+      # only surface in the frozen build) BEFORE we ship an installer.
+      - name: Smoke-test sidecar startup
+        run: npm run smoke:sidecar
+
       - name: Package first-run runtime pack
         run: npm run build:runtime-pack
 

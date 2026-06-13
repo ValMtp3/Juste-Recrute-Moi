@@ -59,7 +59,21 @@ hidden = [
     "services", "services.apps", "services.auth",
     "graph_service", "graph_service.stats", "graph_service.helpers",
     "llm", "logger",
-] + collect_submodules("contracts") + collect_submodules("data") + collect_submodules("gateway") + collect_submodules("services") + collect_submodules("graph_service")
+] + collect_submodules("contracts") + collect_submodules("data") + collect_submodules("gateway") + collect_submodules("services") + collect_submodules("graph_service") + (
+    # Domain packages loaded dynamically via import_module() (api/dependencies.py
+    # DI, gateway/discovery_config.py -> discovery.targets, lazy `from graph` /
+    # `from help` imports). PyInstaller's static analysis can't follow those, so
+    # collect them explicitly — otherwise the frozen sidecar dies at startup with
+    # ModuleNotFoundError (e.g. "No module named 'discovery'").
+    collect_submodules("core")
+    + collect_submodules("discovery")
+    + collect_submodules("ranking")
+    + collect_submodules("generation")
+    + collect_submodules("profile")
+    + collect_submodules("automation")
+    + collect_submodules("help")
+    + collect_submodules("llm")
+)
 
 if include_graph:
     hidden += ["kuzu"]
