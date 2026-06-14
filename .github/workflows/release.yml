@@ -22,6 +22,7 @@ env:
     PYSEC-2026-139 PYSEC-2025-191 PYSEC-2025-197 PYSEC-2025-189 PYSEC-2025-190
     PYSEC-2025-217 PYSEC-2025-214 PYSEC-2025-218 PYSEC-2025-211 PYSEC-2025-212 PYSEC-2025-213
     PYSEC-2025-215 PYSEC-2025-216
+    CVE-2025-3000
 
 # ────────────────────────────────────────────────────────────
 # Topology (maximum parallelism):
