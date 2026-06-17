@@ -18,7 +18,7 @@ from urllib.parse import urljoin, urlparse, urlunparse
 from automation.browser_runtime import launch_chromium
 from core.logging import get_logger
 from profile.portfolio_models import PageSnapshot
-from profile.url_guard import BlockedUrlError, is_public_host
+from core.url_guard import BlockedUrlError, is_public_host
 from profile.portfolio_text import (
     _canonical_url,
     _dedupe_strings,

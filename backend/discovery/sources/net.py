@@ -8,7 +8,7 @@ legitimate-looking host — could drive the backend into internal services
 ``guarded_async_client`` installs an httpx request event-hook that runs on the
 initial request *and on every redirect*, so auto-redirect following cannot reach
 an internal host. The same public-host policy as the portfolio crawler is reused
-(see ``profile.url_guard``).
+(see ``core.url_guard``).
 """
 
 from __future__ import annotations

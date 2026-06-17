@@ -267,7 +267,6 @@ JustHireMe/
 |   |-- discovery/               Lead discovery, quality gate, source adapters
 |   |-- generation/              Resume, cover letter, and outreach generators
 |   |-- ranking/                 Fit scoring, criteria, semantic/evaluator logic
-|   |-- services/                Domain service apps and routers
 |   `-- tests/                   Backend unit, integration, and regression tests
 |-- src-tauri/                   Tauri Rust shell
 |   `-- resources/               Bundled sidecar/runtime resources generated for packages

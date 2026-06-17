@@ -275,10 +275,10 @@ class TestScoringEngineCaps(unittest.TestCase):
         )
 
 class TestLeadQualityGate(unittest.TestCase):
-    def _quality(self, lead: dict, min_quality: int = 60):
+    def _quality(self, lead: dict, min_quality: int = 60, target_level: str = "any"):
         from discovery.quality_gate import evaluate_lead_quality
 
-        return evaluate_lead_quality(lead, min_quality=min_quality)
+        return evaluate_lead_quality(lead, min_quality=min_quality, target_level=target_level)
 
     def test_valid_junior_job_is_accepted(self):
         quality = self._quality({
@@ -294,6 +294,23 @@ class TestLeadQualityGate(unittest.TestCase):
         self.assertGreaterEqual(quality["score"], 60)
 
     def test_senior_only_role_is_rejected_for_beginner_feed(self):
+        # The seniority penalty is now an explicit opt-in (target_level="beginner");
+        # the default feed is seniority-neutral (field/location-agnostic goal).
+        quality = self._quality({
+            "title": "Senior Staff Software Engineer",
+            "company": "Acme",
+            "url": "https://jobs.example.com/staff",
+            "platform": "lever",
+            "description": "Senior Staff engineer role. Requires 7+ years with React, Node, system design, and team leadership.",
+            "posted_date": "today",
+            "signal_score": 90,
+        }, target_level="beginner")
+        self.assertFalse(quality["accepted"])
+        self.assertIn("senior-only", quality["reason"])
+
+    def test_senior_role_is_accepted_by_default_neutral_feed(self):
+        # Same senior role, default (neutral) gate: must be accepted — proves the
+        # quality gate carries no seniority bias unless a beginner feed is requested.
         quality = self._quality({
             "title": "Senior Staff Software Engineer",
             "company": "Acme",
@@ -303,8 +320,7 @@ class TestLeadQualityGate(unittest.TestCase):
             "posted_date": "today",
             "signal_score": 90,
         })
-        self.assertFalse(quality["accepted"])
-        self.assertIn("senior-only", quality["reason"])
+        self.assertTrue(quality["accepted"])
 
     def test_stale_lead_is_rejected(self):
         quality = self._quality({

@@ -548,6 +548,8 @@ def run(
                 processed_leads.extend(web_sources.scrape_github_jobs_target(target, headed=headed))
             elif "remoteok.com/api" in target:
                 processed_leads.extend(asyncio.run(_scrape_remoteok()))
+            elif "remotive.com/api" in target:
+                processed_leads.extend(asyncio.run(_scrape_remotive(target)))
             elif "jobicy.com/api" in target:
                 processed_leads.extend(asyncio.run(_scrape_jobicy_api(target)))
             elif _is_rss_target(target):
@@ -569,16 +571,26 @@ def run(
             errors.append(f"{target}: {_source_error_detail(_e)}")
             _log.warning("Skipping %s: %s", target, _e)
 
-    # Apify fallback
-    if apify_token and apify_actor and queries:
-        raw = asyncio.run(apify(apify_actor, {"queries": queries}, apify_token))
-        for item in raw:
-            processed_leads.append({
-                "title": item.get("title", ""),
-                "company": item.get("company", ""),
-                "url": item.get("url", ""),
-                "platform": "apify"
-            })
+    # Apify fallback (gated: requires apify_token + apify_actor). When configured,
+    # hand the actor the search queries it needs. Previously `queries` was never
+    # populated by any caller, so this branch was dead and the actor never ran.
+    # Derive queries from the `site:` dork targets — exactly the targets the
+    # keyless API/RSS path cannot serve — so Apify becomes the engine for them.
+    if apify_token and apify_actor:
+        actor_queries = queries or [
+            target[len("site:"):].strip()
+            for target in all_targets
+            if target.lower().startswith("site:")
+        ]
+        if actor_queries:
+            raw = asyncio.run(apify(apify_actor, {"queries": actor_queries}, apify_token))
+            for item in raw:
+                processed_leads.append({
+                    "title": item.get("title", ""),
+                    "company": item.get("company", ""),
+                    "url": item.get("url", ""),
+                    "platform": "apify"
+                })
 
     # Save and Deduplicate
     for item in processed_leads:

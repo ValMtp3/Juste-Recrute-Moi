@@ -55,7 +55,7 @@ hidden = [
     # data/vector/runtime.py::_https_ssl_context.
     "certifi",
     "contracts", "contracts.services",
-    "gateway", "gateway.clients", "gateway.supervisor",
+    "gateway",
     "services", "services.apps", "services.auth",
     "graph_service", "graph_service.stats", "graph_service.helpers",
     "llm", "logger",

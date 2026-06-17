@@ -124,7 +124,7 @@ def evaluate_lead_quality(
     lead: dict,
     *,
     min_quality: int = MIN_DEFAULT_QUALITY,
-    target_level: str = "beginner",
+    target_level: str = "any",
     max_age_days: int = 7,
 ) -> dict:
     text = _lead_text(lead)

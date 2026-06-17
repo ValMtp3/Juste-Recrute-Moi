@@ -323,4 +323,12 @@ def truthy(value) -> bool:
 
 
 def free_sources_enabled(cfg: dict) -> bool:
-    return truthy(cfg.get("free_sources_enabled", "false"))
+    # Default ON: the keyless ATS/community APIs (Greenhouse/Lever/Ashby/Workable,
+    # GitHub issues, HN, Reddit) are the zero-config backbone of discovery and must
+    # run for a brand-new user in any country/field with no API key. An unset OR
+    # blank value (e.g. a settings row written empty by the UI) means "not
+    # configured" and stays ON; only an explicit falsey value opts out.
+    raw = str(cfg.get("free_sources_enabled", "") or "").strip()
+    if not raw:
+        return True
+    return truthy(raw)

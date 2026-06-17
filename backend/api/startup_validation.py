@@ -4,7 +4,7 @@ import os
 from urllib.parse import urlparse
 
 from data.repository import Repository
-from gateway.discovery_config import free_sources_enabled, has_x_token, job_targets, truthy
+from gateway.discovery_config import has_x_token, job_targets, truthy
 
 
 def startup_warnings(repo: Repository) -> list[str]:
@@ -14,7 +14,11 @@ def startup_warnings(repo: Repository) -> list[str]:
     if truthy(cfg.get("x_enabled", "false")) and not has_x_token(cfg):
         warnings.append("X scanning is enabled but x_bearer_token is missing.")
 
-    if free_sources_enabled(cfg) and not (cfg.get("free_source_targets") or cfg.get("job_boards")):
+    # Free sources are ON by default (zero-config), and a profile supplies its own
+    # derived targets at scan time, so only warn when the user EXPLICITLY enabled
+    # free sources yet left no targets/boards configured — never on the default path.
+    explicit_free = str(cfg.get("free_sources_enabled", "") or "").strip()
+    if explicit_free and truthy(explicit_free) and not (cfg.get("free_source_targets") or cfg.get("job_boards")):
         warnings.append("Free-source scanning is enabled but no free source targets or job boards are configured.")
 
     if truthy(cfg.get("custom_connectors_enabled", "false")) and not str(cfg.get("custom_connectors") or "").strip():

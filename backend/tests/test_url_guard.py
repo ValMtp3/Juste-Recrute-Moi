@@ -1,7 +1,7 @@
 """SSRF guard for portfolio import (Tier-0 security fix 0.2)."""
 import pytest
 
-from profile.url_guard import BlockedUrlError, assert_public_url, is_public_host
+from core.url_guard import BlockedUrlError, assert_public_url, is_public_host
 
 
 @pytest.mark.parametrize("ip", [

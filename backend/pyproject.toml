@@ -60,8 +60,6 @@ warn_return_any = true
 exclude = [
     "^tests/",
     "^test_.*\\.py$",
-    "^run_diagnostics\\.py$",
-    "^force_model\\.py$",
 ]
 # Full-project mypy is now enforced in CI. These legacy error families are
 # intentionally suppressed while typed module-by-module cleanup continues.
