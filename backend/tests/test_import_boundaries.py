@@ -16,7 +16,6 @@ DOMAIN_PACKAGES = {
 PROJECT_PACKAGES = DOMAIN_PACKAGES | {
     "api",
     "automation",
-    "contracts",
     "core",
     "data",
     "gateway",
@@ -28,7 +27,7 @@ PROJECT_PACKAGES = DOMAIN_PACKAGES | {
 }
 
 ALLOWED_IMPORTS: dict[str, set[str]] = {
-    "api": {"api", "contracts", "core", "data", "gateway", "graph_service", "help", "llm"},
+    "api": {"api", "core", "data", "gateway", "graph_service", "help", "llm"},
     "automation": {"automation", "core", "data", "discovery", "llm"},
     "data": {"core", "data", "graph_service"},
     "profile": {"automation", "core", "data", "llm", "profile"},
@@ -37,10 +36,9 @@ ALLOWED_IMPORTS: dict[str, set[str]] = {
     "llm": {"core", "data", "llm"},
     "ranking": {"core", "data", "llm", "ranking"},
     "generation": {"core", "data", "generation", "llm"},
-    "contracts": {"contracts"},
-    "gateway": {"contracts", "core", "data", "gateway"},
+    "gateway": {"core", "data", "gateway"},
     "graph_service": {"core", "data", "graph_service"},
-    "services": {"automation", "contracts", "core", "data", "discovery", "generation", "graph_service", "profile", "ranking", "services"},
+    "services": {"automation", "core", "data", "discovery", "generation", "graph_service", "profile", "ranking", "services"},
 }
 
 LEGACY_IMPORT_EXCEPTIONS: dict[str, set[str]] = {}

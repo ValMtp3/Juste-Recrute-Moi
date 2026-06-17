@@ -262,7 +262,6 @@ JustHireMe/
 |-- backend/                     Python FastAPI sidecar
 |   |-- api/                     Main app, routers, auth, scheduler, WebSockets
 |   |-- core/                    Config, logging, version, telemetry, shared types
-|   |-- contracts/               Service and data contracts
 |   |-- data/                    SQLite repositories, graph/vector helpers, migrations
 |   |-- discovery/               Lead discovery, quality gate, source adapters
 |   |-- generation/              Resume, cover letter, and outreach generators
