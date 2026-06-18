@@ -10,7 +10,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
  */
 export async function openExternalUrl(url: string | null | undefined): Promise<void> {
   if (!url) return;
-  let scheme = "";
+  let scheme: string;
   try {
     scheme = new URL(url).protocol;
   } catch {
