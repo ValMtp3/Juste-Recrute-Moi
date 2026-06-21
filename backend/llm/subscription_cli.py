@@ -107,6 +107,22 @@ def _strip_fences(s: str) -> str:
 _MODEL_UNSUPPORTED_HINT = "not supported when using codex"
 
 
+def _codex_error_detail(stderr: str, stdout: str) -> str:
+    """Pull the meaningful failure text out of a codex run.
+
+    `codex exec` prints a ~280-char startup banner and echoes the whole prompt on
+    stderr *before* any real error, so the HEAD of stderr — which `_classify`
+    truncates to 300 chars — is pure boilerplate (the banner is exactly what
+    showed up, useless, in the logs). Drop everything up to the banner's closing
+    rule and keep the TAIL, where codex actually reports what went wrong.
+    """
+    text = (stderr or "").strip()
+    if "\n--------\n" in text:
+        text = text.split("\n--------\n")[-1]
+    detail = text[-500:].strip()
+    return detail or (stdout or "").strip()[-500:] or "codex produced no output"
+
+
 def _codex_run_once(exe_path: str, prompt: str, *, model, timeout: int) -> str:
     out_fd, out_path = tempfile.mkstemp(suffix="-codex.txt")
     os.close(out_fd)
@@ -130,14 +146,25 @@ def _codex_run_once(exe_path: str, prompt: str, *, model, timeout: int) -> str:
             combined = ((r.stderr or "") + " " + (r.stdout or "")).lower()
             if _MODEL_UNSUPPORTED_HINT in combined:
                 raise CliModelUnsupported(f"codex rejected model {model!r}")
-            raise _classify(r.stderr or r.stdout)
+            raise _classify(_codex_error_detail(r.stderr, r.stdout))
         try:
             with open(out_path, encoding="utf-8") as handle:
                 message = handle.read().strip()
         except OSError:
+            message = ""
+        # codex writes the clean final message to the --output-last-message file
+        # AND streams it to stdout; if the file is empty (a codex-version quirk),
+        # salvage stdout before giving up.
+        if not message:
             message = (r.stdout or "").strip()
         if not message:
-            raise _classify(r.stderr or "codex returned no output")
+            # A genuinely empty turn: codex ended without a text reply (it only
+            # reasoned, or attempted a sandboxed action it couldn't complete).
+            # Surface that clearly instead of its useless boilerplate banner.
+            raise _classify(
+                "codex ended its turn without a final text message — "
+                + _codex_error_detail(r.stderr, "")
+            )
         return message
     except subprocess.TimeoutExpired as exc:
         raise CliTimeout(f"codex_cli timed out after {timeout}s") from exc
