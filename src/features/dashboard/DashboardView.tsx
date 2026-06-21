@@ -1,7 +1,8 @@
 import Icon from "../../shared/components/Icon";
 import type React from "react";
-import type { Lead, LogLine, OperationProgress, View } from "../../types";
+import type { ApiFetch, Lead, LogLine, OperationProgress, View } from "../../types";
 import { getMark, getTone, leadDisplayHeading, leadSignal } from "../../shared/lib/leadUtils";
+import { DebugResetButton } from "../../shared/components/DebugResetButton";
 
 const warmSurface = "rgba(var(--white-rgb), 0.64)";
 const warmSurfaceStrong = "rgba(var(--white-rgb), 0.78)";
@@ -112,12 +113,13 @@ const SecondaryButton = ({ children, onClick, disabled, danger }: { children: Re
 
 export function DashboardView({
   leads, dueFollowups, logs, setView, openDrawer,
-  scanning, reevaluating, cleaning, progress, onScan, onStopScan, onReevaluate, onStopReevaluate, onCleanup, scanErr,
+  scanning, reevaluating, cleaning, progress, onScan, onStopScan, onReevaluate, onStopReevaluate, onCleanup, scanErr, api = null,
 }: {
   leads: Lead[]; dueFollowups: Lead[]; logs: LogLine[]; setView: (v: View) => void; openDrawer: (l: Lead) => void;
   scanning: boolean; reevaluating: boolean; cleaning: boolean;
   progress?: OperationProgress;
   onScan: () => void; onStopScan: () => void; onReevaluate: () => void; onStopReevaluate: () => void; onCleanup: () => void; scanErr: string | null;
+  api?: ApiFetch | null;
 }) {
   const active = leads.filter(l => l.status !== "discarded");
   const counts = {
@@ -135,6 +137,9 @@ export function DashboardView({
 
   return (
     <div className="scroll" style={{ padding: 24, flex: 1, height: "100%", minHeight: 0 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        <DebugResetButton api={api} />
+      </div>
       <section style={{
         border: "1px solid rgba(var(--accent-rgb),0.20)",
         borderRadius: 8,
