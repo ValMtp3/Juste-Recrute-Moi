@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_repository
 from api.scheduler import ensure_ghost_job
-from core.types import SettingsBody, TemplateBody
+from core.types import ResetDataBody, SettingsBody, TemplateBody
 from data.repository import Repository
 
 
@@ -297,5 +297,21 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
         if payload.get("ghost_mode") == "true":
             ensure_ghost_job(scheduler, ghost_tick)
         return {"ok": True}
+
+    @router.post("/data/reset")
+    async def reset_data(body: ResetDataBody):
+        """Danger zone: wipe local data (leads, profile graph, vectors, generated
+        documents) so the app can be reset for a clean test. Settings + provider
+        config are kept unless ``clear_settings`` is set. Requires confirm=DELETE."""
+        from data.maintenance import reset_all_data
+
+        summary = await asyncio.to_thread(reset_all_data, clear_settings=body.clear_settings)
+        if body.clear_settings:
+            # Drop cached LLM clients so a wiped provider config isn't reused. (Done
+            # here in the api layer — the data layer must not import llm.)
+            from llm.client import reset_client_cache
+
+            await asyncio.to_thread(reset_client_cache)
+        return {"ok": True, "summary": summary}
 
     return router

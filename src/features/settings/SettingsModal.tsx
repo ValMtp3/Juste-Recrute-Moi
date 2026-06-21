@@ -9,6 +9,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { EMPTY, type Cfg } from "./panels/shared";
 import { SectionLabel } from "./panels/shared";
 import { useTheme, type ThemePref } from "../../shared/lib/theme";
+import { settingsApi } from "../../api/settings";
 import type { ApiFetch } from "../../types";
 
 const LEGAL_BASE = "https://github.com/vasu-devs/JustHireMe/blob/main/docs/legal";
@@ -67,6 +68,76 @@ function AppearanceSettings() {
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function DangerZone({ api }: { api: ApiFetch }) {
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+  const [clearSettings, setClearSettings] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const armed = confirmText.trim().toUpperCase() === "DELETE";
+
+  const reset = async () => {
+    if (!armed) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await settingsApi.resetData(api, { clearSettings });
+      if (!response.ok) {
+        const detail = await response.json().then(d => d.detail).catch(() => "");
+        throw new Error(detail || "Reset failed");
+      }
+      // Reload so every view re-fetches the now-empty data and returns to a clean
+      // first-run state.
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <SectionLabel label="Danger zone" sub="Wipe local data to start fresh — this cannot be undone" />
+      <div style={{ border: "1px solid var(--bad)", background: "var(--bad-soft, rgba(220,38,38,0.06))", borderRadius: 12, padding: 14 }}>
+        {!open ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)", maxWidth: 460 }}>
+              Delete all leads, your profile (graph + vectors), and generated documents on this device. Your settings and provider keys are kept.
+            </div>
+            <button className="btn" onClick={() => setOpen(true)}
+              style={{ color: "var(--bad)", borderColor: "var(--bad)", fontSize: 13, padding: "8px 16px", whiteSpace: "nowrap" }}>
+              <Icon name="trash" size={13} /> Delete all data
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+              <Icon name="alert" size={13} /> This permanently deletes all leads, your profile (graph + vectors), and generated PDFs on this device. Type <b>DELETE</b> to confirm.
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--ink-2)", cursor: "pointer" }}>
+              <input type="checkbox" checked={clearSettings} onChange={e => setClearSettings(e.target.checked)} />
+              Also reset settings &amp; provider config (full factory reset)
+            </label>
+            <input type="text" value={confirmText} onChange={e => setConfirmText(e.target.value)}
+              placeholder="Type DELETE to confirm" autoFocus className="field-input" style={{ fontSize: 13 }} />
+            {error && <div style={{ color: "var(--bad)", fontSize: 12, fontWeight: 700 }}>{error}</div>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn" disabled={busy}
+                onClick={() => { setOpen(false); setConfirmText(""); setError(null); setClearSettings(false); }}
+                style={{ fontSize: 13, padding: "8px 16px" }}>Cancel</button>
+              <button className="btn" onClick={reset} disabled={busy || !armed}
+                style={{ background: "var(--bad)", color: "#fff", borderColor: "var(--bad)", fontSize: 13, padding: "8px 18px", opacity: (busy || !armed) ? 0.55 : 1 }}>
+                <Icon name="trash" size={13} /> {busy ? "Deleting..." : clearSettings ? "Delete everything" : "Delete all data"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -134,6 +205,7 @@ export default function SettingsModal({ api, onClose }: Props) {
           <DiscoverySettings cfg={cfg} set={set} onChange={onChange} />
           <AutomationSettings cfg={cfg} onChange={onChange} />
           <LegalSettings />
+          <DangerZone api={api} />
           <div style={{ height: 6 }} />
         </div>
 

@@ -156,6 +156,14 @@ class TemplateBody(StrictBody):
     template: str = Field(default="", max_length=20000)
 
 
+class ResetDataBody(StrictBody):
+    # Require an explicit literal so a destructive reset can never fire from an
+    # empty/accidental request body.
+    confirm: Literal["DELETE"]
+    # Data-only by default (keeps settings + provider config); true = full wipe.
+    clear_settings: bool = False
+
+
 class CandidateBody(StrictBody):
     n: str = Field(default="", max_length=160)
     s: str = Field(default="", max_length=4000)
