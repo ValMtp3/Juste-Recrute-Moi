@@ -1,5 +1,6 @@
 import type { GraphStats } from "../../types";
 import { GraphCanvas } from "./GraphCanvas";
+import { EmbeddingAtlas } from "./EmbeddingAtlas";
 
 export function GraphView({ stats }: { stats: GraphStats }) {
   const hasGraphPayload = Array.isArray(stats.graph?.nodes);
@@ -63,6 +64,8 @@ export function GraphView({ stats }: { stats: GraphStats }) {
         ) : (
           <GraphCanvas nodes={stats.graph?.nodes || []} edges={stats.graph?.edges || []} />
         )}
+
+        {isLive && <EmbeddingAtlas stats={stats} />}
       </div>
     </div>
   );
