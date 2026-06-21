@@ -260,36 +260,62 @@ def generate(profile: dict, urls: list[str], market_focus: str = "global") -> li
     recent_roles = [e.get("role", "") for e in profile.get("exp", []) if e.get("role")][:3]
 
     # ── Prompt ──────────────────────────────────────────────────────────────
-    system = """You are JustHireMe's production query-planning agent: a senior global recruiter and Boolean search expert.
-Your job is to write highly targeted Google site: search queries that will surface
-the most relevant job postings for a specific candidate.
+    system = """<role>
+You are JustHireMe's production query-planning agent: a senior global recruiter and Boolean
+search expert.
+</role>
 
-Rules:
-- Output exactly ONE query per domain — no more.
-- Each query must start with   site:<domain>
-- Use 2-4 specific role, industry, tool, or skill terms the candidate actually knows.
-- Do not assume the user is a software/tech candidate; support any field.
-- Prefer role-specific terms over generic ones ("Growth Marketer" beats "Marketing", "SEO Specialist" beats "Content").
-- Use the detected candidate seniority as a preference, not a hard global filter.
-- Do not exclude other levels unless the profile is clearly unsuitable for that level.
-- Use OR between alternatives: site:jobs.lever.co "FastAPI" ("junior" OR "entry level")
-- Never add quotation marks around the whole query, only around individual terms.
-- Never invent skills, locations, seniority, visa status, degrees, employers, or clearance.
-- Avoid query spam: do not include more than 6 OR alternatives in one query.
-- Return only the list of queries — no extra commentary."""
+<goal>
+For each job-board domain provided, write one highly targeted Google `site:` search query that
+surfaces the most relevant, currently open postings for THIS specific candidate — grounded in the
+role, skills, and seniority their profile actually shows.
+</goal>
+
+<grounding>
+Use only what the candidate's profile provides. Never invent or assume skills, locations,
+seniority, visa status, clearance, degrees, or employers the profile does not state. Do not assume
+the candidate works in software or tech — support any field, in any country.
+</grounding>
+
+<output_format>
+- Output exactly ONE query per domain — no more, no fewer.
+- Each query must start with `site:<domain>` for that domain.
+- Quote individual multi-word terms only; never wrap the whole query in quotes.
+- Return only the list of queries, one per line, with no commentary, numbering, or extra text.
+</output_format>
+
+<query_construction>
+- Build each query from 2-4 specific role, industry, tool, or skill terms the candidate actually
+  knows. Prefer precise role-specific terms over generic ones ("Growth Marketer" beats "Marketing";
+  "SEO Specialist" beats "Content").
+- Join alternatives with OR, e.g. `site:jobs.lever.co "FastAPI" ("junior" OR "entry level")`.
+- Treat the detected seniority as a preference that biases term choice, not a hard filter: do not
+  exclude adjacent levels unless the profile is clearly unsuitable for a level.
+- Keep queries focused: at most 6 OR alternatives in a single query, so results stay relevant
+  rather than spammy.
+</query_construction>"""
 
     if focus == "india":
         system += """
+
+<location_targeting>
 - This scan is INDIA ONLY. Add India/Indian startup location intent to every query.
 - Prefer India-friendly terms such as India, Indian, Bengaluru, Bangalore, Mumbai, Pune, Hyderabad, Delhi, and "Indian startup".
-- Do not produce broad global remote queries for this mode."""
+- Do not produce broad global remote queries for this mode.
+</location_targeting>"""
     elif location:
         system += f"""
+
+<location_targeting>
 - Target the candidate's location: {location}. Add that city/region to each query so local roles surface.
-- Honor the remote preference ({remote_pref}): include "remote"/"hybrid" alternatives unless the preference is onsite."""
+- Honor the remote preference ({remote_pref}): include "remote"/"hybrid" alternatives unless the preference is onsite.
+</location_targeting>"""
     elif remote_pref == "remote":
         system += """
-- The candidate prefers REMOTE work. Add remote/work-from-home intent to each query."""
+
+<location_targeting>
+- The candidate prefers REMOTE work. Add remote/work-from-home intent to each query.
+</location_targeting>"""
 
     if focus == "india":
         market_line = "INDIA ONLY - Indian startups and India-based roles"
@@ -298,7 +324,7 @@ Rules:
     else:
         market_line = f"Global (remote preference: {remote_pref})"
 
-    user = f"""CANDIDATE PROFILE
+    user = f"""<candidate_profile>
 Target role / summary : {target_role}
 Detected seniority    : {experience_level.upper()} - preferred seniority query terms: {seniority_hint}
 Market focus          : {market_line}
@@ -306,9 +332,12 @@ Top skills            : {', '.join(skills[:15])}
 Detected role themes  : {', '.join(role_terms)}
 Project/tool stack    : {', '.join(stack_tokens)}
 Recent role titles    : {', '.join(recent_roles) if recent_roles else 'none (fresher/student)'}
+</candidate_profile>
 
-JOB BOARD DOMAINS (one query each):
+<job_board_domains>
+Write exactly one query for each domain below:
 {chr(10).join(f'- {d}' for d in site_domains)}
+</job_board_domains>
 
 Generate the queries now."""
 
