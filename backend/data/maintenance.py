@@ -62,6 +62,22 @@ def _reset_sqlite(summary: dict, *, clear_settings: bool) -> None:
             summary["sqlite_cleared"].append(name)
         except Exception as exc:
             summary["errors"].append(f"sqlite {name}: {exc}")
+
+    # The profile snapshot + identity fields live in the `settings` table but are
+    # profile DATA, not preferences. They MUST be cleared even on a data-only reset
+    # (settings preserved) — otherwise get_profile() returns the cached snapshot and
+    # the profile still shows full. (On a full reset the whole table is gone already.)
+    if "settings" in preserve:
+        try:
+            from data.graph.profile_base import IDENTITY_KEYS, PROFILE_SNAPSHOT_KEY
+
+            profile_keys = (PROFILE_SNAPSHOT_KEY, *IDENTITY_KEYS)
+            placeholders = ",".join("?" for _ in profile_keys)
+            conn.execute(f"DELETE FROM settings WHERE key IN ({placeholders})", profile_keys)
+            summary["sqlite_cleared"].append("settings:profile")
+        except Exception as exc:
+            summary["errors"].append(f"sqlite profile keys: {exc}")
+
     try:
         conn.commit()
     except Exception as exc:
@@ -89,9 +105,13 @@ def _reset_graph(summary: dict) -> None:
 
 def _reset_vectors(summary: dict) -> None:
     try:
+        # Use the canonical helper, not vec.list_tables() directly: lancedb returns
+        # a ListTablesResponse object that iterates into (key, value) tuples rather
+        # than table-name strings. vec_table_names() normalizes it to list[str].
+        from data.graph.profile_vectors import vec_table_names
         from data.vector.connection import vec
 
-        for name in list(vec.list_tables() or []):
+        for name in list(vec_table_names() or []):
             try:
                 vec.drop_table(name)
                 summary["vectors_dropped"].append(name)

@@ -26,7 +26,8 @@ class _FakeConn:
 
     def __init__(self, tables):
         self._tables = tables
-        self.deleted: list[str] = []
+        self.deleted: list[str] = []          # whole-table DELETE FROM <name>
+        self.deleted_keys: list[str] = []     # keys hit by DELETE FROM settings WHERE key IN (...)
         self.committed = False
 
     def execute(self, sql, params=None):
@@ -34,7 +35,12 @@ class _FakeConn:
         if text.upper().startswith("SELECT NAME FROM SQLITE_MASTER"):
             return _FakeCursor([{"name": t} for t in self._tables])
         if text.upper().startswith("DELETE FROM "):
-            self.deleted.append(text[len("DELETE FROM "):].strip())
+            target = text[len("DELETE FROM "):].strip()
+            if " WHERE " in target.upper():
+                # Targeted profile-key delete (DELETE FROM settings WHERE key IN ...).
+                self.deleted_keys.extend(params or [])
+            else:
+                self.deleted.append(target)
             return _FakeCursor([])
         return _FakeCursor([])
 
@@ -62,12 +68,21 @@ def test_reset_sqlite_data_only_preserves_settings_and_templates(monkeypatch):
     deleted = set(conn.deleted)
     # User data is wiped...
     assert {"leads", "events", "error_log", "gateway_jobs"} <= deleted
-    # ...but settings, resume templates and schema bookkeeping survive.
+    # ...but the settings, resume-templates and schema tables survive as tables.
     assert "settings" not in deleted
     assert "resume_templates" not in deleted
     assert "schema_migrations" not in deleted
     assert conn.committed is True
-    assert "leads" in summary["sqlite_cleared"] and "settings" not in summary["sqlite_cleared"]
+    assert "leads" in summary["sqlite_cleared"]
+
+    # ...HOWEVER the profile snapshot + identity rows live INSIDE the settings table
+    # and are profile DATA, so they must be cleared even when settings are preserved
+    # (otherwise get_profile() returns the cached snapshot and the profile still shows).
+    from data.graph.profile_base import IDENTITY_KEYS, PROFILE_SNAPSHOT_KEY
+
+    assert PROFILE_SNAPSHOT_KEY in conn.deleted_keys
+    assert set(IDENTITY_KEYS) <= set(conn.deleted_keys)
+    assert "settings:profile" in summary["sqlite_cleared"]
 
 
 def test_reset_sqlite_full_clears_settings_and_templates(monkeypatch):
@@ -99,6 +114,27 @@ def test_reset_all_data_orchestrates_every_store(monkeypatch):
     assert summary["vectors_dropped"] == ["skills"]
     assert summary["assets_removed"] == 3
     assert summary["settings_cleared"] is False
+    assert summary["errors"] == []
+
+
+def test_reset_vectors_drops_every_table(monkeypatch):
+    """Regression: lancedb's list_tables() returns a ListTablesResponse (iterating
+    it yields tuples, not names), so the reset must go through vec_table_names().
+    Every profile vector table must be dropped or the profile rebuilds from vectors."""
+    dropped: list[str] = []
+
+    class _FakeVec:
+        def drop_table(self, name):
+            dropped.append(name)
+
+    monkeypatch.setattr("data.graph.profile_vectors.vec_table_names", lambda: ["skills", "projects", "experiences"])
+    monkeypatch.setattr("data.vector.connection.vec", _FakeVec())
+
+    summary = {"vectors_dropped": [], "errors": []}
+    maintenance._reset_vectors(summary)
+
+    assert set(dropped) == {"skills", "projects", "experiences"}
+    assert set(summary["vectors_dropped"]) == {"skills", "projects", "experiences"}
     assert summary["errors"] == []
 
 
