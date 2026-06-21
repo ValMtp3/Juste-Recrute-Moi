@@ -111,6 +111,25 @@ def test_first_json_value_is_string_and_brace_aware():
     assert sc._first_json_value(tricky) == '{"score":7,"reason":"has {curly} and \\"quotes\\" and [brackets]"}'
 
 
+def test_codex_run_once_pins_low_reasoning_effort(monkeypatch):
+    # xhigh reasoning makes codex too slow for the latency-bound scout step; we
+    # override it for our automated calls so large feeds finish in time.
+    captured = {}
+
+    def fake_run(argv, *a, **k):
+        captured["argv"] = argv
+        out = argv[argv.index("--output-last-message") + 1]
+        with open(out, "w", encoding="utf-8") as handle:
+            handle.write("done")
+        return subprocess.CompletedProcess(argv, 0, "done", "")
+
+    monkeypatch.setattr(sc.subprocess, "run", fake_run)
+    sc._codex_run_once("/x/codex", "extract jobs", model=None, timeout=30)
+    argv = captured["argv"]
+    flag = argv[argv.index("-c") + 1]
+    assert "model_reasoning_effort" in flag and "low" in flag
+
+
 def test_codex_error_detail_drops_echoed_prompt():
     # codex echoed a huge prompt (e.g. scraped RSS) then produced no turn — the
     # diagnostic must not dump that prompt into the log.

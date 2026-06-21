@@ -36,6 +36,13 @@ _CODEX_REJECTED_MODELS = {"", "gpt-5-codex"}
 _SCRUB = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY")
 _DEFAULT_TIMEOUT = 120
 
+# JustHireMe's codex calls are mechanical, latency-bound extraction/scoring, not
+# interactive coding — so pin a low reasoning effort regardless of the user's
+# global ~/.codex setting. At "xhigh" a 140-job feed takes ~169s and blows the
+# 120s timeout (and burns ~16K tokens on a 4KB input); "low" keeps it fast enough
+# and still extracts/scores correctly. Override via env if ever needed.
+_CODEX_REASONING = (os.environ.get("JHM_CODEX_REASONING", "").strip() or "low")
+
 # substrings that classify a failure (checked case-insensitively, login first)
 _LOGIN_HINTS = ("not logged in", "please run /login", "/login", "invalid api key",
                 "unauthor", "authenticate", "sign in", "log in", "run `claude login`",
@@ -186,6 +193,9 @@ def _codex_run_once(exe_path: str, prompt: str, *, model, timeout: int) -> str:
         exe_path, "exec", "-",
         "--skip-git-repo-check", "--sandbox", "read-only", "--ephemeral",
         "--output-last-message", out_path,
+        # Override the user's global reasoning effort for our automated calls so
+        # large feeds finish inside the timeout (see _CODEX_REASONING above).
+        "-c", f'model_reasoning_effort="{_CODEX_REASONING}"',
     ]
     # Only forward an explicit, account-compatible model override; never the
     # known-rejected default (see _CODEX_REJECTED_MODELS).
