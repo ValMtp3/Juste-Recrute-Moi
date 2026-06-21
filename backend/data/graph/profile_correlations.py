@@ -19,14 +19,10 @@ from data.graph.profile_base import _query_rows, _safe_execute, _vec, hash_id
 from data.graph.profile_deletions import _delete_tokens, _load_profile_deletions
 from data.graph.profile_read import refresh_profile_snapshot
 from data.graph.profile_vectors import (
-    add_candidate_vec,
-    add_credential_vec,
-    add_experience_vec,
     add_profile_vec,
-    add_project_vec,
-    add_skill_vec,
     credential_text,
     delete_vec_id_from_all,
+    embed_rows,
     experience_text,
     profile_text,
     project_text,
@@ -119,36 +115,77 @@ def sync_vectors_from_graph() -> dict:
 
     synced = 0
     profile_parts: list[str] = []
+
+    # Build each vector table in ONE batched embed + write instead of a per-item
+    # round-trip. embed_rows() embeds the whole list in a single embed_texts call
+    # and writes it in one LanceDB operation, so 75 skills cost 1 embed + 1 write
+    # instead of 75 + 75 (the old add_*_vec-per-item loop was the ingest hot spot).
+    cand_rows: list[dict] = []
+    cand_texts: list[str] = []
     for candidate_id, name, summary in candidates:
         if is_bad_vector_label(name) and is_bad_vector_label(summary):
             continue
-        add_candidate_vec(str(candidate_id), str(name or ""), str(summary or ""))
-        profile_parts.append(profile_text(name, summary))
-        synced += 1
+        text = profile_text(str(name or ""), str(summary or ""))
+        cand_rows.append({"id": str(candidate_id), "label": str(name or "") or "Candidate", "kind": "candidate", "n": str(name or ""), "summary": str(summary or "")})
+        cand_texts.append(text)
+        profile_parts.append(text)
+    if cand_rows:
+        embed_rows("candidates", cand_rows, cand_texts)
+        synced += len(cand_rows)
+
+    skill_rows: list[dict] = []
+    skill_texts: list[str] = []
     for skill_id, name, category in skills:
         if is_bad_vector_label(name):
             continue
-        add_skill_vec(str(skill_id), str(name), str(category or "general"))
-        profile_parts.append(skill_text(name, category))
-        synced += 1
+        text = skill_text(str(name), str(category or "general"))
+        skill_rows.append({"id": str(skill_id), "label": str(name), "kind": "skill", "n": str(name), "cat": str(category or "general")})
+        skill_texts.append(text)
+        profile_parts.append(text)
+    if skill_rows:
+        embed_rows("skills", skill_rows, skill_texts)
+        synced += len(skill_rows)
+
+    proj_rows: list[dict] = []
+    proj_texts: list[str] = []
     for project_id, title, stack, impact in projects:
         if is_bad_vector_label(title):
             continue
-        add_project_vec(str(project_id), str(title), str(stack or ""), str(impact or ""))
-        profile_parts.append(project_text(title, stack, impact))
-        synced += 1
+        text = project_text(str(title), str(stack or ""), str(impact or ""))
+        proj_rows.append({"id": str(project_id), "label": str(title), "kind": "project", "title": str(title), "stack": str(stack or ""), "impact": str(impact or "")})
+        proj_texts.append(text)
+        profile_parts.append(text)
+    if proj_rows:
+        embed_rows("projects", proj_rows, proj_texts)
+        synced += len(proj_rows)
+
+    exp_rows: list[dict] = []
+    exp_texts: list[str] = []
     for experience_id, role, company, period, description in experiences:
         if is_bad_vector_label(role) and is_bad_vector_label(company):
             continue
-        add_experience_vec(str(experience_id), str(role or ""), str(company or ""), str(period or ""), str(description or ""))
-        profile_parts.append(experience_text(role, company, period, description))
-        synced += 1
+        label = " - ".join(part for part in [str(role or ""), str(company or "")] if part) or "Experience"
+        text = experience_text(str(role or ""), str(company or ""), str(period or ""), str(description or ""))
+        exp_rows.append({"id": str(experience_id), "label": label, "kind": "experience", "role": str(role or ""), "company": str(company or ""), "period": str(period or ""), "description": str(description or "")})
+        exp_texts.append(text)
+        profile_parts.append(text)
+    if exp_rows:
+        embed_rows("experiences", exp_rows, exp_texts)
+        synced += len(exp_rows)
+
+    cred_rows: list[dict] = []
+    cred_texts: list[str] = []
     for credential_id, title, kind in credentials:
         if is_bad_vector_label(title):
             continue
-        add_credential_vec(str(credential_id), str(title), str(kind))
-        profile_parts.append(credential_text(title, kind))
-        synced += 1
+        text = credential_text(str(title), str(kind))
+        cred_rows.append({"id": str(credential_id), "label": str(title), "kind": str(kind).lower(), "title": str(title)})
+        cred_texts.append(text)
+        profile_parts.append(text)
+    if cred_rows:
+        embed_rows("credentials", cred_rows, cred_texts)
+        synced += len(cred_rows)
+
     if profile_parts:
         add_profile_vec("profile:default", "Complete profile", "\n".join(profile_parts))
         synced += 1

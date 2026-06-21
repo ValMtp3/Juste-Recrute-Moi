@@ -284,6 +284,12 @@ def _openai_embed_urllib(texts: list[str], api_key: str) -> list[list[float]]:
 
 # ── Provider selection ───────────────────────────────────────────────────
 
+# Tracks the last ONNX-fallback reason we logged, so a single ingest (which makes
+# many embed calls) doesn't spam the same "falling back to hash" line hundreds of
+# times — we log only when the state actually changes.
+_last_onnx_fallback_error: str | None = None
+
+
 def _configured_provider() -> str:
     """Read the user's embedding provider preference from settings."""
     try:
@@ -314,7 +320,10 @@ def active_provider() -> str:
     # Default: onnx
     if _load_onnx_session():
         return "onnx"
-    _log.info("ONNX embedding unavailable (%s); falling back to hash", _onnx_error)
+    global _last_onnx_fallback_error
+    if _onnx_error != _last_onnx_fallback_error:
+        _log.info("ONNX embedding unavailable (%s); falling back to hash", _onnx_error)
+        _last_onnx_fallback_error = _onnx_error
     return "hash"
 
 
@@ -399,9 +408,10 @@ def embedding_status() -> dict:
 
 def reset_onnx_session() -> None:
     """Force reload of the ONNX session on next use. Useful after model download."""
-    global _onnx_session, _onnx_tokenizer, _onnx_error, _onnx_loaded
+    global _onnx_session, _onnx_tokenizer, _onnx_error, _onnx_loaded, _last_onnx_fallback_error
     with _lock:
         _onnx_session = None
         _onnx_tokenizer = None
         _onnx_error = ""
         _onnx_loaded = False
+        _last_onnx_fallback_error = None
