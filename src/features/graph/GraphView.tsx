@@ -61,6 +61,10 @@ type ForceEdge = GraphEdgePayload & {
 };
 
 const MAX_ATLAS_SKILLS = 24;
+// Show every real project, not a curated top-N — the graph must mirror the DB.
+// Skills stay capped/clustered (they can number in the hundreds), but projects
+// are bounded per person, so this ceiling only guards against a pathological set.
+const MAX_ATLAS_PROJECTS = 60;
 const ATLAS_VIEWPORT_WIDTH = 1180;
 const GRAVITY_WIDTH = 1500;
 const GRAVITY_HEIGHT = 900;
@@ -154,8 +158,10 @@ function seededUnit(seed: string, salt: number) {
 function buildGravityGraph(allNodes: GraphNodePayload[], allEdges: GraphEdgePayload[]) {
   const sourceNodes = allNodes
     .filter(node => !["JobLead", "Candidate", "Profile"].includes(node.type))
+    // Structural nodes (Project/Experience/Credential) sort before Skill, so if
+    // the ceiling is ever hit it trims skills first — projects are never cut.
     .sort((a, b) => a.type.localeCompare(b.type) || a.label.localeCompare(b.label))
-    .slice(0, 140);
+    .slice(0, 240);
   const nodeIds = new Set(sourceNodes.map(node => node.id));
   const sourceEdges = allEdges
     .filter(edge => PROFILE_EDGE_TYPES.has(edge.type) && nodeIds.has(edge.source) && nodeIds.has(edge.target))
@@ -190,7 +196,10 @@ function buildGravityGraph(allNodes: GraphNodePayload[], allEdges: GraphEdgePayl
     Achievement: 250,
   };
   const typeIndex = new Map<string, number>();
-  const visibleNodes = sourceNodes.filter(node => (degree.get(node.id) || 0) > 0);
+  // Keep every structural node (project / experience / credential) even if it has
+  // no surviving edge, so the graph mirrors the DB; only hide orphan skills,
+  // which are just noise without a relationship.
+  const visibleNodes = sourceNodes.filter(node => node.type !== "Skill" || (degree.get(node.id) || 0) > 0);
   const projectCount = visibleNodes.filter(node => node.type === "Project").length;
   const projectStep = projectCount <= 1 ? 0 : Math.min(230, Math.max(150, (GRAVITY_WIDTH - 300) / (projectCount - 1)));
   let projectLaneIndex = 0;
@@ -422,7 +431,7 @@ function buildRelationAtlas(allNodes: GraphNodePayload[], allEdges: GraphEdgePay
     .filter(node => node.type === "Project")
     .filter(node => !normalizedQuery || node.label.toLowerCase().includes(normalizedQuery))
     .sort((a, b) => nodeSupport(b.id, graphEdges) - nodeSupport(a.id, graphEdges))
-    .slice(0, 10);
+    .slice(0, MAX_ATLAS_PROJECTS);
   const rankedGrades = profileNodes
     .filter(node => node.type === "Skill")
     .map(skill => scoreSkill(skill, graphEdges, nodeMap))

@@ -506,30 +506,45 @@ def _query_rows(query: str, params: dict | None = None) -> list[list]:
     return rows
 
 
-def graph_snapshot(limit: int = 140) -> dict:
+def graph_snapshot(limit: int = 500) -> dict:
     nodes: list[dict] = []
     edges: list[dict] = []
+    node_ids: set[str] = set()
+    type_counts: dict[str, int] = {}
     if not _ensure_connection() or conn is None:
         return {"nodes": nodes, "edges": edges, "available": False, "error": graph_error()}
 
+    # Only the high-cardinality types (skills, job leads) are capped, to keep the
+    # visualization legible. Structural types — Candidate, Project, Experience,
+    # Credential — are UNcapped and emitted FIRST, so the snapshot faithfully
+    # mirrors the database (every project the DB holds is returned) and a
+    # skill-heavy profile can never starve projects out of it. `limit` is only an
+    # overall safety ceiling. Previously a single global cap applied skills-first
+    # left ~5 slots for projects, so 19 projects rendered as 5.
+    per_type_cap = {"Skill": 200, "JobLead": 100}
+
     def add_node(node_id: str, label: str, node_type: str, subtitle: str = "") -> None:
-        if not node_id or any(node["id"] == node_id for node in nodes):
+        if not node_id or node_id in node_ids:
             return
         if len(nodes) >= limit:
             return
+        cap = per_type_cap.get(node_type)
+        if cap is not None and type_counts.get(node_type, 0) >= cap:
+            return
+        type_counts[node_type] = type_counts.get(node_type, 0) + 1
+        node_ids.add(node_id)
         nodes.append({"id": node_id, "label": label or node_id, "type": node_type, "subtitle": subtitle})
 
     def add_edge(source: str, target: str, rel: str) -> None:
         if not source or not target:
             return
-        if not any(node["id"] == source for node in nodes) or not any(node["id"] == target for node in nodes):
+        if source not in node_ids or target not in node_ids:
             return
         edges.append({"source": source, "target": target, "type": rel})
 
+    # Structural nodes first (bounded per person, never capped).
     for row in _query_rows("MATCH (n:Candidate) RETURN n.id, n.n, n.s"):
         add_node(f"candidate:{row[0]}", row[1] or "Candidate", "Candidate", row[2] or "")
-    for row in _query_rows("MATCH (n:Skill) RETURN n.id, n.n, n.cat"):
-        add_node(f"skill:{row[0]}", row[1] or "Skill", "Skill", row[2] or "general")
     for row in _query_rows("MATCH (n:Project) RETURN n.id, n.title, n.stack"):
         add_node(f"project:{row[0]}", row[1] or "Project", "Project", row[2] or "")
     for row in _query_rows("MATCH (n:Experience) RETURN n.id, n.role, n.co"):
@@ -537,6 +552,9 @@ def graph_snapshot(limit: int = 140) -> dict:
     for label in ["Certification", "Education", "Achievement"]:
         for row in _query_rows(f"MATCH (n:{label}) RETURN n.id, n.title"):
             add_node(f"credential:{row[0]}", row[1] or label, "Credential", label)
+    # High-cardinality nodes last (capped per type above).
+    for row in _query_rows("MATCH (n:Skill) RETURN n.id, n.n, n.cat"):
+        add_node(f"skill:{row[0]}", row[1] or "Skill", "Skill", row[2] or "general")
     for row in _query_rows("MATCH (n:JobLead) RETURN n.job_id, n.title, n.co"):
         add_node(f"job:{row[0]}", row[1] or "Job lead", "JobLead", row[2] or "")
 
