@@ -58,6 +58,7 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-updater": "^2.10.1",
+    "d3-force": "^3.0.0",
     "framer-motion": "^12.40.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
@@ -66,6 +67,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.11.1",
+    "@types/d3-force": "^3.0.10",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",

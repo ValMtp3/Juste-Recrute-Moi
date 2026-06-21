@@ -5583,3 +5583,118 @@ button.profile-map-node {
     grid-template-columns: 1fr;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   KNOWLEDGE GRAPH — familiar node-link canvas (GraphCanvas.tsx)
+   One clean interactive graph: scroll = zoom, drag = pan, drag node = move,
+   click node = focus its neighbourhood. Replaces the old ribbon/gravity/atlas.
+   ══════════════════════════════════════════════════════════════════════════ */
+.kg-card { padding: 16px; }
+.kg-toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.kg-filters { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.kg-filters button {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line); background: var(--paper);
+  color: var(--ink-2); border-radius: 999px; padding: 6px 13px;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all 120ms ease;
+}
+.kg-filters button:hover { border-color: var(--accent); color: var(--ink); }
+.kg-filters button.active {
+  background: var(--ink); color: var(--paper); border-color: var(--ink);
+}
+.kg-filters .kg-count {
+  font-size: 10.5px; font-weight: 700; opacity: 0.7;
+  background: rgba(var(--ink-rgb), 0.10); border-radius: 999px; padding: 1px 6px;
+}
+.kg-filters button.active .kg-count { background: rgba(var(--white-rgb), 0.22); opacity: 0.95; }
+.kg-search { flex: 1; min-width: 160px; display: flex; }
+.kg-search input {
+  width: 100%; border: 1px solid var(--line); background: var(--paper);
+  border-radius: 9px; padding: 8px 12px; font-size: 13px; color: var(--ink);
+}
+.kg-search input:focus { outline: none; border-color: var(--accent); }
+.kg-zoom { display: inline-flex; gap: 4px; }
+.kg-zoom button {
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink-2);
+  border-radius: 8px; min-width: 34px; height: 32px; padding: 0 10px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.kg-zoom button:hover { border-color: var(--accent); color: var(--ink); }
+
+.kg-body { display: flex; gap: 14px; align-items: stretch; }
+.kg-stage {
+  position: relative; flex: 1; min-width: 0;
+  height: min(640px, 72vh);
+  border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(var(--accent-rgb), 0.05), transparent 60%),
+    var(--paper-3, var(--paper));
+}
+.kg-svg { width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.kg-svg:active { cursor: grabbing; }
+
+.kg-edge { stroke: rgba(var(--ink-rgb), 0.22); stroke-width: 1.1; transition: opacity 140ms ease; }
+.kg-edge.dim { opacity: 0.06; }
+
+.kg-node { cursor: pointer; transition: opacity 140ms ease; }
+.kg-node.dim { opacity: 0.18; }
+.kg-node-dot {
+  fill: var(--kg-tone, var(--blue));
+  stroke: var(--paper); stroke-width: 1.5;
+  transition: stroke-width 120ms ease;
+}
+.kg-node:hover .kg-node-dot { stroke: var(--ink); stroke-width: 2; }
+.kg-node.selected .kg-node-dot { stroke: var(--ink); stroke-width: 2.5; }
+.kg-node-ring { fill: none; stroke: var(--kg-tone, var(--blue)); stroke-width: 2; opacity: 0.5; }
+.kg-node-label {
+  text-anchor: middle; fill: var(--ink-2); font-size: 12px; font-weight: 600;
+  pointer-events: none; paint-order: stroke;
+  stroke: var(--paper); stroke-width: 3px; stroke-linejoin: round;
+}
+.kg-node.selected .kg-node-label { fill: var(--ink); }
+
+.kg-laying, .kg-empty {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  color: var(--ink-3); font-size: 13px; pointer-events: none; text-align: center; padding: 24px;
+}
+.kg-legend {
+  position: absolute; left: 12px; bottom: 12px; display: flex; gap: 12px; flex-wrap: wrap;
+  background: rgba(var(--white-rgb), 0.72); backdrop-filter: blur(4px);
+  border: 1px solid var(--line); border-radius: 9px; padding: 6px 10px;
+}
+.kg-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-2); font-weight: 600; }
+.kg-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+
+.kg-inspector {
+  width: 300px; flex-shrink: 0;
+  border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+  background: var(--paper); overflow-y: auto; height: min(640px, 72vh);
+}
+.kg-inspector-head { display: flex; align-items: center; justify-content: space-between; }
+.kg-chip { border-radius: 999px; padding: 3px 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.kg-close { border: none; background: transparent; color: var(--ink-3); font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; }
+.kg-close:hover { color: var(--ink); }
+.kg-inspector-title { font-size: 18px; font-weight: 700; margin: 10px 0 4px; word-break: break-word; }
+.kg-inspector-sub { font-size: 12.5px; color: var(--ink-3); margin: 0 0 12px; line-height: 1.5; }
+.kg-inspector-count { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); font-weight: 700; margin: 8px 0; }
+.kg-conn-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.kg-conn-list button {
+  width: 100%; display: flex; align-items: center; gap: 9px;
+  border: 1px solid transparent; background: transparent; border-radius: 8px;
+  padding: 7px 9px; cursor: pointer; text-align: left; color: var(--ink);
+}
+.kg-conn-list button:hover { background: var(--paper-3, rgba(var(--ink-rgb),0.04)); border-color: var(--line); }
+.kg-conn-list i { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.kg-conn-label { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kg-conn-rel { font-size: 10.5px; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; flex-shrink: 0; }
+.kg-conn-empty { color: var(--ink-3); font-size: 12.5px; padding: 8px 9px; }
+.kg-inspector-hint h3 { font-size: 15px; font-weight: 700; margin: 0 0 8px; }
+.kg-inspector-hint p { font-size: 12.5px; color: var(--ink-3); line-height: 1.6; margin: 0; }
+
+@media (max-width: 920px) {
+  .kg-body { flex-direction: column; }
+  .kg-inspector { width: auto; height: auto; max-height: 320px; }
+}
