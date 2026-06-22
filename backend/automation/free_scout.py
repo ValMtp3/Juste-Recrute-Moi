@@ -33,7 +33,10 @@ from discovery.sources.custom import scrape_custom_connector as _source_scrape_c
 from discovery.sources.github_jobs import github_query as _source_github_query
 from discovery.sources.github_jobs import scrape_github as _source_scrape_github
 from discovery.sources.hackernews import scrape_hn as _source_scrape_hn
+from discovery.sources.france_travail import scrape_target as _source_scrape_france_travail
+from discovery.sources.jobspy import scrape_target as _source_scrape_jobspy
 from discovery.sources.reddit import scrape_reddit as _source_scrape_reddit
+from discovery.sources.url_import import scrape_target as _source_scrape_url_import
 from discovery.quality_gate import MIN_DEFAULT_QUALITY, attach_quality_metadata, evaluate_lead_quality
 from core.logging import get_logger
 
@@ -150,6 +153,10 @@ def _ats_targets_from_watchlist(raw: str | None) -> list[str]:
             targets.append(f"ats:ashby:{slug}")
         elif provider == "workable":
             targets.append(f"ats:workable:{slug}")
+        elif provider in {"smartrecruiters", "smartrecruiter"}:
+            targets.append(f"ats:smartrecruiters:{slug}")
+        elif provider == "teamtailor":
+            targets.append(f"ats:teamtailor:{slug}")
     return targets
 
 
@@ -261,6 +268,16 @@ async def _scrape_target(target: str) -> list[dict]:
         return await _scrape_ashby(target.split(":", 2)[2].strip())
     if lower.startswith("ats:workable:"):
         return await _scrape_workable(target.split(":", 2)[2].strip())
+    if lower.startswith("ats:smartrecruiters:") or lower.startswith("ats:teamtailor:"):
+        from discovery.sources.ats import scrape_target as _source_scrape_ats_target
+
+        return await _source_scrape_ats_target(target)
+    if lower.startswith("france_travail:"):
+        return await _source_scrape_france_travail(target)
+    if lower.startswith("jobspy:"):
+        return await _source_scrape_jobspy(target)
+    if lower.startswith("import:"):
+        return await _source_scrape_url_import(target)
     if lower.startswith(("http://", "https://")):
         return await _scrape_direct_ats_url(target)
     if lower.startswith("github:"):

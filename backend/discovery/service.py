@@ -28,10 +28,43 @@ class DiscoveryService:
         return await asyncio.to_thread(generate, profile, raw_urls, market_focus)
 
     async def scan_job_boards(self, urls: list[str], cfg: dict) -> DiscoveryRunResult:
+        from automation.source_adapters import run_free_scout
         from discovery.sources.apify import run_board_scan
 
-        result = await asyncio.to_thread(run_board_scan, urls, cfg)
-        return DiscoveryRunResult(leads=result.leads, usage=result.usage, errors=result.errors)
+        free_targets = [url for url in urls if _is_direct_free_target(url)]
+        board_targets = [url for url in urls if not _is_direct_free_target(url)]
+        if not free_targets:
+            result = await asyncio.to_thread(run_board_scan, urls, cfg)
+            return DiscoveryRunResult(leads=result.leads, usage=result.usage, errors=result.errors)
+
+        leads: list[dict] = []
+        errors: list[str] = []
+        usage: dict = {"configured": len(urls), "executed": 0, "candidates": 0, "saved": 0, "duplicates": 0, "filtered": 0, "missing_url": 0, "errors": 0, "by_source": {}}
+
+        if free_targets:
+            free_result = await asyncio.to_thread(
+                run_free_scout,
+                targets=free_targets,
+                raw_targets="",
+                raw_watchlist="",
+                raw_custom_connectors="",
+                raw_custom_headers=cfg.get("custom_connector_headers", ""),
+                custom_connectors_enabled=False,
+                kind_filter="job",
+                max_requests=int_cfg(cfg, "free_source_max_requests", 20, 1, 80),
+                min_signal_score=int_cfg(cfg, "free_source_min_signal_score", 60, 0, 100),
+            )
+            leads.extend(free_result.leads)
+            errors.extend(free_result.errors)
+            _merge_usage(usage, free_result.usage, configured=len(free_targets))
+
+        if board_targets:
+            board_result = await asyncio.to_thread(run_board_scan, board_targets, cfg)
+            leads.extend(board_result.leads)
+            errors.extend(board_result.errors)
+            _merge_usage(usage, board_result.usage, configured=len(board_targets))
+
+        return DiscoveryRunResult(leads=leads, usage=usage, errors=errors)
 
     async def scan_free_sources(
         self,
@@ -104,3 +137,19 @@ class DiscoveryService:
 
 def create_discovery_service() -> DiscoveryService:
     return DiscoveryService()
+
+
+def _is_direct_free_target(target: str) -> bool:
+    lower = str(target or "").strip().lower()
+    return lower.startswith(("france_travail:", "jobspy:", "import:", "ats:"))
+
+
+def _merge_usage(out: dict, incoming: dict | None, *, configured: int) -> None:
+    incoming = incoming or {}
+    out["configured"] = int(out.get("configured") or 0)
+    out["executed"] = int(out.get("executed") or 0) + int(incoming.get("executed") or incoming.get("targets") or configured or 0)
+    for key in ("candidates", "saved", "duplicates", "filtered", "missing_url", "errors"):
+        out[key] = int(out.get(key) or 0) + int(incoming.get(key) or 0)
+    by_source = out.setdefault("by_source", {})
+    for key, value in (incoming.get("by_source") or {}).items():
+        by_source[str(key)] = int(by_source.get(str(key)) or 0) + int(value or 0)

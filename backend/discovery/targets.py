@@ -3,6 +3,7 @@ from __future__ import annotations
 from core.config import (
     DEFAULT_JOB_TARGETS,
     INDIA_JOB_TARGETS,
+    FRANCE_JOB_TARGETS,
     BLOCKED_JOB_TARGET_MARKERS,
     dedupe_targets,
     desired_position,
@@ -26,6 +27,7 @@ __all__ = [
     "BLOCKED_JOB_TARGET_MARKERS",
     "DEFAULT_JOB_TARGETS",
     "INDIA_JOB_TARGETS",
+    "FRANCE_JOB_TARGETS",
     "dedupe_targets",
     "desired_position",
     "free_sources_enabled",

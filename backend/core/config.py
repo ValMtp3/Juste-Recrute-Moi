@@ -43,6 +43,19 @@ INDIA_JOB_TARGETS = [
     "site:apply.workable.com India",
 ]
 
+FRANCE_JOB_TARGETS = [
+    "france_travail:developpeur;lieu=France;range=0-49",
+    "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168",
+    "site:welcometothejungle.com/fr/jobs France",
+    "site:hellowork.com/fr-fr/emplois France",
+    "site:jobs.smartrecruiters.com France",
+    "site:teamtailor.com/jobs France",
+    "site:boards.greenhouse.io France",
+    "site:jobs.lever.co France",
+    "site:jobs.ashbyhq.com France",
+    "site:apply.workable.com France",
+]
+
 BLOCKED_JOB_TARGET_MARKERS = (
     "freelance",
     "upwork",
@@ -83,7 +96,11 @@ def dedupe_targets(targets: list[str]) -> list[str]:
 
 def job_market_focus(value) -> str:
     focus = str(value or "global").strip().lower()
-    return "india" if focus in {"india", "in", "indian", "indian_startups"} else "global"
+    if focus in {"india", "in", "indian", "indian_startups"}:
+        return "india"
+    if focus in {"france", "fr", "french", "marche_francais", "marché_français"}:
+        return "france"
+    return "global"
 
 
 def is_hn_target(target: str) -> bool:
@@ -95,7 +112,11 @@ def job_targets(raw: str, market_focus: str = "global") -> list[str]:
     focus = job_market_focus(market_focus)
     targets = split_configured_targets(raw)
     if not targets:
-        return list(INDIA_JOB_TARGETS if focus == "india" else DEFAULT_JOB_TARGETS)
+        if focus == "india":
+            return list(INDIA_JOB_TARGETS)
+        if focus == "france":
+            return list(FRANCE_JOB_TARGETS)
+        return list(DEFAULT_JOB_TARGETS)
 
     filtered: list[str] = []
     for target in targets:
@@ -129,8 +150,33 @@ def job_targets(raw: str, market_focus: str = "global") -> list[str]:
             "glassdoor.co.in",
         )
         filtered = [target for target in filtered if any(marker in target.lower() for marker in india_markers)]
+    elif focus == "france":
+        france_markers = (
+            "france",
+            "francetravail",
+            "france_travail",
+            "paris",
+            "lyon",
+            "marseille",
+            "lille",
+            "nantes",
+            "bordeaux",
+            "toulouse",
+            "rennes",
+            "welcometothejungle",
+            "hellowork",
+            "indeed",
+            "smartrecruiters",
+            "teamtailor",
+            "greenhouse",
+            "lever",
+            "ashby",
+            "workable",
+            "jobspy",
+        )
+        filtered = [target for target in filtered if any(marker in target.lower() for marker in france_markers)]
 
-    fallback = INDIA_JOB_TARGETS if focus == "india" else DEFAULT_JOB_TARGETS
+    fallback = INDIA_JOB_TARGETS if focus == "india" else FRANCE_JOB_TARGETS if focus == "france" else DEFAULT_JOB_TARGETS
     return dedupe_targets(filtered) or list(fallback)
 
 
@@ -154,9 +200,12 @@ def discovery_location(cfg: dict | None, profile: dict | None = None) -> str:
         value = str(cfg.get(key) or "").strip()
         if value:
             return value
-    # Backward-compat: an explicit india market focus implies India.
-    if job_market_focus(cfg.get("job_market_focus")) == "india":
+    # Backward-compat: explicit market focus implies its country.
+    focus = job_market_focus(cfg.get("job_market_focus"))
+    if focus == "india":
         return "India"
+    if focus == "france":
+        return "France"
     identity = (profile or {}).get("identity") if isinstance(profile, dict) else None
     if isinstance(identity, dict):
         for key in ("city", "location", "region", "country"):
@@ -289,8 +338,11 @@ def profile_x_queries(profile: dict, market_focus: str = "global") -> str:
     terms = terms_for_discovery(profile, 4)
     role = " OR ".join(f'"{term}"' for term in terms[:3])
     loc_text = str((profile or {}).get("_discovery_location") or "").strip()
-    if job_market_focus(market_focus) == "india":
+    focus = job_market_focus(market_focus)
+    if focus == "india":
         location = '("India" OR "Indian" OR "Bengaluru" OR "Mumbai" OR "Pune" OR "Hyderabad")'
+    elif focus == "france":
+        location = '("France" OR "Paris" OR "Lyon" OR "remote" OR "hybrid" OR "télétravail")'
     elif loc_text:
         # Any region: include the user's location plus remote alternatives.
         location = f'("{loc_text}" OR "remote" OR "hybrid")'

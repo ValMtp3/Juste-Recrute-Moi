@@ -5,6 +5,14 @@ import type { ApiFetch, Lead } from "../../../types";
 import { GENERATION_TIMEOUT_MS } from "../../../api/generation";
 import { getMark, getTone, leadDisplayHeading, leadSeniority, seniorityLabel, seniorityTone } from "../../../shared/lib/leadUtils";
 
+const sourceReliability = (lead: Lead) => {
+  const raw = String(lead.source_meta?.source_reliability || "").toLowerCase();
+  if (raw === "stable") return { label: "Stable", tone: "green" };
+  if (raw === "manual") return { label: "Manual", tone: "blue" };
+  if (raw === "best_effort") return { label: "Best effort", tone: "yellow" };
+  return null;
+};
+
 export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerate = false, port, api }: {
   lead: Lead;
   onOpen: (l: Lead) => void;
@@ -23,6 +31,7 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
   const isHotX = lead.platform === "x" && signalScore >= 80;
   const level = leadSeniority(lead);
   const levelTone = seniorityTone(level);
+  const reliability = sourceReliability(lead);
 
   const handleGenerate = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -69,6 +78,7 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
             <span className="pill mono" style={{ fontSize: 8.5, padding: "1px 6px" }}>{lead.platform}</span>
             <span className="pill mono" style={{ fontSize: 8.5, padding: "1px 6px", background: `var(--${levelTone}-soft)`, color: `var(--${levelTone}-ink)`, border: `1px solid var(--${levelTone})` }}>{seniorityLabel(level)}</span>
             {isHotX && <span className="pill mono" style={{ fontSize: 8.5, padding: "1px 6px", background: "var(--orange-soft)", color: "var(--orange-ink)", border: "1px solid var(--orange)" }}>HOT X</span>}
+            {reliability && <span className="pill mono" style={{ fontSize: 8.5, padding: "1px 6px", background: `var(--${reliability.tone}-soft)`, color: `var(--${reliability.tone}-ink)`, border: `1px solid var(--${reliability.tone})` }}>{reliability.label}</span>}
             {lead.budget && <span className="pill mono" style={{ fontSize: 8.5, padding: "1px 6px", background: "var(--green-soft)", color: "var(--green-ink)" }}>{lead.budget}</span>}
           </div>
         </div>
@@ -196,6 +206,7 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
   const statusTone = getTone(lead.status);
   const display = leadDisplayHeading(lead);
   const urlLabel = lead.url ? lead.url.replace(/^https?:\/\//, "").slice(0, 42) : "No source URL";
+  const reliability = sourceReliability(lead);
 
   const handleGenerate = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -239,6 +250,7 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
         <div className="pipeline-job-meta">
           <span>{lead.platform || "source"}</span>
           <span style={{ color: `var(--${levelTone}-ink)` }}>{seniorityLabel(level)}</span>
+          {reliability && <span style={{ color: `var(--${reliability.tone}-ink)` }}>{reliability.label}</span>}
           {isHotX && <span style={{ color: "var(--orange-ink)" }}>Hot X</span>}
           {lead.budget && <span style={{ color: "var(--green-ink)" }}>{lead.budget}</span>}
         </div>

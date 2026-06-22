@@ -7,8 +7,13 @@ from discovery.sources.ats import (
     scrape_greenhouse,
     is_ats_target,
     scrape_lever,
+    scrape_smartrecruiters,
+    scrape_teamtailor,
     scrape_workable,
 )
+from discovery.sources.france_travail import scrape_target as scrape_france_travail_target
+from discovery.sources.jobspy import scrape_target as scrape_jobspy_target
+from discovery.sources.url_import import scrape_target as scrape_url_import_target
 from discovery.sources.apify import run_actor as run_apify_actor
 from discovery.sources.apify import run_board_scan
 from discovery.sources.custom import scrape_custom_connector
@@ -37,14 +42,19 @@ __all__ = [
     "scrape_github",
     "scrape_github_jobs_target",
     "scrape_greenhouse",
+    "scrape_france_travail_target",
     "scrape_hn",
     "scrape_hn_hiring",
     "scrape_jobicy_api",
+    "scrape_jobspy_target",
     "scrape_lever",
     "scrape_reddit",
     "scrape_remoteok",
     "scrape_remotive",
     "scrape_rss",
+    "scrape_smartrecruiters",
+    "scrape_teamtailor",
+    "scrape_url_import_target",
     "scrape_web",
     "scrape_wellfound_target",
     "scrape_workable",

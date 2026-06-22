@@ -1,0 +1,16 @@
+{
+  "market_focus": "france",
+  "free_source_targets": [
+    "france_travail:developpeur;lieu=France;range=0-49",
+    "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168",
+    "ats:greenhouse:mistralai",
+    "ats:lever:qonto",
+    "ats:smartrecruiters:Ubisoft2",
+    "ats:teamtailor:alan"
+  ],
+  "notes": [
+    "France Travail is the stable source and requires FRANCE_TRAVAIL_CLIENT_ID/SECRET.",
+    "JobSpy is best effort and requires the optional python-jobspy package.",
+    "ATS slugs are examples; users can replace or extend this list without code changes."
+  ]
+}

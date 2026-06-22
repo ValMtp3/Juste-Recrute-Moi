@@ -74,6 +74,23 @@ def create_router(manager) -> APIRouter:
             raise HTTPException(status_code=400, detail="Invalid job ID format")
         return job_id
 
+    async def _manual_or_imported_lead(body: ManualLeadBody) -> dict:
+        from gateway.lead_adapters import manual_lead_from_text
+
+        if body.url.strip() and not body.text.strip():
+            try:
+                from discovery.sources.url_import import import_url
+
+                return await import_url(body.url.strip())
+            except Exception as exc:
+                logging.getLogger(__name__).warning("URL import failed, falling back to manual lead: %s", exc)
+                lead = manual_lead_from_text(body.text, body.url, "job")
+                meta = dict(lead.get("source_meta") or {})
+                meta["url_import_error"] = str(exc) or type(exc).__name__
+                lead["source_meta"] = meta
+                return lead
+        return manual_lead_from_text(body.text, body.url, "job")
+
     @router.get("/leads")
     async def leads(
         page: int | None = None,
@@ -210,9 +227,7 @@ def create_router(manager) -> APIRouter:
         require_rate_limit(manual_limiter)
         if not body.text.strip() and not body.url.strip():
             raise HTTPException(status_code=400, detail="Paste lead text or a URL")
-        from gateway.lead_adapters import manual_lead_from_text
-
-        raw_lead = manual_lead_from_text(body.text, body.url, "job")
+        raw_lead = await _manual_or_imported_lead(body)
         examples = await asyncio.to_thread(repo.feedback.get_feedback_training_examples)
         try:
             lead = await asyncio.wait_for(
@@ -243,9 +258,8 @@ def create_router(manager) -> APIRouter:
         if not body.text.strip() and not body.url.strip():
             raise HTTPException(status_code=400, detail="Paste lead text or a URL")
         from api.routers.generation import generate_one
-        from gateway.lead_adapters import manual_lead_from_text
 
-        raw_lead = manual_lead_from_text(body.text, body.url, "job")
+        raw_lead = await _manual_or_imported_lead(body)
         if raw_lead.get("kind") != "job":
             raise HTTPException(status_code=422, detail="Only job leads are accepted right now")
         lead = annotate_job_lead(raw_lead)

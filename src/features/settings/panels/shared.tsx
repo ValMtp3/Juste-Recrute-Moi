@@ -178,6 +178,19 @@ export const INDIA_SOURCE_PRESET = [
   "site:apply.workable.com India,",
 ].join("\n");
 
+export const FRANCE_SOURCE_PRESET = [
+  "france_travail:developpeur;lieu=France;range=0-49,",
+  "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168,",
+  "site:welcometothejungle.com/fr/jobs France,",
+  "site:hellowork.com/fr-fr/emplois France,",
+  "site:jobs.smartrecruiters.com France,",
+  "site:teamtailor.com/jobs France,",
+  "site:boards.greenhouse.io France,",
+  "site:jobs.lever.co France,",
+  "site:jobs.ashbyhq.com France,",
+  "site:apply.workable.com France,",
+].join("\n");
+
 export const KEY_FIELD: Record<string, keyof Cfg> = {
   anthropic: "anthropic_key", gemini: "gemini_api_key", groq: "groq_api_key",
   nvidia: "nvidia_api_key", openai: "openai_api_key", deepseek: "deepseek_api_key",

@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 import type { Cfg } from "./shared";
-import { BigToggle, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, LabelledField, SectionLabel } from "./shared";
+import { BigToggle, FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, LabelledField, SectionLabel } from "./shared";
 
 export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: keyof Cfg) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void }) {
   const [siteDraft, setSiteDraft] = useState("");
@@ -9,14 +9,14 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
     const value = raw.trim().replace(/,$/, "");
     if (!value) return "";
     const lower = value.toLowerCase();
-    if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|https?:\/\/)/i.test(value)) {
-      if (lower.includes("greenhouse.io") || lower.includes("lever.co") || lower.includes("ashbyhq.com") || lower.includes("workable.com")) {
+    if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|france_travail:|jobspy:|import:|https?:\/\/)/i.test(value)) {
+      if (lower.includes("greenhouse.io") || lower.includes("lever.co") || lower.includes("ashbyhq.com") || lower.includes("workable.com") || lower.includes("smartrecruiters.com") || lower.includes("teamtailor.com")) {
         return value;
       }
       return value;
     }
     const domain = value.replace(/^www\./i, "").replace(/\/+$/, "");
-    return `site:${domain} ("jobs" OR "careers" OR "hiring" OR "open roles") (remote OR hybrid OR onsite OR India OR global)`;
+    return `site:${domain} ("jobs" OR "careers" OR "hiring" OR "open roles") (remote OR hybrid OR onsite OR France OR global)`;
   };
 
   const addSiteSource = () => {
@@ -220,6 +220,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Market focus</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {[
+                      { id: "france", label: "France market", sub: "France Travail, Indeed France via JobSpy, ATS pages, and French job boards" },
                       { id: "global", label: "Global market", sub: "Worldwide job boards, ATS pages, remote feeds, and role-neutral sources" },
                       { id: "india", label: "India market", sub: "India job boards, Indian startups, local ATS pages, and remote-India roles" },
                     ].map(mode => {
@@ -266,11 +267,18 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     {[
                       { label: "Global preset", url: GLOBAL_SOURCE_PRESET },
+                      { label: "France preset", url: FRANCE_SOURCE_PRESET },
                       { label: "India preset", url: INDIA_SOURCE_PRESET },
                       { label: "HN Hiring", url: "hn-hiring" },
                       { label: "RemoteOK", url: "https://remoteok.com/api" },
                       { label: "LinkedIn", url: "site:linkedin.com/jobs" },
                       { label: "Indeed", url: "site:indeed.com/jobs" },
+                      { label: "France Travail", url: "france_travail:developpeur;lieu=France;range=0-49" },
+                      { label: "JobSpy FR", url: "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168" },
+                      { label: "WTTJ", url: "site:welcometothejungle.com/fr/jobs France" },
+                      { label: "HelloWork", url: "site:hellowork.com/fr-fr/emplois France" },
+                      { label: "SmartRecruiters", url: "site:jobs.smartrecruiters.com France" },
+                      { label: "Teamtailor", url: "site:teamtailor.com/jobs France" },
                       { label: "Naukri", url: "site:naukri.com jobs India" },
                       { label: "Instahyre", url: "site:instahyre.com jobs India" },
                       { label: "Cutshort", url: "site:cutshort.io/jobs India startup" },
@@ -291,6 +299,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                         <button key={p.label} onClick={() => {
                           if (already) return;
                           const sep = cfg.job_boards.trim() ? ",\n" : "";
+                          if (p.label === "France preset") onChange("job_market_focus", "france");
                           if (p.label === "India preset") onChange("job_market_focus", "india");
                           if (p.label === "Global preset") onChange("job_market_focus", "global");
                           onChange("job_boards", cfg.job_boards.trim() + sep + p.url);
@@ -310,6 +319,9 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                 </div>
                 <textarea value={cfg.job_boards} onChange={set("job_boards")} rows={5} className="mono field-input"
                   placeholder={[
+                    "# France market stable/best-effort sources",
+                    "france_travail:developpeur;lieu=France;range=0-49,",
+                    "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168,",
                     "# Hacker News Who is Hiring (Algolia API)",
                     "hn-hiring,",
                     "# Direct API / RSS feeds",

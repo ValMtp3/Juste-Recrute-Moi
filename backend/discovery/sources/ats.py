@@ -14,7 +14,14 @@ def is_ats_target(target: str) -> bool:
         return True
     if not lower.startswith(("http://", "https://")):
         return False
-    return any(host in lower for host in ("greenhouse.io", "lever.co", "ashbyhq.com", "workable.com"))
+    return any(host in lower for host in (
+        "greenhouse.io",
+        "lever.co",
+        "ashbyhq.com",
+        "workable.com",
+        "smartrecruiters.com",
+        "teamtailor.com",
+    ))
 
 
 async def scrape_greenhouse(slug: str) -> list[dict]:
@@ -159,6 +166,73 @@ async def scrape_workable(slug: str) -> list[dict]:
     return results
 
 
+async def scrape_smartrecruiters(slug: str) -> list[dict]:
+    data = await json_get(f"https://api.smartrecruiters.com/v1/companies/{slug}/postings", {"limit": "100"})
+    jobs = data.get("content") if isinstance(data, dict) else []
+    results = []
+    for job in jobs if isinstance(jobs, list) else []:
+        if not isinstance(job, dict):
+            continue
+        posted = job.get("releasedDate") or job.get("updatedOn") or job.get("createdOn") or ""
+        if posted and not is_recent(posted):
+            continue
+        location_data = job.get("location") or {}
+        location = ", ".join(
+            str(location_data.get(key) or "")
+            for key in ("city", "region", "country")
+            if location_data.get(key)
+        ) if isinstance(location_data, dict) else str(location_data or "")
+        url = job.get("ref") or job.get("applyUrl") or f"https://jobs.smartrecruiters.com/{slug}/{job.get('id', '')}"
+        desc = clean_text(strip_html_text(job.get("jobAd", {}).get("sections", {}).get("jobDescription", "") if isinstance(job.get("jobAd"), dict) else ""))
+        if location:
+            desc = (desc + f"\nLocation: {location}").strip()
+        results.append(text_lead({
+            "title": job.get("name") or job.get("title") or "",
+            "company": slug,
+            "url": url,
+            "platform": "smartrecruiters",
+            "description": desc[:1200],
+            "posted_date": posted,
+            "location": location,
+            "source_meta": {"source": "ats", "source_reliability": "stable", "ats": "smartrecruiters", "slug": slug, "source_job_id": job.get("id")},
+        }))
+    return results
+
+
+async def scrape_teamtailor(slug: str) -> list[dict]:
+    data = await json_get(f"https://{slug}.teamtailor.com/jobs.json")
+    jobs = data.get("jobs") if isinstance(data, dict) else data
+    results = []
+    for job in jobs if isinstance(jobs, list) else []:
+        if not isinstance(job, dict):
+            continue
+        posted = job.get("published_at") or job.get("updated_at") or ""
+        if posted and not is_recent(posted):
+            continue
+        location_data = job.get("locations") or job.get("location") or []
+        if isinstance(location_data, list):
+            location = ", ".join(str(loc.get("name") if isinstance(loc, dict) else loc) for loc in location_data if loc)
+        elif isinstance(location_data, dict):
+            location = str(location_data.get("name") or "")
+        else:
+            location = str(location_data or "")
+        url = job.get("url") or job.get("careersite_job_url") or f"https://{slug}.teamtailor.com/jobs/{job.get('id', '')}"
+        desc = clean_text(strip_html_text(job.get("body") or job.get("description") or job.get("pitch") or ""))
+        if location:
+            desc = (desc + f"\nLocation: {location}").strip()
+        results.append(text_lead({
+            "title": job.get("title") or job.get("name") or "",
+            "company": slug,
+            "url": url,
+            "platform": "teamtailor",
+            "description": desc[:1200],
+            "posted_date": posted,
+            "location": location,
+            "source_meta": {"source": "ats", "source_reliability": "stable", "ats": "teamtailor", "slug": slug, "source_job_id": job.get("id")},
+        }))
+    return results
+
+
 async def scrape_direct_ats_url(url: str) -> list[dict]:
     parsed = urlparse(url)
     host = parsed.netloc.lower()
@@ -174,6 +248,14 @@ async def scrape_direct_ats_url(url: str) -> list[dict]:
         slug = path[0] if path[0] not in {"j", "api"} else ""
         if slug:
             return await scrape_workable(slug)
+    if "smartrecruiters.com" in host and path:
+        slug = path[0] if "jobs.smartrecruiters.com" in host else path[-1]
+        if slug:
+            return await scrape_smartrecruiters(slug)
+    if "teamtailor.com" in host:
+        slug = host.split(".teamtailor.com")[0].replace("www.", "")
+        if slug:
+            return await scrape_teamtailor(slug)
     return []
 
 
@@ -187,6 +269,10 @@ async def scrape_target(target: str) -> list[dict]:
         return await scrape_ashby(target.split(":", 2)[2].strip())
     if lower.startswith("ats:workable:"):
         return await scrape_workable(target.split(":", 2)[2].strip())
+    if lower.startswith("ats:smartrecruiters:"):
+        return await scrape_smartrecruiters(target.split(":", 2)[2].strip())
+    if lower.startswith("ats:teamtailor:"):
+        return await scrape_teamtailor(target.split(":", 2)[2].strip())
     if lower.startswith(("http://", "https://")):
         return await scrape_direct_ats_url(target)
     return []
