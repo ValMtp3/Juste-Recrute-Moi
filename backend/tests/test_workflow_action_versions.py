@@ -11,11 +11,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOWS = [ROOT / ".github/workflows/ci.yml", ROOT / ".github/workflows/release.yml"]
 
-# Highest existing stable major for each action (as of this fix).
+# Highest existing stable major for each action (as of 2026-06-22; bump when an
+# action ships a new major and CI confirms it resolves).
 _MAX_MAJOR = {
-    "actions/checkout": 4,
-    "actions/setup-node": 4,
-    "actions/setup-python": 5,
+    "actions/checkout": 7,
+    "actions/setup-node": 6,
+    "actions/setup-python": 6,
     "actions/upload-artifact": 4,
     "actions/download-artifact": 4,
     "actions/cache": 4,
