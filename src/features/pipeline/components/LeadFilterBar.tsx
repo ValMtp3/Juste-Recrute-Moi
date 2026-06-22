@@ -28,7 +28,7 @@ export function LeadFilterBar({
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder={`Search ${label}`}
+          placeholder={`Rechercher ${label}`}
         />
       </label>
 
@@ -36,37 +36,37 @@ export function LeadFilterBar({
         <label className="pipeline-field">
           <span>Source</span>
           <select value={platform} onChange={e => setPlatform(e.target.value)}>
-            <option value="">All sources</option>
+            <option value="">Toutes les sources</option>
             {platforms.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
         </label>
         <label className="pipeline-field">
-          <span>Level</span>
+          <span>Niveau</span>
           <select value={seniority} onChange={e => setSeniority(e.target.value as SeniorityFilter)}>
-            <option value="all">All levels</option>
-            <option value="beginner">Beginner</option>
-            <option value="fresher">Fresher</option>
+            <option value="all">Tous niveaux</option>
+            <option value="beginner">Débutant</option>
+            <option value="fresher">Stage / alternance</option>
             <option value="junior">Junior</option>
-            <option value="mid">Mid</option>
+            <option value="mid">Intermédiaire</option>
             <option value="senior">Senior</option>
-            <option value="unknown">Unknown</option>
+            <option value="unknown">Inconnu</option>
           </select>
         </label>
         <label className="pipeline-field">
-          <span>Sort</span>
+          <span>Tri</span>
           <select value={sort} onChange={e => setSort(e.target.value as LeadSort)}>
-            <option value="recommended">Recommended</option>
-            <option value="newest">Newest</option>
-            <option value="signal">Best signal</option>
-            <option value="match">Best match</option>
-            <option value="company">Company</option>
+            <option value="recommended">Recommandé</option>
+            <option value="newest">Plus récent</option>
+            <option value="signal">Meilleur signal</option>
+            <option value="match">Meilleur match</option>
+            <option value="company">Entreprise</option>
           </select>
         </label>
       </div>
 
       <div className="pipeline-filter-actions">
         <span className="pipeline-count mono">{shown}/{total}</span>
-        {hasFilters && <button className="pipeline-clear" onClick={resetFilters}>Clear</button>}
+        {hasFilters && <button className="pipeline-clear" onClick={resetFilters}>Effacer</button>}
       </div>
       {actions && <div className="pipeline-actions">{actions}</div>}
     </div>

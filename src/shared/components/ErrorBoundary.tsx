@@ -32,11 +32,11 @@ class ErrorBoundary extends React.Component<
           justifyContent: "center", height: "100%", gap: 12, opacity: 0.6,
         }}>
           <p style={{ margin: 0, fontSize: 14 }}>
-            {this.props.label} failed to load.
+            {this.props.label} n'a pas pu se charger.
           </p>
           <button onClick={() => this.setState(prev => ({ error: null, retryCount: prev.retryCount + 1 }))}
             style={{ fontSize: 12 }}>
-            Retry
+            Réessayer
           </button>
         </div>
       );

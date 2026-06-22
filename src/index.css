@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap");
 @import "tailwindcss";
 
 /* ══════════════════════════════════════════════════
@@ -64,9 +65,9 @@
   --shadow-md:  0 6px 18px rgba(31,26,20,0.08);
   --shadow-lg:  0 18px 60px rgba(31,26,20,0.12), 0 4px 16px rgba(31,26,20,0.06);
 
-  --font-sans:    "Inter", system-ui, -apple-system, sans-serif;
+  --font-sans:    "Space Grotesk", "Inter", system-ui, -apple-system, sans-serif;
   --font-mono:    "JetBrains Mono", ui-monospace, monospace;
-  --font-display: "Fraunces", "Instrument Serif", ui-serif, Georgia, serif;
+  --font-display: "Space Grotesk", "Inter", system-ui, -apple-system, sans-serif;
   --font-serif:   "Instrument Serif", "Fraunces", ui-serif, Georgia, serif;
 
   /* ── RGB channel tokens ──
@@ -464,11 +465,39 @@
 }
 
 .sidebar-setup,
-.sidebar-settings-btn {
-  width: 100%;
-  min-height: 44px;
-  border-radius: 10px;
-}
+  .sidebar-settings-btn {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 10px;
+  }
+
+  .creator-footer {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 38px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: #1a54b3;
+    color: #e4501c;
+    font-family: "Space Grotesk", var(--font-sans);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.2;
+    text-align: center;
+    text-decoration: none;
+    border: 1px solid rgba(var(--white-rgb), 0.22);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .creator-footer:hover {
+    filter: brightness(1.04);
+  }
+
+  .creator-footer.compact {
+    width: min(280px, 100%);
+  }
 
 .sidebar-settings-btn {
   justify-content: flex-start;
@@ -495,13 +524,14 @@
   height: 30px;
 }
 
-.sidebar.collapsed .sidebar-label,
-.sidebar.collapsed .nav-label,
-.sidebar.collapsed .sidebar-section-label,
-.sidebar.collapsed .sidebar-snapshot-label {
-  opacity: 0;
-  max-width: 0;
-  transform: translateX(-4px);
+  .sidebar.collapsed .sidebar-label,
+  .sidebar.collapsed .nav-label,
+  .sidebar.collapsed .sidebar-section-label,
+  .sidebar.collapsed .sidebar-snapshot-label,
+  .sidebar.collapsed .creator-footer {
+    opacity: 0;
+    max-width: 0;
+    transform: translateX(-4px);
   pointer-events: none;
   overflow: hidden;
 }

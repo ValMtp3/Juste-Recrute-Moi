@@ -351,8 +351,8 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
           <div className="approval-doc-pane" style={{ padding: 18, borderRight: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 12, minHeight: 0, overflowY: "auto", overflowX: "hidden" }}>
             <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <div>
-                <div className="eyebrow">Application Package</div>
-                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>Resume and cover letter are generated separately for this role.</div>
+                <div className="eyebrow">Dossier de candidature</div>
+                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>CV et lettre sont générés séparément pour cette offre.</div>
               </div>
               <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
                 {templates.length > 0 && (
@@ -360,7 +360,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                     value={templateId}
                     onChange={e => setTemplateId(e.target.value)}
                     disabled={generating || pipelineRunning}
-                    title="Resume template to mimic for this job"
+                    title="Modèle de CV à suivre pour cette offre"
                     style={{
                       padding: "5px 10px", borderRadius: 8, fontSize: 11, fontWeight: 700,
                       border: "1px solid var(--line)", background: "var(--paper)", color: "var(--ink-2)",
@@ -368,34 +368,34 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                     }}
                   >
                     {templates.map(t => (
-                      <option key={t.id} value={t.id}>{t.name}{t.is_default ? " (default)" : ""}</option>
+                      <option key={t.id} value={t.id}>{t.name}{t.is_default ? " (défaut)" : ""}</option>
                     ))}
                   </select>
                 )}
                 {pdfBlobUrl && (
-                  <button onClick={openPdf} title="Open PDF in system viewer" style={{
+                  <button onClick={openPdf} title="Ouvrir le PDF avec le lecteur système" style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "5px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700,
                     border: "1px solid var(--teal)", background: "var(--teal-soft)", color: "var(--teal)", cursor: "pointer",
                   }}>
-                    <Icon name="download" size={12} color="var(--teal)" /> Open PDF
+                    <Icon name="download" size={12} color="var(--teal)" /> Ouvrir le PDF
                   </button>
                 )}
                 <button onClick={generatePdf} disabled={generating || pipelineRunning} style={{
                   padding: "5px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700,
                   border: "1px solid var(--purple)", background: "var(--purple-soft)", color: "var(--purple-ink)", cursor: generating ? "wait" : pipelineRunning ? "not-allowed" : "pointer",
-                }}>{generating ? "Generating..." : resumeReady || coverReady ? "Regenerate Package" : "Generate Package"}</button>
+                }}>{generating ? "Génération..." : resumeReady || coverReady ? "Régénérer le dossier" : "Générer le dossier"}</button>
                 <button onClick={runPipeline} disabled={pipelineRunning || generating} style={{
                   padding: "5px 12px", borderRadius: 8, fontSize: 11, fontWeight: 700,
                   border: "1px solid var(--blue)", background: "var(--blue-soft)", color: "var(--blue-ink)", cursor: pipelineRunning ? "wait" : generating ? "not-allowed" : "pointer",
-                }}>{pipelineRunning ? "Pipeline running..." : "Run full pipeline"}</button>
+                }}>{pipelineRunning ? "Pipeline en cours..." : "Lancer le pipeline complet"}</button>
               </div>
             </div>
             {pipelineMsg && <div style={{ color: pipelineMsg.includes("failed") || pipelineMsg.includes("Server") ? "var(--bad)" : "var(--blue-ink)", fontSize: 12 }}>{pipelineMsg}</div>}
             <div className="row gap-2" style={{ background: "var(--paper-3)", padding: 5, borderRadius: 10, flexShrink: 0 }}>
               {[
-                ["resume", "Resume", resumeReady],
-                ["cover", "Cover Letter", coverReady],
+                ["resume", "CV", resumeReady],
+                ["cover", "Lettre", coverReady],
               ].map(([kind, label, ready]) => (
                 <button key={kind as string} onClick={() => setActiveDoc(kind as DocKind)} style={{
                   flex: 1, padding: "8px 10px", borderRadius: 7, border: "none", cursor: "pointer",
@@ -411,7 +411,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
             </div>
             {versions.length > 1 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                <div className="eyebrow">Version history</div>
+                <div className="eyebrow">Historique des versions</div>
                 <select
                   className="field-input"
                   value={selectedVersion ?? ""}
@@ -478,18 +478,18 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                 <div style={{ height: "100%", minHeight: 420, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, color: "var(--ink-3)", fontSize: 12, padding: 24, textAlign: "center" }}>
                   {pdfLoadErr ? (
                     <>
-                      <div style={{ color: "var(--bad)", maxWidth: 460, lineHeight: 1.5 }}>Failed to load PDF preview: {pdfLoadErr}</div>
+                      <div style={{ color: "var(--bad)", maxWidth: 460, lineHeight: 1.5 }}>Aperçu PDF impossible à charger : {pdfLoadErr}</div>
                       <button
                         onClick={() => setPdfPreviewAttempt(n => n + 1)}
                         style={{ padding: "8px 18px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "1px solid var(--blue)", background: "var(--blue-soft)", color: "var(--blue-ink)", cursor: "pointer" }}
                       >
-                        Retry preview
+                        Réessayer l'aperçu
                       </button>
                     </>
                   ) : (
                     <>
-                      <div>Loading {activeDoc === "resume" ? "resume" : "cover letter"}...</div>
-                      <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>Preview will time out automatically if the backend does not respond.</div>
+                      <div>Chargement du {activeDoc === "resume" ? "CV" : "lettre"}...</div>
+                      <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)" }}>L'aperçu expirera automatiquement si le backend ne répond pas.</div>
                     </>
                   )}
                 </div>
@@ -498,13 +498,13 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                 <div style={{ height: "100%", minHeight: 420, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, color: "var(--ink-3)", fontSize: 12, padding: 24, textAlign: "center" }}>
                   <Icon name="file" size={26} color="var(--ink-4)" />
                   <div style={{ fontWeight: 700, color: "var(--ink-2)" }}>
-                    No tailored {activeDoc === "resume" ? "resume" : "cover letter"} yet.
+                    Aucun {activeDoc === "resume" ? "CV" : "lettre"} adapté pour l'instant.
                   </div>
                   <div style={{ maxWidth: 380, lineHeight: 1.5 }}>
-                    Generate the application package to create separate PDFs using the job description, company context, and best-matching projects.
+                    Génère le dossier de candidature pour créer les PDF à partir de la description, du contexte entreprise et des meilleurs projets.
                   </div>
                   <button onClick={generatePdf} disabled={generating || pipelineRunning} style={{ padding: "8px 18px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: "1px solid var(--purple)", background: "var(--purple-soft)", color: "var(--purple-ink)", cursor: generating ? "wait" : pipelineRunning ? "not-allowed" : "pointer" }}>
-                    Generate Package
+                    Générer le dossier
                   </button>
                 </div>
               )}
@@ -515,7 +515,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
           <div className="approval-detail-pane" style={{ display: "flex", flexDirection: "column", minHeight: 0, background: "var(--paper)" }}>
             <div style={{ padding: 22, display: "flex", flexDirection: "column", gap: 14, overflowY: "auto", minHeight: 0, flex: 1 }}>
             <div>
-              <div className="eyebrow" style={{ marginBottom: 6 }}>Job Description</div>
+              <div className="eyebrow" style={{ marginBottom: 6 }}>Description de l'offre</div>
               <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.6, background: "var(--paper-3)", borderRadius: 8, padding: "10px 12px", border: "1px solid var(--line)", whiteSpace: "pre-wrap" }}>
                 {jobDescription}
               </div>
@@ -739,7 +739,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                 }}
               >
                 <Icon name="check" size={15} color="#fff" />
-                {statusBusy === "applied" ? "Saving..." : j.status === "applied" ? "Marked as applied" : "Mark as applied"}
+                {statusBusy === "applied" ? "Enregistrement..." : j.status === "applied" ? "Marquée comme postulée" : "Marquer comme postulée"}
               </button>
               {statusErr ? (
                 <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--bad)", lineHeight: 1.45 }}>

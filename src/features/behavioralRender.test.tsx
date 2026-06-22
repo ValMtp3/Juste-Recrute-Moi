@@ -64,7 +64,7 @@ describe("high-risk component behavioral render coverage", () => {
       />,
     );
 
-    expect(html).toContain("Agent Online");
+    expect(html).toContain("Agent actif");
     expect(html).toContain("Acme AI");
     expect(html).toContain("Backend Engineer");
   });
@@ -75,7 +75,7 @@ describe("high-risk component behavioral render coverage", () => {
     );
 
     expect(html).toContain("Backend Engineer");
-    expect(html).toContain("Generate Package");
+    expect(html).toContain("Générer le dossier");
     expect(html).toContain("91%");
   });
 
@@ -95,7 +95,7 @@ describe("high-risk component behavioral render coverage", () => {
 
     expect(applyHtml).toContain("job");
     expect(drawerHtml).toContain("Backend Engineer");
-    expect(drawerHtml).toContain("Mark as applied");
+    expect(drawerHtml).toContain("Marquer comme postulée");
   });
 
   it("reports ErrorBoundary crashes through the configured API", () => {

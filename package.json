@@ -1,17 +1,17 @@
 {
-  "name": "justhireme",
+  "name": "juste-recrute-moi",
   "private": true,
   "version": "1.2.0",
-  "description": "Local-first AI job intelligence workbench for scraping, ranking, and tailoring applications.",
+  "description": "Agrégateur local-first d'offres d'emploi pour le marché français.",
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vasu-devs/JustHireMe.git"
+    "url": "https://github.com/ValMtp3/Juste-Recrute-Moi.git"
   },
   "bugs": {
-    "url": "https://github.com/vasu-devs/JustHireMe/issues"
+    "url": "https://github.com/ValMtp3/Juste-Recrute-Moi/issues"
   },
-  "homepage": "https://github.com/vasu-devs/JustHireMe#readme",
+  "homepage": "https://github.com/ValMtp3/Juste-Recrute-Moi#readme",
   "type": "module",
   "scripts": {
     "dev": "vite",

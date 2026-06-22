@@ -26,6 +26,7 @@ import { OnboardingWizard } from "./shared/components/OnboardingWizard";
 import { HelpChat } from "./shared/components/HelpChat";
 import { UpdatePrompt } from "./shared/components/UpdatePrompt";
 import { SemanticRuntimePrompt } from "./shared/components/SemanticRuntimePrompt";
+import { CreatorFooter } from "./shared/components/CreatorFooter";
 
 const PIPELINE_VIEW_TO_TAB: Partial<Record<View, PipelineTab>> = {
   pipeline: "all",
@@ -38,6 +39,12 @@ const PIPELINE_VIEW_TO_TAB: Partial<Record<View, PipelineTab>> = {
 };
 
 type SubsystemHealth = Record<string, { status: string; error?: string; reason?: string; [key: string]: unknown }>;
+
+const connLabel = (conn: string) => ({
+  connected: "connecté",
+  connecting: "connexion",
+  disconnected: "déconnecté",
+}[conn] || conn);
 
 function isActionableSubsystemIssue(name: string, value: SubsystemHealth[string]) {
   if (value.status === "ok") return false;
@@ -92,7 +99,7 @@ export default function App() {
     if (!scanning) return;
     const timer = window.setTimeout(() => {
       setScanning(false);
-      const msg = "Scan indicator cleared after 15 minutes without backend progress.";
+      const msg = "Indicateur de scan réinitialisé après 15 minutes sans progression backend.";
       setScanErr(msg);
       wsAddLog(msg, "system", "scan");
     }, 15 * 60 * 1000);
@@ -165,10 +172,10 @@ export default function App() {
       const r = await api(`/api/v1/scan`, { method: "POST" });
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Backend unreachable");
+        throw new Error(detail || "Backend injoignable");
       }
     } catch (e: any) {
-      setScanErr(e.message || "Scan failed"); setScanning(false);
+      setScanErr(e.message || "Le scan a échoué"); setScanning(false);
     }
   }, [port, api, scanning]);
 
@@ -178,10 +185,10 @@ export default function App() {
       const r = await api(`/api/v1/scan/stop`, { method: "POST" });
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Stop scan failed");
+        throw new Error(detail || "Arrêt du scan impossible");
       }
     } catch (e: any) {
-      const msg = e.message || "Stop scan request failed";
+      const msg = e.message || "La demande d'arrêt du scan a échoué";
       setScanErr(msg);
       wsAddLog(msg, "system", "scan");
     }
@@ -194,10 +201,10 @@ export default function App() {
       const r = await api(`/api/v1/leads/reevaluate`, { method: "POST" });
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Re-evaluation failed");
+        throw new Error(detail || "La réévaluation a échoué");
       }
     } catch (e: any) {
-      const msg = e.message || "Re-evaluation failed";
+      const msg = e.message || "La réévaluation a échoué";
       setScanErr(msg); setReevaluating(false);
       wsAddLog(msg, "system", "reeval");
     }
@@ -209,10 +216,10 @@ export default function App() {
       const r = await api(`/api/v1/leads/reevaluate/stop`, { method: "POST" });
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Stop re-evaluation failed");
+        throw new Error(detail || "Arrêt de la réévaluation impossible");
       }
     } catch (e: any) {
-      const msg = e.message || "Stop re-evaluation request failed";
+      const msg = e.message || "La demande d'arrêt de la réévaluation a échoué";
       setScanErr(msg);
       wsAddLog(msg, "system", "reeval");
     }
@@ -220,20 +227,20 @@ export default function App() {
 
   const onCleanupLeads = useCallback(async () => {
     if (!port || !api || scanning || reevaluating || cleaning) return;
-    const ok = window.confirm("Discard obvious bad rows like HN discussion comments and non-job content? This keeps the rows in Discarded with a cleanup reason.");
+    const ok = window.confirm("Masquer les lignes clairement hors sujet, comme des commentaires ou contenus non liés à une offre ? Elles resteront dans les offres masquées avec une raison de nettoyage.");
     if (!ok) return;
     setCleaning(true); setScanErr(null);
     try {
       const r = await api(`/api/v1/leads/cleanup`, { method: "POST" });
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Cleanup failed");
+        throw new Error(detail || "Le nettoyage a échoué");
       }
       const result = await r.json();
-      wsAddLog(`Cleanup discarded ${result.candidates ?? 0} bad rows after scanning ${result.scanned ?? 0}`, "system", "cleanup");
+      wsAddLog(`Nettoyage : ${result.candidates ?? 0} lignes masquées après analyse de ${result.scanned ?? 0}`, "system", "cleanup");
       window.dispatchEvent(new CustomEvent("leads-refresh"));
     } catch (e: any) {
-      const msg = e.message || "Cleanup failed";
+      const msg = e.message || "Le nettoyage a échoué";
       setScanErr(msg);
       wsAddLog(msg, "system", "cleanup");
     } finally {
@@ -290,19 +297,19 @@ export default function App() {
           <Topbar view={view} progress={progress} />
           <SubsystemBanner items={degradedSubsystems} />
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--paper)" }}>
-            {view === "apply"     && <ErrorBoundary label="Apply" api={api ?? undefined}><ApplyJobView port={port} api={api} leads={leads} openDrawer={setSel} initialInput={applyDraft} autoFocus={applyAutoFocus} /></ErrorBoundary>}
+            {view === "apply"     && <ErrorBoundary label="Adaptation" api={api ?? undefined}><ApplyJobView port={port} api={api} leads={leads} openDrawer={setSel} initialInput={applyDraft} autoFocus={applyAutoFocus} /></ErrorBoundary>}
             {view === "dashboard" && <ErrorBoundary label="Dashboard" api={api ?? undefined}><DashboardView leads={leads} dueFollowups={dueFollowups} logs={logs} setView={setView} openDrawer={setSel} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} progress={progress} onScan={onScan} onStopScan={onStopScan} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} scanErr={scanErr} api={api} /></ErrorBoundary>}
             {isPipelineView  && <ErrorBoundary label="Pipeline" api={api ?? undefined}><PipelineView leads={leads} openDrawer={setSel} deleteLead={deleteLead} port={port} api={api} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} loading={leadsLoading || !port || !api} error={leadsError} tab={pipelineTab} /></ErrorBoundary>}
-            {view === "graph"     && <ErrorBoundary label="Graph" api={api ?? undefined}><GraphView stats={stats} /></ErrorBoundary>}
-            {view === "activity"  && <ErrorBoundary label="Activity" api={api ?? undefined}><ActivityView logs={logs} /></ErrorBoundary>}
-            {view === "profile"   && (api ? <ErrorBoundary label="Profile" api={api ?? undefined}><ProfileView api={api} setView={setView} stats={stats} /></ErrorBoundary> : <BackendUnavailable title="Profile" conn={conn} port={port} />)}
-            {view === "ingestion" && (api ? <ErrorBoundary label="Ingestion" api={api ?? undefined}><IngestionView api={api} /></ErrorBoundary> : <BackendUnavailable title="Add Context" conn={conn} port={port} />)}
+            {view === "graph"     && <ErrorBoundary label="Graphe" api={api ?? undefined}><GraphView stats={stats} /></ErrorBoundary>}
+            {view === "activity"  && <ErrorBoundary label="Activité" api={api ?? undefined}><ActivityView logs={logs} /></ErrorBoundary>}
+            {view === "profile"   && (api ? <ErrorBoundary label="Profil" api={api ?? undefined}><ProfileView api={api} setView={setView} stats={stats} /></ErrorBoundary> : <BackendUnavailable title="Profil" conn={conn} port={port} />)}
+            {view === "ingestion" && (api ? <ErrorBoundary label="Contexte" api={api ?? undefined}><IngestionView api={api} /></ErrorBoundary> : <BackendUnavailable title="Ajout de contexte" conn={conn} port={port} />)}
           </div>
         </div>
 
         {/* The drawer/modal layer renders the richest untyped lead data; a
             render crash here without a boundary would blank the whole app. */}
-        <ErrorBoundary label="Lead drawer" api={api ?? undefined}>
+        <ErrorBoundary label="Détail offre" api={api ?? undefined}>
           <AnimatePresence>
             {liveSel && api && (
               <ApprovalDrawer key={liveSel.job_id} j={liveSel} api={api} onClose={() => setSel(null)} />
@@ -326,12 +333,12 @@ export default function App() {
           </AnimatePresence>
         </ErrorBoundary>
         {api && (
-          <ErrorBoundary label="Help chat" api={api}>
+          <ErrorBoundary label="Assistant" api={api}>
             <HelpChat api={api} />
           </ErrorBoundary>
         )}
       </div>
-      <ErrorBoundary label="Prompts" api={api ?? undefined}>
+      <ErrorBoundary label="Invites" api={api ?? undefined}>
         <SemanticRuntimePrompt api={api} />
         <UpdatePrompt />
       </ErrorBoundary>
@@ -351,7 +358,7 @@ function SubsystemBanner({ items }: { items: Array<[string, SubsystemHealth[stri
     .join(" | ");
   return (
     <div className="subsystem-banner" role="status">
-      <strong>Subsystem degraded</strong>
+      <strong>Sous-système dégradé</strong>
       <span>{summary}</span>
       {detail && <span className="subsystem-banner-detail">{detail}</span>}
     </div>
@@ -364,8 +371,11 @@ function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; po
     <div style={{
       minHeight: "100vh",
       width: "100vw",
-      display: "grid",
-      placeItems: "center",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 16,
       background: "var(--paper)",
       color: "var(--ink)",
       padding: 24,
@@ -374,18 +384,18 @@ function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; po
         <div className="row gap-3">
           <div className="spinner" />
           <div>
-            <div className="eyebrow">Starting JustHireMe</div>
-            <h1 style={{ fontSize: 30, marginTop: 6 }}>Preparing your local workspace</h1>
+            <div className="eyebrow">Lancement de Juste Recrute Moi</div>
+            <h1 style={{ fontSize: 30, marginTop: 6 }}>Préparation de ton espace local</h1>
           </div>
         </div>
         <p style={{ color: "var(--ink-2)", lineHeight: 1.6, maxWidth: 620 }}>
-          The desktop app is launching its bundled backend, opening the local database, and waiting for a private API token.
-          The setup guide will appear automatically as soon as the backend is ready.
+          L'application desktop démarre son backend intégré, ouvre la base locale et attend le jeton privé de l'API.
+          Le guide de configuration s'affichera automatiquement dès que le backend sera prêt.
         </p>
         <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-          <span className="pill">Backend: {conn}</span>
-          <span className="pill">Port: {port ?? "pending"}</span>
-          <span className="pill">Elapsed: {seconds}s</span>
+          <span className="pill">Backend : {connLabel(conn)}</span>
+          <span className="pill">Port : {port ?? "en attente"}</span>
+          <span className="pill">Temps écoulé : {seconds}s</span>
         </div>
         {isSlow && (
           <div style={{
@@ -396,8 +406,8 @@ function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; po
             color: "var(--ink-2)",
             lineHeight: 1.55,
           }}>
-            This is taking longer than expected. If it stays here, the bundled backend failed to start.
-            On macOS, use Privacy &amp; Security &gt; Open Anyway if the app was blocked, then restart JustHireMe.
+            Le démarrage prend plus de temps que prévu. Si cet écran reste affiché, le backend intégré n'a probablement pas démarré.
+            Sur macOS, ouvre Confidentialité et sécurité &gt; Ouvrir quand même si l'application a été bloquée, puis relance Juste Recrute Moi.
           </div>
         )}
         {sidecarError && (
@@ -416,6 +426,7 @@ function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; po
           </div>
         )}
       </section>
+      <CreatorFooter compact />
     </div>
   );
 }
@@ -428,16 +439,16 @@ function BackendUnavailable({ title, conn, port }: { title: string; conn: string
           <div className="row gap-3">
             <div className="spinner" />
             <div>
-              <div className="eyebrow">Starting local backend</div>
-              <h2 style={{ marginTop: 6 }}>{title} will appear automatically</h2>
+              <div className="eyebrow">Démarrage du backend local</div>
+              <h2 style={{ marginTop: 6 }}>{title} s'affichera automatiquement</h2>
             </div>
           </div>
           <p style={{ color: "var(--ink-2)", maxWidth: 620, lineHeight: 1.6 }}>
-            JustHireMe is waiting for the bundled sidecar to publish its API token and port. This should take a few seconds after launch.
+            Juste Recrute Moi attend que le sidecar intégré publie son jeton API et son port. Cela devrait prendre quelques secondes après le lancement.
           </p>
           <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-            <span className="pill">Connection: {conn}</span>
-            <span className="pill">Port: {port ?? "pending"}</span>
+            <span className="pill">Connexion : {connLabel(conn)}</span>
+            <span className="pill">Port : {port ?? "en attente"}</span>
           </div>
         </div>
       </div>

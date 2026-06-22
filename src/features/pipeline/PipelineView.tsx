@@ -40,13 +40,13 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
     };
     const apply = (arr: Lead[]) => sortLeads(arr.filter(keep), sort);
     const tabItems: { id: PipelineTab; label: string; tone: string; leads: Lead[] }[] = [
-      { id: "all",       label: "All",       tone: "teal",   leads: apply(leads) },
-      { id: "hot",       label: "Hot",       tone: "orange", leads: apply(leads.filter(l => (l.signal_score || 0) >= 80 || (l.score || 0) >= 85)) },
-      { id: "found",     label: "New",       tone: "blue",   leads: apply(leads.filter(l => l.status === "discovered")) },
-      { id: "evaluated", label: "Rated",     tone: "yellow", leads: apply(leads.filter(l => l.score > 0 || (l.signal_score || 0) > 0)) },
-      { id: "generated", label: "Ready",     tone: "purple", leads: apply(leads.filter(l => l.status === "tailoring" || l.status === "approved")) },
-      { id: "applied",   label: "Applied",   tone: "orange", leads: apply(leads.filter(l => l.status === "applied")) },
-      { id: "discarded", label: "Discarded", tone: "bad",    leads: apply(leads.filter(l => l.status === "discarded")) },
+      { id: "all",       label: "Toutes",       tone: "teal",   leads: apply(leads) },
+      { id: "hot",       label: "Prioritaires", tone: "orange", leads: apply(leads.filter(l => (l.signal_score || 0) >= 80 || (l.score || 0) >= 85)) },
+      { id: "found",     label: "Nouvelles",    tone: "blue",   leads: apply(leads.filter(l => l.status === "discovered")) },
+      { id: "evaluated", label: "Notées",       tone: "yellow", leads: apply(leads.filter(l => l.score > 0 || (l.signal_score || 0) > 0)) },
+      { id: "generated", label: "Prêtes",       tone: "purple", leads: apply(leads.filter(l => l.status === "tailoring" || l.status === "approved")) },
+      { id: "applied",   label: "Postulées",    tone: "orange", leads: apply(leads.filter(l => l.status === "applied")) },
+      { id: "discarded", label: "Masquées",     tone: "bad",    leads: apply(leads.filter(l => l.status === "discarded")) },
     ];
     return tabItems;
   }, [leads, search, platform, sort, seniority]);
@@ -54,7 +54,7 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
   const activeTab = tabs.find(t => t.id === tab) || tabs[0];
   const visibleLeads = activeTab.leads.slice(0, visibleCount);
   const hasFilters = Boolean(search || platform || seniority !== "all" || sort !== "recommended");
-  const busyLabel = scanning ? "Scanning for new leads" : reevaluating ? "Re-evaluating fit scores" : cleaning ? "Cleaning bad data" : "";
+  const busyLabel = scanning ? "Recherche de nouvelles offres" : reevaluating ? "Réévaluation des scores" : cleaning ? "Nettoyage des mauvaises données" : "";
 
   const toggleSelect = (id: string) => {
     setSelected(prev => {
@@ -66,11 +66,11 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
   };
 
   const bulkDelete = async () => {
-    if (!window.confirm(`Delete ${selected.size} leads?`)) return;
+    if (!window.confirm(`Supprimer ${selected.size} offres ?`)) return;
     const count = selected.size;
     const results = await Promise.allSettled([...selected].map(id => Promise.resolve(deleteLead(id))));
     const failed = results.filter(r => r.status === "rejected").length;
-    if (failed > 0) alert(`${failed} of ${count} deletions failed. Refreshing list.`);
+    if (failed > 0) alert(`${failed} suppressions sur ${count} ont échoué. Rafraîchissement de la liste.`);
     setSelected(new Set());
     setBulkSelecting(false);
     window.dispatchEvent(new CustomEvent("leads-refresh"));
@@ -85,7 +85,7 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
       body: JSON.stringify({ status: "applied" }),
     })));
     const failed = results.filter(r => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok)).length;
-    if (failed > 0) alert(`${failed} of ${ids.length} jobs could not be marked as applied.`);
+    if (failed > 0) alert(`${failed} offres sur ${ids.length} n'ont pas pu être marquées comme postulées.`);
     ids.forEach(job_id => window.dispatchEvent(new CustomEvent("lead-updated", { detail: { job_id, status: "applied" } })));
     setSelected(new Set());
     setBulkSelecting(false);
@@ -98,7 +98,7 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
     setExportErr(null);
     try {
       const res = await api("/api/v1/leads/export.csv");
-      if (!res.ok) throw new Error(`Export failed (${res.status})`);
+      if (!res.ok) throw new Error(`Export échoué (${res.status})`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -107,7 +107,7 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setExportErr(e instanceof Error ? e.message : "Export failed");
+      setExportErr(e instanceof Error ? e.message : "Export échoué");
     } finally {
       setExporting(false);
     }
@@ -135,41 +135,41 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
           platforms={platforms}
           total={activeTab.leads.length}
           shown={Math.min(visibleCount, activeTab.leads.length)}
-          label="jobs"
+          label="les offres"
           actions={(
             <>
               <button className="btn" onClick={exportCsv} disabled={!api || exporting || loading}>
-                {exporting ? "Exporting..." : "Export"}
+                {exporting ? "Export..." : "Exporter"}
               </button>
               {bulkSelecting ? (
                 <>
                   <button className="btn" onClick={bulkMarkApplied} disabled={!api || selected.size === 0 || loading}>
-                    <Icon name="check" size={13} /> Mark applied {selected.size}
+                    <Icon name="check" size={13} /> Marquer postulées {selected.size}
                   </button>
-                  <button className="btn" onClick={() => { setBulkSelecting(false); setSelected(new Set()); }}>Cancel</button>
+                  <button className="btn" onClick={() => { setBulkSelecting(false); setSelected(new Set()); }}>Annuler</button>
                 </>
               ) : (
                 <button className="btn" onClick={() => setBulkSelecting(true)} disabled={activeTab.leads.length === 0 || loading}>
-                  <Icon name="check" size={13} /> Select
+                  <Icon name="check" size={13} /> Sélectionner
                 </button>
               )}
               {reevaluating ? (
                 <button className="btn danger" onClick={onStopReevaluate}>
-                  <Icon name="x" size={13} /> Stop re-eval
+                  <Icon name="x" size={13} /> Stop re-score
                 </button>
               ) : (
                 <button className="btn" onClick={onReevaluate} disabled={leads.length === 0 || scanning || cleaning || loading}>
-                  <Icon name="pulse" size={13} /> Re-eval
+                  <Icon name="pulse" size={13} /> Re-scorer
                 </button>
               )}
               <button className="btn danger-soft" onClick={onCleanup} disabled={leads.length === 0 || scanning || reevaluating || cleaning || loading}>
-                <Icon name="trash" size={13} /> {cleaning ? "Cleaning" : "Clean"}
+                <Icon name="trash" size={13} /> {cleaning ? "Nettoyage" : "Nettoyer"}
               </button>
               {tab === "discarded" && (
                 bulkSelecting ? (
-                  <button className="btn danger" onClick={bulkDelete} disabled={selected.size === 0}>Delete {selected.size}</button>
+                  <button className="btn danger" onClick={bulkDelete} disabled={selected.size === 0}>Supprimer {selected.size}</button>
                 ) : (
-                  <button className="btn" onClick={() => setBulkSelecting(true)} disabled={activeTab.leads.length === 0}>Bulk delete</button>
+                  <button className="btn" onClick={() => setBulkSelecting(true)} disabled={activeTab.leads.length === 0}>Suppression groupée</button>
                 )
               )}
             </>
@@ -181,11 +181,11 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
         <div className="pipeline-results-head">
           <div>
             <h3>{activeTab.label}</h3>
-            <p>{hasFilters ? "Filtered results" : "All matching leads"} - showing {Math.min(visibleCount, activeTab.leads.length)} of {activeTab.leads.length}</p>
+            <p>{hasFilters ? "Résultats filtrés" : "Toutes les offres correspondantes"} - {Math.min(visibleCount, activeTab.leads.length)} sur {activeTab.leads.length}</p>
           </div>
           {bulkSelecting && (
             <span className={`pipeline-selected mono ${tab === "discarded" ? "danger" : "applied"}`}>
-              {selected.size} selected
+              {selected.size} sélectionnées
             </span>
           )}
         </div>
@@ -194,8 +194,8 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
         ) : activeTab.leads.length === 0 ? (
           <div className="pipeline-empty">
             <Icon name={hasFilters ? "filter" : "search"} size={18} />
-            <h3>{hasFilters ? "No leads match these filters" : `No ${activeTab.label.toLowerCase()} jobs yet`}</h3>
-            <p>{hasFilters ? "Clear filters or lower the score thresholds." : "Run a scan from the dashboard or customize a pasted job to start filling this lane."}</p>
+             <h3>{hasFilters ? "Aucune offre ne correspond à ces filtres" : `Aucune offre ${activeTab.label.toLowerCase()} pour l'instant`}</h3>
+             <p>{hasFilters ? "Efface les filtres ou baisse les seuils de score." : "Lance un scan depuis l'accueil ou colle une offre à adapter pour remplir cette colonne."}</p>
           </div>
         ) : (
           <div className="pipeline-list">
@@ -228,7 +228,7 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
         {activeTab.leads.length > visibleCount && (
           <div className="row" style={{ justifyContent: "center", marginTop: 18 }}>
             <button className="btn" onClick={() => setVisibleCount(v => v + PAGE_SIZE)}>
-              Show next {Math.min(PAGE_SIZE, activeTab.leads.length - visibleCount)} of {activeTab.leads.length}
+              Afficher les {Math.min(PAGE_SIZE, activeTab.leads.length - visibleCount)} suivantes sur {activeTab.leads.length}
             </button>
           </div>
         )}

@@ -125,22 +125,22 @@ export function UpdatePrompt() {
   const etaSeconds = total && bytesPerSecond > 0 ? Math.max(0, (total - downloaded) / bytesPerSecond) : null;
   const blockedByInstallLocation = Boolean(installStatus && !installStatus.canUpdate && state !== "ready");
   const updateMessage = (() => {
-    if (state === "ready") return "The update is installed. Restart to finish if JustHireMe did not reopen automatically.";
-    if (state === "relaunching") return "Update installed. Reopening JustHireMe with the new version.";
-    if (blockedByInstallLocation) return installStatus?.reason || "Move JustHireMe to a writable Applications folder before updating.";
-    if (state === "installing") return "Download complete. Applying the signed update in the background.";
-    if (state === "downloading") return "Downloading the signed update. You can keep using JustHireMe while this runs.";
-    return `You are running ${update?.currentVersion}. Update to ${update?.version} now.`;
+    if (state === "ready") return "La mise à jour est installée. Redémarre pour terminer si Juste Recrute Moi ne s'est pas rouvert automatiquement.";
+    if (state === "relaunching") return "Mise à jour installée. Réouverture de Juste Recrute Moi avec la nouvelle version.";
+    if (blockedByInstallLocation) return installStatus?.reason || "Déplace Juste Recrute Moi dans un dossier Applications modifiable avant la mise à jour.";
+    if (state === "installing") return "Téléchargement terminé. Installation de la mise à jour signée en arrière-plan.";
+    if (state === "downloading") return "Téléchargement de la mise à jour signée. Tu peux continuer à utiliser Juste Recrute Moi.";
+    return `Version actuelle ${update?.currentVersion}. Mise à jour disponible vers ${update?.version}.`;
   })();
   const progressLabel = (() => {
-    if (state === "relaunching") return "Reopening the app with the updated build.";
-    if (state === "installing") return `Applying update, elapsed ${formatDuration(elapsedSeconds)}.`;
+    if (state === "relaunching") return "Réouverture de l'app avec la version mise à jour.";
+    if (state === "installing") return `Installation en cours, ${formatDuration(elapsedSeconds)} écoulées.`;
     if (progress !== null && total) {
-      const eta = etaSeconds !== null ? `, about ${formatDuration(etaSeconds)} left` : "";
-      return `${progress}% - ${formatBytes(downloaded)} of ${formatBytes(total)}${eta}`;
+      const eta = etaSeconds !== null ? `, environ ${formatDuration(etaSeconds)} restantes` : "";
+      return `${progress}% - ${formatBytes(downloaded)} sur ${formatBytes(total)}${eta}`;
     }
-    if (downloaded > 0) return `${formatBytes(downloaded)} downloaded - estimating time remaining`;
-    return "Preparing download - usually a few minutes on a normal connection";
+    if (downloaded > 0) return `${formatBytes(downloaded)} téléchargés - estimation du temps restant`;
+    return "Préparation du téléchargement - souvent quelques minutes sur une connexion normale";
   })();
 
   if (!update) return null;
@@ -163,7 +163,7 @@ export function UpdatePrompt() {
 
   const install = async () => {
     if (installStatus && !installStatus.canUpdate) {
-      setError(`${installStatus.reason} Download the latest DMG from ${RELEASES_URL} if you need to repair this install now.`);
+      setError(`${installStatus.reason} Télécharge le dernier DMG depuis ${RELEASES_URL} si tu dois réparer cette installation maintenant.`);
       setState("error");
       return;
     }
@@ -213,8 +213,8 @@ export function UpdatePrompt() {
   return (
     <aside className="update-toast" role="status" aria-live="polite">
       <div>
-        <div className="eyebrow">Update available</div>
-        <strong>JustHireMe {update.version}</strong>
+        <div className="eyebrow">Mise à jour disponible</div>
+        <strong>Juste Recrute Moi {update.version}</strong>
         <p>{updateMessage}</p>
         {isBusy && (
           <div className={`update-progress ${progress === null || state !== "downloading" ? "is-indeterminate" : ""}`}>
@@ -222,7 +222,7 @@ export function UpdatePrompt() {
             <span>{progressLabel}</span>
           </div>
         )}
-        {state === "error" && <p className="update-error">{error || `Update failed. Try again from ${RELEASES_URL}.`}</p>}
+        {state === "error" && <p className="update-error">{error || `Mise à jour échouée. Réessaie depuis ${RELEASES_URL}.`}</p>}
       </div>
       <div className="update-actions">
         {state === "ready" ? (
@@ -232,14 +232,14 @@ export function UpdatePrompt() {
               void relaunchIntoUpdate();
             }}
           >
-            Restart
+            Redémarrer
           </button>
         ) : (
           <button className="btn btn-accent" onClick={install} disabled={blockedByInstallLocation || isBusy}>
-            {blockedByInstallLocation ? "Move app first" : state === "downloading" ? "Downloading..." : state === "installing" ? "Applying..." : state === "relaunching" ? "Reopening..." : "Update"}
+            {blockedByInstallLocation ? "Déplacer l'app" : state === "downloading" ? "Téléchargement..." : state === "installing" ? "Installation..." : state === "relaunching" ? "Réouverture..." : "Mettre à jour"}
           </button>
         )}
-        <button className="btn btn-ghost" onClick={dismiss} disabled={isBusy}>Later</button>
+        <button className="btn btn-ghost" onClick={dismiss} disabled={isBusy}>Plus tard</button>
       </div>
     </aside>
   );

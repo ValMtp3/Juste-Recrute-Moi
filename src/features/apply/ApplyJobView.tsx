@@ -238,20 +238,20 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
             style={{ fontSize: 14, lineHeight: 1.55, resize: "vertical" }}
           />
           <button className="btn btn-accent" onClick={submit} disabled={!port || !api || busy || !input.trim()} style={{ justifyContent: "center", padding: "12px 16px", fontSize: 14 }}>
-            <Icon name="spark" size={15} color="#fff" /> {busy ? "Analysing and generating..." : "Analyse & Generate"}
+            <Icon name="spark" size={15} color="#fff" /> {busy ? "Analyse et génération..." : "Analyser et générer"}
           </button>
           {busy && (
-            <button className="btn" onClick={() => { submitControllerRef.current?.abort(); setBusy(false); setErr("Stopped waiting. If generation already started, it may still finish in the background."); }} style={{ justifyContent: "center" }}>
-              <Icon name="x" size={13} /> Stop waiting
+            <button className="btn" onClick={() => { submitControllerRef.current?.abort(); setBusy(false); setErr("Attente arrêtée. Si la génération a déjà commencé, elle peut encore finir en arrière-plan."); }} style={{ justifyContent: "center" }}>
+              <Icon name="x" size={13} /> Arrêter l'attente
             </button>
           )}
           {err && <div style={{ color: "var(--bad)", background: "var(--bad-soft)", border: "1px solid var(--bad)", borderRadius: 8, padding: "9px 11px", fontSize: 12 }}>{err}</div>}
           {liveLead && (
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-              {stepPill("Job captured", true, false)}
-              {stepPill("Resume generated", resumeReady, generating && !resumeReady)}
-              {stepPill("Cover letter generated", coverReady, generating && resumeReady && !coverReady)}
-              <button className="btn" onClick={() => openDrawer(liveLead)} style={{ justifyContent: "center" }}>Open full details</button>
+              {stepPill("Offre capturée", true, false)}
+              {stepPill("CV généré", resumeReady, generating && !resumeReady)}
+              {stepPill("Lettre générée", coverReady, generating && resumeReady && !coverReady)}
+              <button className="btn" onClick={() => openDrawer(liveLead)} style={{ justifyContent: "center" }}>Ouvrir les détails</button>
             </div>
           )}
         </section>
@@ -260,14 +260,14 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
           <section style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
             <div className="card" style={{ padding: 18, display: "flex", justifyContent: "space-between", gap: 14, alignItems: "flex-start", flexWrap: "wrap" }}>
               <div style={{ minWidth: 0 }}>
-              <div className="eyebrow">Customization Package</div>
+              <div className="eyebrow">Dossier adapté</div>
                 <h3 style={{ fontSize: 18, fontWeight: 700, marginTop: 5 }}>{roleFromLead(liveLead)}</h3>
-                <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 3 }}>{liveLead.company || "Unknown company"}</div>
+                <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 3 }}>{liveLead.company || "Entreprise inconnue"}</div>
               </div>
               <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-                {coveragePct !== null && <span className="pill mono" style={{ background: "var(--blue-soft)", color: "var(--blue-ink)", border: "1px solid var(--blue)" }}>{coveragePct}% coverage</span>}
+                {coveragePct !== null && <span className="pill mono" style={{ background: "var(--blue-soft)", color: "var(--blue-ink)", border: "1px solid var(--blue)" }}>{coveragePct}% couverture</span>}
                 <span className="pill mono" style={{ background: resumeReady && coverReady ? "var(--green-soft)" : "var(--purple-soft)", color: resumeReady && coverReady ? "var(--green-ink)" : "var(--purple-ink)", border: `1px solid ${resumeReady && coverReady ? "var(--green)" : "var(--purple)"}` }}>
-                  {resumeReady && coverReady ? "Ready" : "Generating"}
+                  {resumeReady && coverReady ? "Prêt" : "Génération"}
                 </span>
               </div>
             </div>
@@ -275,13 +275,13 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
             {(missingTerms.length > 0 || incorporatedTerms.length > 0) && (
               <div className="card" style={{ padding: 16, borderColor: "var(--blue)", background: "var(--blue-soft)" }}>
                 <div className="row" style={{ justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 8 }}>
-                  <span className="eyebrow" style={{ color: "var(--blue-ink)" }}>Coverage</span>
+                  <span className="eyebrow" style={{ color: "var(--blue-ink)" }}>Couverture</span>
                   {coveragePct !== null && <span className="mono" style={{ fontSize: 11, fontWeight: 800, color: "var(--blue-ink)" }}>{coveragePct}% JD keywords</span>}
                 </div>
                 <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55 }}>
                   {missingTerms.length
-                    ? <>You're missing these terms from the JD: <b>{missingTerms.slice(0, 8).join(", ")}</b>. We've incorporated supported matches where applicable.</>
-                    : <>Strong keyword coverage. Supported JD terms were incorporated where they fit.</>
+                    ? <>Ces termes de l'offre manquent encore : <b>{missingTerms.slice(0, 8).join(", ")}</b>. Les correspondances exploitables ont été intégrées quand c'était pertinent.</>
+                    : <>Bonne couverture des mots-clés. Les termes compatibles de l'offre ont été intégrés quand ils étaient pertinents.</>
                   }
                 </div>
                 {incorporatedTerms.length > 0 && (
@@ -297,17 +297,17 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
             <div className="card" style={{ padding: 16, borderColor: primaryContact ? "var(--green)" : "var(--line)", background: primaryContact ? "var(--green-soft)" : "var(--paper)" }}>
               <div className="row" style={{ justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div style={{ minWidth: 0 }}>
-                  <div className="eyebrow" style={{ color: primaryContact ? "var(--green-ink)" : "var(--ink-3)" }}>Who to contact</div>
+                  <div className="eyebrow" style={{ color: primaryContact ? "var(--green-ink)" : "var(--ink-3)" }}>Qui contacter</div>
                   {primaryContact ? (
                     <>
-                      <h3 style={{ fontSize: 17, fontWeight: 800, marginTop: 5 }}>{primaryContact.name || "Company contact"}</h3>
-                      <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3 }}>{primaryContact.title || "Hiring contact"}{contactLookup.domain ? ` at ${contactLookup.domain}` : ""}</div>
+                      <h3 style={{ fontSize: 17, fontWeight: 800, marginTop: 5 }}>{primaryContact.name || "Contact entreprise"}</h3>
+                      <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3 }}>{primaryContact.title || "Contact recrutement"}{contactLookup.domain ? ` chez ${contactLookup.domain}` : ""}</div>
                     </>
                   ) : (
                     <>
-                      <h3 style={{ fontSize: 17, fontWeight: 800, marginTop: 5 }}>Contact lookup</h3>
+                      <h3 style={{ fontSize: 17, fontWeight: 800, marginTop: 5 }}>Recherche de contact</h3>
                       <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3 }}>
-                        {contactLookup.message || (resumeReady && coverReady ? "Add a Hunter.io API key in Settings to find recruiter and founder emails." : "Contact lookup runs after the package is generated.")}
+                        {contactLookup.message || (resumeReady && coverReady ? "Ajoute une clé Hunter.io dans les paramètres pour trouver des emails recruteurs ou fondateurs." : "La recherche de contact démarre après génération du dossier.")}
                       </div>
                     </>
                   )}
@@ -321,30 +321,30 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
               {primaryContact && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginTop: 12 }}>
                   <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: 12 }}>
-                    <div className="eyebrow">Direct line</div>
+                    <div className="eyebrow">Contact direct</div>
                     <div className="col gap-2" style={{ marginTop: 8, fontSize: 12.5, color: "var(--ink-2)" }}>
                       {primaryContact.email && (
                         <button className="btn btn-ghost" style={{ justifyContent: "space-between" }} onClick={() => copyText(primaryContact.email || "")}>
                           <span className="mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{primaryContact.email}</span>
-                          <span>Copy</span>
+                          <span>Copier</span>
                         </button>
                       )}
                       {primaryContact.linkedin_url && (
                         <button className="btn btn-ghost" style={{ justifyContent: "space-between" }} onClick={() => copyText(primaryContact.linkedin_url || "")}>
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>LinkedIn profile</span>
-                          <span>Copy</span>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>Profil LinkedIn</span>
+                          <span>Copier</span>
                         </button>
                       )}
                       {typeof primaryContact.confidence === "number" && primaryContact.confidence > 0 && (
-                        <div className="mono" style={{ color: "var(--green-ink)", fontSize: 11 }}>{primaryContact.confidence}% Hunter confidence</div>
+                        <div className="mono" style={{ color: "var(--green-ink)", fontSize: 11 }}>{primaryContact.confidence}% confiance Hunter</div>
                       )}
                     </div>
                   </div>
                   {primaryContact.personalized_email && (
                     <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: 12 }}>
                       <div className="row" style={{ justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-                        <span className="eyebrow">Cold email</span>
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => copyText(primaryContact.personalized_email || "")}>Copy</button>
+                        <span className="eyebrow">Email d'approche</span>
+                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => copyText(primaryContact.personalized_email || "")}>Copier</button>
                       </div>
                       <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{primaryContact.personalized_email}</div>
                     </div>
@@ -355,8 +355,8 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14 }}>
               {[
-                { label: "Resume", ready: resumeReady, blob: resumeBlobUrl, error: resumeLoadErr },
-                { label: "Cover Letter", ready: coverReady, blob: coverBlobUrl, error: coverLoadErr },
+                { label: "CV", ready: resumeReady, blob: resumeBlobUrl, error: resumeLoadErr },
+                { label: "Lettre", ready: coverReady, blob: coverBlobUrl, error: coverLoadErr },
               ].map(doc => (
                 <div key={doc.label} className="card" style={{ minHeight: 600, overflow: "hidden", display: "flex", flexDirection: "column" }}>
                   <div className="row" style={{ padding: 11, borderBottom: "1px solid var(--line)", background: "var(--paper-3)", justifyContent: "space-between", gap: 10 }}>
@@ -365,7 +365,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
                       <span className="dot" style={{ color: doc.ready ? "var(--ok)" : "var(--ink-4)" }} />
                     </div>
                     <button className="btn btn-ghost" disabled={!doc.blob} onClick={() => doc.blob && openUrl(doc.blob)} style={{ fontSize: 11, padding: "4px 9px" }}>
-                      <Icon name="download" size={12} /> Download PDF
+                      <Icon name="download" size={12} /> Télécharger le PDF
                     </button>
                   </div>
                   <div style={{ flex: 1, minHeight: 0 }}>
@@ -373,14 +373,14 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
                       <iframe key={doc.blob} src={doc.blob} title={doc.label} width="100%" style={{ height: "100%", minHeight: 548, border: "none", display: "block" }} />
                     )}
                     {doc.ready && !doc.blob && !doc.error && (
-                      <div style={{ minHeight: 548, display: "grid", placeItems: "center", color: "var(--ink-3)", fontSize: 12 }}>Loading PDF...</div>
+                      <div style={{ minHeight: 548, display: "grid", placeItems: "center", color: "var(--ink-3)", fontSize: 12 }}>Chargement du PDF...</div>
                     )}
                     {doc.error && (
                       <div style={{ minHeight: 548, display: "grid", placeItems: "center", color: "var(--bad)", fontSize: 12 }}>{doc.error}</div>
                     )}
                     {!doc.ready && (
                       <div style={{ minHeight: 548, display: "grid", placeItems: "center", color: "var(--ink-3)", fontSize: 12, textAlign: "center", padding: 24 }}>
-                        {generating ? `Generating ${doc.label.toLowerCase()}...` : `${doc.label} will appear here.`}
+                        {generating ? `Génération ${doc.label.toLowerCase()}...` : `${doc.label} apparaîtra ici.`}
                       </div>
                     )}
                   </div>

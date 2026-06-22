@@ -158,7 +158,7 @@ describe("lead utility formatting helpers", () => {
   });
 
   it("maps seniority and status labels to stable display values", () => {
-    expect(seniorityLabel("beginner")).toBe("Beginner");
+    expect(seniorityLabel("beginner")).toBe("Débutant");
     expect(seniorityTone("fresher")).toBe("teal");
     expect(getTone("accepted")).toBe("teal");
     expect(getTone("discarded")).toBe("red");

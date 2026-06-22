@@ -25,7 +25,7 @@ describe("FIX.md frontend stability contracts", () => {
     expect(dashboard).toContain("onScan");
     expect(dashboard).toContain("onReevaluate");
     expect(dashboard).toContain("onCleanup");
-    expect(dashboard).toContain("Agent Online");
+    expect(dashboard).toContain("Agent actif");
   });
 
   it("keeps job cards actionable from the pipeline", () => {
@@ -57,7 +57,7 @@ describe("FIX.md frontend stability contracts", () => {
     expect(errorBoundary).toContain("/api/v1/errors");
     expect(approvalDrawer).toContain("/status");
     expect(approvalDrawer).toContain("/feedback");
-    expect(approvalDrawer).toContain("Mark as applied");
+    expect(approvalDrawer).toContain("Marquer comme postulée");
   });
 
   it("keeps required runtime pack mandatory", () => {
@@ -96,9 +96,9 @@ describe("FIX.md frontend stability contracts", () => {
   it("does not present expected setup states as broken UI", () => {
     expect(app).toContain("isActionableSubsystemIssue");
     expect(app).toContain('name === "llm"');
-    expect(settingsModal).toContain('"Saved"');
-    expect(settingsModal).toContain('"Saving..."');
-    expect(settingsModal).not.toContain("? Saved");
-    expect(settingsModal).not.toContain("Saving?");
+    expect(settingsModal).toContain('"Enregistré"');
+    expect(settingsModal).toContain('"Enregistrement..."');
+    expect(settingsModal).not.toContain("? Enregistré");
+    expect(settingsModal).not.toContain("Enregistrement?");
   });
 });

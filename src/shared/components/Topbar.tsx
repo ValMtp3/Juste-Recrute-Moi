@@ -7,34 +7,34 @@ export function Topbar({ view, progress }: { view: View; progress?: OperationPro
   const appVersion = useAppVersion();
   const { resolved, setPref } = useTheme();
   const titles: Record<View, string> = {
-    apply:     "Customize One Job",
-    dashboard: "Command Center",
-    pipeline:  "Job Pipeline",
-    "pipeline-hot": "Hot Jobs",
-    "pipeline-found": "New Jobs",
-    "pipeline-evaluated": "Rated Jobs",
-    "pipeline-generated": "Ready Jobs",
-    "pipeline-applied": "Applied Jobs",
-    "pipeline-discarded": "Discarded Jobs",
-    graph:     "Knowledge Graph",
-    activity:  "Live Activity",
-    profile:   "Profile",
-    ingestion: "Add Context",
+    apply:     "Adapter une offre",
+    dashboard: "Centre de recherche",
+    pipeline:  "Pipeline d'offres",
+    "pipeline-hot": "Offres prioritaires",
+    "pipeline-found": "Nouvelles offres",
+    "pipeline-evaluated": "Offres notées",
+    "pipeline-generated": "Offres prêtes",
+    "pipeline-applied": "Offres postulées",
+    "pipeline-discarded": "Offres masquées",
+    graph:     "Graphe de connaissances",
+    activity:  "Activité en direct",
+    profile:   "Profil",
+    ingestion: "Ajouter du contexte",
   };
   const subtitles: Record<View, string> = {
-    apply: "Tailor resume, cover letter, and outreach for one selected role",
-    dashboard: "Scan, review, and move the next best roles forward",
-    pipeline: "Track applications and follow-ups",
-    "pipeline-hot": "High-fit or high-signal roles worth attention first",
-    "pipeline-found": "Freshly discovered roles waiting for evaluation",
-    "pipeline-evaluated": "Roles with fit, signal, or quality scoring",
-    "pipeline-generated": "Application packages that are ready or being tailored",
-    "pipeline-applied": "Roles already marked as sent",
-    "pipeline-discarded": "Rejected, cleanup, or low-quality rows",
-    graph: "Local profile context used by matching",
-    activity: "Backend events and agent logs",
-    profile: "Candidate details used for tailoring",
-    ingestion: "Add resume, project, portfolio, and GitHub context",
+    apply: "Adapte CV, lettre et approche pour une offre précise",
+    dashboard: "Recherche, trie et avance les meilleures offres",
+    pipeline: "Suit les offres, les favoris et les candidatures",
+    "pipeline-hot": "Offres avec le meilleur signal à traiter en premier",
+    "pipeline-found": "Offres fraîchement découvertes à évaluer",
+    "pipeline-evaluated": "Offres avec score de pertinence ou de qualité",
+    "pipeline-generated": "Dossiers prêts ou en cours d'adaptation",
+    "pipeline-applied": "Offres déjà marquées comme postulées",
+    "pipeline-discarded": "Offres rejetées, masquées ou trop faibles",
+    graph: "Contexte local du profil utilisé pour le matching",
+    activity: "Événements backend et logs de l'agent",
+    profile: "Détails candidat utilisés pour l'adaptation",
+    ingestion: "Ajoute CV, projets, portfolio et contexte GitHub",
   };
   return (
     <header className="topbar">
@@ -44,7 +44,7 @@ export function Topbar({ view, progress }: { view: View; progress?: OperationPro
       </div>
       {view === "profile" && (
         <button className="btn" onClick={() => window.dispatchEvent(new CustomEvent("profile-export"))}>
-          <Icon name="download" size={13} /> Export Graph
+          <Icon name="download" size={13} /> Exporter le graphe
         </button>
       )}
       {progress?.active && (
@@ -56,7 +56,7 @@ export function Topbar({ view, progress }: { view: View; progress?: OperationPro
           gap: 5,
         }}>
           <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", display: "flex", justifyContent: "space-between", gap: 8 }}>
-            <span>{progress.mode === "reevaluate" ? "Re-scoring" : "Scanning"}</span>
+            <span>{progress.mode === "reevaluate" ? "Re-score" : "Scan"}</span>
             <span>{progress.total ? `${Math.min(progress.completed, progress.total)}/${progress.total}` : progress.completed}</span>
           </div>
           <div style={{ height: 6, borderRadius: 999, background: "var(--paper-3)", overflow: "hidden", border: "1px solid var(--line)" }}>
@@ -73,12 +73,12 @@ export function Topbar({ view, progress }: { view: View; progress?: OperationPro
       <button
         className="btn btn-icon"
         onClick={() => setPref(resolved === "dark" ? "light" : "dark")}
-        title={resolved === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-        aria-label="Toggle theme"
+        title={resolved === "dark" ? "Passer au thème clair" : "Passer au thème sombre"}
+        aria-label="Changer de thème"
       >
         <Icon name={resolved === "dark" ? "sun" : "moon"} size={15} />
       </button>
-      <div className="topbar-version mono" title={`JustHireMe version ${appVersion}`}>v{appVersion}</div>
+      <div className="topbar-version mono" title={`Juste Recrute Moi version ${appVersion}`}>v{appVersion}</div>
     </header>
   );
 }

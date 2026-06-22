@@ -39,13 +39,13 @@ export const leadSeniority = (lead: Lead): SeniorityFilter => {
 };
 
 export const seniorityLabel = (level: SeniorityFilter) => ({
-  fresher: "Fresher",
+  fresher: "Stage / alternance",
   junior: "Junior",
-  mid: "Mid",
+  mid: "Intermédiaire",
   senior: "Senior",
-  beginner: "Beginner",
-  unknown: "Unknown",
-  all: "All levels",
+  beginner: "Débutant",
+  unknown: "Inconnu",
+  all: "Tous niveaux",
 }[level]);
 
 export const seniorityTone = (level: SeniorityFilter) => ({
@@ -121,8 +121,8 @@ export const cleanRoleSegment = (segment: string) => {
 };
 
 export const roleFromLead = (lead: Lead) => {
-  const company = cleanLeadText(lead.company) || "Unknown company";
-  const rawTitle = isUrlOnlyText(lead.title) ? roleFromUrl(lead.url || lead.title) || "Untitled role" : cleanLeadText(lead.title);
+  const company = cleanLeadText(lead.company) || "Entreprise inconnue";
+  const rawTitle = isUrlOnlyText(lead.title) ? roleFromUrl(lead.url || lead.title) || "Offre sans titre" : cleanLeadText(lead.title);
   const parts = rawTitle.split(/\s*\|\s*/).map(cleanLeadText).filter(Boolean);
   const roleHints = /\b(engineer|developer|designer|product|backend|front[- ]?end|frontend|full[- ]?stack|ai|ml|data|software|devops|sre|mobile|ios|android|platform|founding|deployed|research|intern|analyst|architect|security|qa)\b/i;
   const noisy = (part: string) =>
@@ -133,12 +133,12 @@ export const roleFromLead = (lead: Lead) => {
   const candidates = parts.map(cleanRoleSegment).filter(part => part && !noisy(part));
   const hinted = candidates.find(part => roleHints.test(part));
   const fallback = cleanRoleSegment(stripCompanyPrefix(rawTitle, company));
-  const role = cleanLeadText(hinted || candidates[0] || fallback || "Untitled role");
+  const role = cleanLeadText(hinted || candidates[0] || fallback || "Offre sans titre");
   return role.length > 96 ? `${role.slice(0, 93).trim()}...` : role;
 };
 
 export const leadDisplayHeading = (lead: Lead) => {
-  const company = cleanLeadText(lead.company) || "Unknown company";
+  const company = cleanLeadText(lead.company) || "Entreprise inconnue";
   return { role: roleFromLead(lead), company };
 };
 

@@ -7,7 +7,7 @@ import { DebugResetButton } from "../../shared/components/DebugResetButton";
 import { settingsApi } from "../../api/settings";
 
 /**
- * "What you're looking for" — free-text preferences the agent uses to target the
+ * "Ce que tu recherches" — free-text preferences the agent uses to target the
  * scan and rank matching jobs higher. Loads + saves the job_preferences setting
  * directly (on blur), so it survives restarts and feeds the next scan/evaluation.
  */
@@ -43,21 +43,21 @@ function PreferencesBox({ api }: { api: ApiFetch | null }) {
     <section className="card" style={{ padding: 16, marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
         <div style={{ minWidth: 0 }}>
-          <span className="eyebrow">What you're looking for</span>
+          <span className="eyebrow">Ce que tu recherches</span>
           <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 3, lineHeight: 1.5 }}>
-            Describe your ideal role in plain English — the agent uses it to <b>target your scan</b> and <b>rank matching jobs higher</b>.
+            Décris ton poste idéal en français simple : l'agent l'utilise pour <b>cibler la recherche</b> et <b>remonter les offres les plus pertinentes</b>.
           </div>
         </div>
-        {status === "saved" && <span className="pill" style={{ background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" }}>Saved</span>}
-        {status === "saving" && <span className="pill">Saving…</span>}
-        {status === "error" && <span className="pill" style={{ background: "var(--bad-soft)", color: "var(--bad)", border: "1px solid var(--bad)" }}>Save failed</span>}
+        {status === "saved" && <span className="pill" style={{ background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" }}>Enregistré</span>}
+        {status === "saving" && <span className="pill">Enregistrement...</span>}
+        {status === "error" && <span className="pill" style={{ background: "var(--bad-soft)", color: "var(--bad)", border: "1px solid var(--bad)" }}>Échec</span>}
       </div>
       <textarea
         className="field-input"
         rows={2}
         value={value}
         disabled={!loaded}
-        placeholder="e.g. remote senior backend, Python or Go, fintech or health, $150k+, no on-call, mission-driven teams"
+        placeholder="ex. fullstack React/Node, remote ou Montpellier, CDI, produit SaaS, pas d'astreinte, équipe tech solide"
         onChange={e => setValue(e.target.value)}
         onBlur={save}
         style={{ width: "100%", resize: "vertical", fontSize: 13, lineHeight: 1.55 }}
@@ -212,12 +212,12 @@ export function DashboardView({
       }}>
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.1fr) minmax(260px, 0.9fr)", gap: 22, alignItems: "end" }}>
           <div style={{ minWidth: 0 }}>
-            <div className="eyebrow">Agent Online</div>
+            <div className="eyebrow">Agent actif</div>
             <h1 style={{ fontSize: 44, marginTop: 8 }}>
-              The hunt is <span className="italic-serif" style={{ color: "var(--ink-2)" }}>on.</span>
+              La recherche est <span className="italic-serif" style={{ color: "var(--ink-2)" }}>lancée.</span>
             </h1>
             <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.55, maxWidth: 560, marginTop: 10 }}>
-              Scanned <b>{leads.length} job leads</b>, evaluated <b>{counts.scored}</b> with scores, tailored <b>{counts.tailoring + counts.ready} resumes</b>.
+              <b>{leads.length} offres</b> récupérées, <b>{counts.scored}</b> évaluées avec un score, <b>{counts.tailoring + counts.ready} dossiers</b> adaptés.
             </div>
             <div className="row gap-2" style={{ flexWrap: "wrap", marginTop: 16 }}>
               {scanning ? (
@@ -237,7 +237,7 @@ export function DashboardView({
                   alignItems: "center",
                   gap: 8,
                 }}>
-                  <Icon name="x" size={13} color="var(--bad)" /> Stop scan
+                  <Icon name="x" size={13} color="var(--bad)" /> Arrêter
                 </button>
               ) : (
                 <button onClick={onScan} disabled={reevaluating || cleaning} style={{
@@ -256,11 +256,11 @@ export function DashboardView({
                   alignItems: "center",
                   gap: 8,
                 }}>
-                  <Icon name="search" size={13} color="var(--paper)" /> Scan sources
+                  <Icon name="search" size={13} color="var(--paper)" /> Scanner les sources
                 </button>
               )}
               <SecondaryButton onClick={() => setView("apply")} disabled={busy}>
-                <Icon name="spark" size={13} /> Customize job
+                <Icon name="spark" size={13} /> Adapter une offre
               </SecondaryButton>
               <SecondaryButton onClick={() => setView("pipeline")}>
                 Pipeline <Icon name="arrow-right" size={13} />
@@ -276,14 +276,14 @@ export function DashboardView({
             padding: 14,
             minWidth: 0,
           }}>
-            <div className="eyebrow">Now</div>
+            <div className="eyebrow">Maintenant</div>
             <div style={{ marginTop: 8, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
-              {busy ? (scanning ? "Scanning configured sources..." : reevaluating ? "Re-scoring saved jobs..." : "Cleaning weak rows...") : "Ready for the next action."}
+              {busy ? (scanning ? "Scan des sources configurées..." : reevaluating ? "Re-score des offres sauvegardées..." : "Nettoyage des lignes faibles...") : "Prêt pour la prochaine action."}
             </div>
             {progress?.active && (
               <div style={{ marginTop: 12 }}>
                 <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", display: "flex", justifyContent: "space-between", gap: 8 }}>
-                  <span>{progress.total ? `Evaluating ${Math.min(progress.completed, progress.total)}/${progress.total} leads` : `${progress.completed} leads evaluated`}</span>
+                  <span>{progress.total ? `Évaluation ${Math.min(progress.completed, progress.total)}/${progress.total} offres` : `${progress.completed} offres évaluées`}</span>
                   <span>{progress.total ? `${Math.min(100, Math.round((progress.completed / progress.total) * 100))}%` : ""}</span>
                 </div>
                 <div style={{ height: 7, borderRadius: 999, background: "rgba(var(--white-rgb),0.64)", overflow: "hidden", border: `1px solid ${warmBorder}`, marginTop: 6 }}>
@@ -315,10 +315,10 @@ export function DashboardView({
       <PreferencesBox api={api} />
 
       <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
-        <MiniStat tone="blue" label="Active leads" value={counts.total} hint="not discarded" icon="layers" />
-        <MiniStat tone="yellow" label="Scored" value={counts.scored} hint="fit known" icon="spark" />
-        <MiniStat tone="green" label="Ready" value={counts.ready} hint="approved" icon="check" />
-        <MiniStat tone="orange" label="Applied" value={counts.applied} hint="sent" icon="arrow-up" />
+        <MiniStat tone="blue" label="Offres actives" value={counts.total} hint="non masquées" icon="layers" />
+        <MiniStat tone="yellow" label="Notées" value={counts.scored} hint="score connu" icon="spark" />
+        <MiniStat tone="green" label="Prêtes" value={counts.ready} hint="validées" icon="check" />
+        <MiniStat tone="orange" label="Postulées" value={counts.applied} hint="envoyées" icon="arrow-up" />
       </section>
 
       <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(260px, 360px)", gap: 14 }}>
@@ -331,15 +331,15 @@ export function DashboardView({
         }}>
           <div className="row" style={{ justifyContent: "space-between", marginBottom: 12, gap: 12 }}>
             <div>
-              <h3>Best leads to open</h3>
-              <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>Top 4 only; everything else lives in the pipeline.</div>
+              <h3>Meilleures offres à ouvrir</h3>
+              <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>Top 4 seulement ; le reste est dans le pipeline.</div>
             </div>
-            <button className="btn btn-ghost" onClick={() => setView("pipeline")} style={{ fontSize: 12 }}>Open pipeline <Icon name="arrow-right" size={12} /></button>
+            <button className="btn btn-ghost" onClick={() => setView("pipeline")} style={{ fontSize: 12 }}>Ouvrir le pipeline <Icon name="arrow-right" size={12} /></button>
           </div>
           <div className="col gap-2">
             {queue.length === 0 ? (
               <div style={{ padding: 14, fontSize: 12.5, color: "var(--ink-3)", borderRadius: 8, border: `1px solid ${warmBorder}`, background: warmSurface }}>
-                Run a scan to fill this list.
+                Lance un scan pour remplir cette liste.
               </div>
             ) : queue.map(lead => <LeadRow key={lead.job_id} lead={lead} openDrawer={openDrawer} />)}
           </div>
@@ -354,28 +354,28 @@ export function DashboardView({
         }}>
           <h3>Maintenance</h3>
           <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2, marginBottom: 12 }}>
-            Use these only when the data feels stale.
+            À utiliser quand les données semblent obsolètes.
           </div>
           <div className="col gap-2">
             {reevaluating ? (
               <SecondaryButton danger onClick={onStopReevaluate}>
-                <Icon name="x" size={13} /> Stop re-score
+                <Icon name="x" size={13} /> Arrêter le re-score
               </SecondaryButton>
             ) : (
               <SecondaryButton onClick={onReevaluate} disabled={scanning || leads.length === 0}>
-                <Icon name="pulse" size={13} /> Re-score jobs
+                <Icon name="pulse" size={13} /> Re-scorer les offres
               </SecondaryButton>
             )}
             <SecondaryButton onClick={onCleanup} disabled={busy || leads.length === 0}>
-              <Icon name="trash" size={13} /> {cleaning ? "Cleaning..." : "Clean bad data"}
+              <Icon name="trash" size={13} /> {cleaning ? "Nettoyage..." : "Nettoyer les données"}
             </SecondaryButton>
             <button className="btn btn-ghost" onClick={() => setView("activity")} style={{ justifyContent: "center", fontSize: 12 }}>
-              Activity log <Icon name="arrow-right" size={12} />
+              Journal d'activité <Icon name="arrow-right" size={12} />
             </button>
           </div>
           {dueFollowups.length > 0 && (
             <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid ${warmBorder}` }}>
-              <div className="eyebrow">Follow-ups due</div>
+              <div className="eyebrow">Relances à faire</div>
               <div className="display tabular" style={{ fontSize: 28, color: "var(--green-ink)", marginTop: 4 }}>{dueFollowups.length}</div>
             </div>
           )}

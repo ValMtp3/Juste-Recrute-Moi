@@ -80,7 +80,7 @@ function bannerMessage(state: PromptState, payload: RuntimePayload | null, error
     return error || payload?.vector?.error || "Runtime pack installed. Restart to finish loading.";
   }
   if (state === "restarting") {
-    return "Reopening JustHireMe…";
+    return "Réouverture de Juste Recrute Moi...";
   }
   if (error) return error;
   return "Runtime pack required for semantic matching.";

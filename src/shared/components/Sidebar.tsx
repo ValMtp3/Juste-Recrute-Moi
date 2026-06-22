@@ -2,24 +2,25 @@ import { useState } from "react";
 import Icon from "./Icon";
 import type { LeadCounts, View } from "../../types";
 import { useAppVersion } from "../hooks/useAppVersion";
+import { CreatorFooter } from "./CreatorFooter";
 
 const NAV = [
-  { id: "dashboard", label: "Dashboard", icon: "home", tone: "blue" },
-  { id: "apply", label: "Customize Job", icon: "spark", tone: "green" },
-  { id: "graph", label: "Knowledge", icon: "graph", tone: "green" },
-  { id: "activity", label: "Activity", icon: "pulse", tone: "orange" },
-  { id: "profile", label: "Profile", icon: "user", tone: "pink" },
-  { id: "ingestion", label: "Add Context", icon: "plus", tone: "teal" },
+  { id: "dashboard", label: "Accueil", icon: "home", tone: "blue" },
+  { id: "apply", label: "Adapter une offre", icon: "spark", tone: "green" },
+  { id: "graph", label: "Connaissance", icon: "graph", tone: "green" },
+  { id: "activity", label: "Activité", icon: "pulse", tone: "orange" },
+  { id: "profile", label: "Profil", icon: "user", tone: "pink" },
+  { id: "ingestion", label: "Ajouter du contexte", icon: "plus", tone: "teal" },
 ];
 
 const PIPELINE_NAV = [
-  { id: "pipeline", label: "All", countKey: "total", tone: "teal" },
-  { id: "pipeline-hot", label: "Hot", countKey: "hot", tone: "orange" },
-  { id: "pipeline-found", label: "New", countKey: "discovered", tone: "blue" },
-  { id: "pipeline-evaluated", label: "Rated", countKey: "evaluated", tone: "yellow" },
-  { id: "pipeline-generated", label: "Ready", countKey: "ready", tone: "purple" },
-  { id: "pipeline-applied", label: "Applied", countKey: "applied", tone: "orange" },
-  { id: "pipeline-discarded", label: "Discarded", countKey: "discarded", tone: "bad" },
+  { id: "pipeline", label: "Toutes", countKey: "total", tone: "teal" },
+  { id: "pipeline-hot", label: "Prioritaires", countKey: "hot", tone: "orange" },
+  { id: "pipeline-found", label: "Nouvelles", countKey: "discovered", tone: "blue" },
+  { id: "pipeline-evaluated", label: "Notées", countKey: "evaluated", tone: "yellow" },
+  { id: "pipeline-generated", label: "Prêtes", countKey: "ready", tone: "purple" },
+  { id: "pipeline-applied", label: "Postulées", countKey: "applied", tone: "orange" },
+  { id: "pipeline-discarded", label: "Masquées", countKey: "discarded", tone: "bad" },
 ];
 
 const isPipelineView = (view: View) => view === "pipeline" || view.startsWith("pipeline-");
@@ -49,22 +50,22 @@ export function Sidebar({
         <div className="row gap-3 sidebar-brand-main">
           <Icon name="logo" size={32} />
           <div className="col sidebar-label" style={{ lineHeight: 1.1 }}>
-            <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.02em" }}>JustHireMe</div>
+            <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: 0 }}>Juste Recrute Moi</div>
             <div className="mono app-version-label">v{appVersion}</div>
           </div>
         </div>
         <button
           className="btn btn-icon sidebar-collapse-btn"
           onClick={onToggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          aria-label={collapsed ? "Déplier le menu" : "Replier le menu"}
           aria-expanded={!collapsed}
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Déplier le menu" : "Replier le menu"}
         >
           <Icon name="arrow-right" size={14} style={{ transform: collapsed ? "none" : "rotate(180deg)" }} />
         </button>
       </div>
 
-      <div className="eyebrow sidebar-section-label">Workspace</div>
+      <div className="eyebrow sidebar-section-label">Espace de travail</div>
       <div className="col gap-1">
         {NAV.slice(0, 2).map(n => {
           const active = view === n.id;
@@ -101,8 +102,8 @@ export function Sidebar({
               setPipelineOpen(value => !value);
               if (!pipelineActive) setView("pipeline");
             }}
-            title={collapsed ? "Job Pipeline" : undefined}
-            aria-label="Job Pipeline"
+            title={collapsed ? "Pipeline d'offres" : undefined}
+            aria-label="Pipeline d'offres"
             aria-expanded={pipelineOpen && !collapsed}
           >
             <div
@@ -114,7 +115,7 @@ export function Sidebar({
             >
               <Icon name="layers" size={14} stroke={1.8} />
             </div>
-            <span className="nav-label">Job Pipeline</span>
+            <span className="nav-label">Pipeline d'offres</span>
             <span
               className="mono tabular nav-count"
               style={{
@@ -175,12 +176,12 @@ export function Sidebar({
         })}
       </div>
 
-      <div className="eyebrow sidebar-section-label snapshot-label">Snapshot</div>
+      <div className="eyebrow sidebar-section-label snapshot-label">Aperçu</div>
       <div className="sidebar-snapshot">
         {[
-          ["Ready", "green", leadCounts.approved],
-          ["Applied", "orange", leadCounts.applied],
-          ["Interview", "pink", leadCounts.interviewing],
+          ["Prêtes", "green", leadCounts.approved],
+          ["Postulées", "orange", leadCounts.applied],
+          ["Entretien", "pink", leadCounts.interviewing],
         ].map(([label, tone, n]) => (
           <div key={label as string} className="sidebar-snapshot-item" title={`${label}: ${n || 0}`}>
             <div className="mono tabular" style={{ fontSize: 15, fontWeight: 800, color: `var(--${tone}-ink)`, lineHeight: 1 }}>{n || 0}</div>
@@ -192,10 +193,11 @@ export function Sidebar({
       <div className="grow" />
 
       <div className="sidebar-utility">
-        <button className="btn sidebar-settings-btn" onClick={onSettings} aria-label="Settings" title="Settings">
+        <button className="btn sidebar-settings-btn" onClick={onSettings} aria-label="Paramètres" title="Paramètres">
           <Icon name="settings" size={15} />
-          <span className="sidebar-label">Settings</span>
+          <span className="sidebar-label">Paramètres</span>
         </button>
+        <CreatorFooter />
       </div>
     </aside>
   );

@@ -121,7 +121,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
       setStep(1);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Resume import failed";
-      setErr(message === "Failed to fetch" ? "Could not reach the local backend. Restart JustHireMe and try again." : message);
+      setErr(message === "Failed to fetch" ? "Backend local injoignable. Relance Juste Recrute Moi puis réessaie." : message);
     } finally {
       setBusy(false);
     }

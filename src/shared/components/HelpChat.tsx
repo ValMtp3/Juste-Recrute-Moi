@@ -6,7 +6,7 @@ type Msg = { role: "user" | "assistant"; content: string };
 
 const STARTER: Msg = {
   role: "assistant",
-  content: "Ask me how to use JustHireMe, configure sources, generate packages, or understand a lead.",
+  content: "Demande-moi comment utiliser Juste Recrute Moi, configurer les sources, générer un dossier ou comprendre une offre.",
 };
 
 export function HelpChat({ api }: { api: ApiFetch }) {
@@ -17,7 +17,7 @@ export function HelpChat({ api }: { api: ApiFetch }) {
   const scroller = useRef<HTMLDivElement>(null);
   const canSend = Boolean(draft.trim()) && !busy;
 
-  const subtitle = useMemo(() => busy ? "Thinking..." : "Project help", [busy]);
+  const subtitle = useMemo(() => busy ? "Réflexion..." : "Aide projet", [busy]);
 
   const send = async () => {
     const question = draft.trim();
@@ -32,12 +32,12 @@ export function HelpChat({ api }: { api: ApiFetch }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question, history: next.slice(-8) }),
       });
-      if (!r.ok) throw new Error(`Help returned ${r.status}`);
+      if (!r.ok) throw new Error(`L'aide a retourné ${r.status}`);
       const data = await r.json();
-      setMessages([...next, { role: "assistant", content: data.answer || "I could not answer that yet." }]);
+      setMessages([...next, { role: "assistant", content: data.answer || "Je ne peux pas encore répondre à ça." }]);
       window.setTimeout(() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" }), 0);
     } catch (e) {
-      setMessages([...next, { role: "assistant", content: e instanceof Error ? e.message : "Help chat failed." }]);
+      setMessages([...next, { role: "assistant", content: e instanceof Error ? e.message : "Le chat d'aide a échoué." }]);
     } finally {
       setBusy(false);
     }
@@ -49,10 +49,10 @@ export function HelpChat({ api }: { api: ApiFetch }) {
         <section className="help-chat-panel">
           <div className="help-chat-head">
             <div>
-              <div className="eyebrow">JustHireMe Assistant</div>
+              <div className="eyebrow">Assistant Juste Recrute Moi</div>
               <div className="help-chat-title">{subtitle}</div>
             </div>
-            <button className="btn btn-icon" onClick={() => setOpen(false)} aria-label="Close help">
+            <button className="btn btn-icon" onClick={() => setOpen(false)} aria-label="Fermer l'aide">
               <Icon name="x" size={14} />
             </button>
           </div>
@@ -74,15 +74,15 @@ export function HelpChat({ api }: { api: ApiFetch }) {
                 }
               }}
               rows={2}
-              placeholder="Ask how to scan, rank, customize, or configure..."
+              placeholder="Demande comment scanner, trier, adapter ou configurer..."
             />
-            <button className="btn btn-accent btn-icon" onClick={send} disabled={!canSend} aria-label="Send help question">
+            <button className="btn btn-accent btn-icon" onClick={send} disabled={!canSend} aria-label="Envoyer la question">
               <Icon name="arrow-up" size={14} color="#fff" />
             </button>
           </div>
         </section>
       )}
-      <button className="help-chat-fab" onClick={() => setOpen(v => !v)} aria-label="Open help chat">
+      <button className="help-chat-fab" onClick={() => setOpen(v => !v)} aria-label="Ouvrir l'aide">
         <Icon name="spark" size={18} color="#fff" />
       </button>
     </div>

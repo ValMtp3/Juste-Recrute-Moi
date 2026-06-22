@@ -8,6 +8,7 @@ const READY_RETRY_MS = 180;
 const READY_ATTEMPTS = 60;
 
 const delay = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms));
+const hasTauriEventBridge = () => typeof (window as any).__TAURI_INTERNALS__?.transformCallback === "function";
 
 const emptyProgress = (): OperationProgress => ({
   active: false,
@@ -136,7 +137,7 @@ export function useWS() {
         })
         .catch(error => {
           const msg = error instanceof Error ? error.message : String(error);
-          addLog(`Status reconciliation failed: ${msg}`, "system", "ws");
+            addLog(`Échec de synchronisation du statut : ${msg}`, "system", "ws");
         });
     };
     ws.onopen    = () => {
@@ -144,7 +145,7 @@ export function useWS() {
       const wasReconnect = retryRef.current > 0;
       setConn("connected");
       retryRef.current = 0;
-      addLog("WebSocket connected", "system", "ws");
+      addLog("WebSocket connecté", "system", "ws");
       if (wasReconnect) reconcileBackendStatus();
     };
     ws.onmessage = (e) => {
@@ -184,13 +185,13 @@ export function useWS() {
           window.dispatchEvent(new CustomEvent("hot-x-lead", { detail: d.data }));
           if ("Notification" in window && Notification.permission === "granted") {
             const lead = d.data as Lead;
-            new Notification("Hot X lead", { body: `${lead.company}: ${lead.title}` });
+            new Notification("Offre prioritaire", { body: `${lead.company}: ${lead.title}` });
           }
         }
       } catch (err) {
         const preview = typeof e.data === "string" ? e.data.slice(0, 200) : "";
-        console.warn("[WS] Failed to parse message:", err, preview);
-        addLog(`Message parse error: ${err}`, "system", "ws");
+        console.warn("[WS] Message impossible à analyser :", err, preview);
+        addLog(`Erreur d'analyse du message : ${err}`, "system", "ws");
       }
     };
     ws.onclose = () => {
@@ -200,10 +201,10 @@ export function useWS() {
       wsEndpointRef.current = "";
       if (manuallyClosedRef.current) return;
       if (retryRef.current >= MAX_RETRIES) {
-        setSidecarError("Backend unreachable. Restart JustHireMe or check the backend process.");
+        setSidecarError("Backend injoignable. Relance Juste Recrute Moi ou vérifie le processus backend.");
         setPort(null);
         setApiToken(null);
-        addLog("Backend unreachable after repeated WebSocket reconnect attempts", "system", "ws");
+        addLog("Backend injoignable après plusieurs tentatives de reconnexion WebSocket", "system", "ws");
         // Re-arm so the sidecar poll resumes probing; if the backend recovers
         // (or relaunches on a new port) we reconnect instead of staying dead
         // until the app is restarted.
@@ -243,7 +244,7 @@ export function useWS() {
             backendReady = false;
             setPort(null);
             setApiToken(null);
-            setSidecarError(`Backend did not become ready on port ${p}.`);
+            setSidecarError(`Le backend n'est pas prêt sur le port ${p}.`);
           }
           return;
         }
@@ -286,6 +287,10 @@ export function useWS() {
         }
         if (!token || !currentPort || !backendReady) void syncSidecar();
       }, 1000);
+      if (!hasTauriEventBridge()) {
+        addLog("Bridge d'événements desktop indisponible ; le polling reste actif.", "system", "sidecar");
+        return;
+      }
       try {
         unlisten = await listen<number>("sidecar-port", ev => {
           currentPort = ev.payload;
@@ -311,14 +316,13 @@ export function useWS() {
           setConn("disconnected");
           setProgress(emptyProgress());
           window.dispatchEvent(new CustomEvent("backend-status", { detail: { scanning: false, reevaluating: false } }));
-          addLog("Backend sidecar terminated", "system", "sidecar");
+          addLog("Sidecar backend arrêté", "system", "sidecar");
         });
         const prevUnlisten = unlisten;
         unlisten = () => { prevUnlisten?.(); unlistenToken(); unlistenError(); unlistenTerminated(); };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        setSidecarError(`Desktop event bridge unavailable: ${message}`);
-        addLog(`Desktop event bridge unavailable: ${message}`, "system", "sidecar");
+        addLog(`Bridge d'événements desktop indisponible ; polling actif : ${message}`, "system", "sidecar");
       }
     })();
     return () => {

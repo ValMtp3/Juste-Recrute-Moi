@@ -8,8 +8,8 @@ import { getMark, getTone, leadDisplayHeading, leadSeniority, seniorityLabel, se
 const sourceReliability = (lead: Lead) => {
   const raw = String(lead.source_meta?.source_reliability || "").toLowerCase();
   if (raw === "stable") return { label: "Stable", tone: "green" };
-  if (raw === "manual") return { label: "Manual", tone: "blue" };
-  if (raw === "best_effort") return { label: "Best effort", tone: "yellow" };
+  if (raw === "manual") return { label: "Manuel", tone: "blue" };
+  if (raw === "best_effort") return { label: "À vérifier", tone: "yellow" };
   return null;
 };
 
@@ -43,11 +43,11 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
     try {
       const response = await api(`/api/v1/leads/${lead.job_id}/generate`, { method: "POST", signal: controller.signal, timeoutMs: GENERATION_TIMEOUT_MS });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.detail || `Generation returned ${response.status}`);
+      if (!response.ok) throw new Error(body.detail || `Génération échouée (${response.status})`);
       if (body.lead) window.dispatchEvent(new CustomEvent("lead-updated", { detail: body.lead }));
       window.dispatchEvent(new CustomEvent("leads-refresh"));
     } catch (error) {
-      console.error("Package generation failed", error);
+      console.error("La génération du dossier a échoué", error);
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
       setGenerating(false);
@@ -101,7 +101,7 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
         {/* Delete button */}
         <button
           onClick={e => { e.stopPropagation(); onDelete(lead.job_id); }}
-          title="Remove"
+          title="Supprimer"
           style={{
             flexShrink: 0, width: 26, height: 26, borderRadius: 7,
             border: "1px solid var(--line)", background: "var(--paper)",
@@ -125,7 +125,7 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
           border: "1px solid var(--line)",
         }}>{desc}</div>
       ) : (
-        <div style={{ fontSize: 11.5, color: "var(--ink-4)", fontStyle: "italic" }}>No description extracted.</div>
+        <div style={{ fontSize: 11.5, color: "var(--ink-4)", fontStyle: "italic" }}>Aucune description extraite.</div>
       )}
 
       {/* Evaluator reason (for Evaluated tab) */}
@@ -143,7 +143,7 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
 
       {qualityReason && (
         <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.5, borderLeft: "2px solid var(--blue)", paddingLeft: 8 }}>
-          Shown by quality gate{qualityScore ? ` (${qualityScore})` : ""}: {qualityReason.slice(0, 150)}{qualityReason.length > 150 ? "..." : ""}
+          Affichée par le filtre qualité{qualityScore ? ` (${qualityScore})` : ""} : {qualityReason.slice(0, 150)}{qualityReason.length > 150 ? "..." : ""}
         </div>
       )}
 
@@ -167,7 +167,7 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
                 border: "1px solid var(--purple)", background: "var(--purple-soft)",
                 color: "var(--purple-ink)", cursor: generating ? "wait" : "pointer",
               }}
-            >{generating ? "Queued..." : "Generate Package"}</button>
+            >{generating ? "En file..." : "Générer le dossier"}</button>
           )}
           <button
             onClick={e => { e.stopPropagation(); onOpen(lead); }}
@@ -176,7 +176,7 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
               border: "1px solid var(--line)", background: "var(--paper)",
               color: "var(--ink-2)", cursor: "pointer",
             }}
-          >Details →</button>
+          >Détails →</button>
         </div>
       </div>
     </div>
@@ -205,7 +205,7 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
   const levelTone = seniorityTone(level);
   const statusTone = getTone(lead.status);
   const display = leadDisplayHeading(lead);
-  const urlLabel = lead.url ? lead.url.replace(/^https?:\/\//, "").slice(0, 42) : "No source URL";
+  const urlLabel = lead.url ? lead.url.replace(/^https?:\/\//, "").slice(0, 42) : "Aucune URL source";
   const reliability = sourceReliability(lead);
 
   const handleGenerate = async (e: React.MouseEvent) => {
@@ -218,11 +218,11 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
     try {
       const response = await api(`/api/v1/leads/${lead.job_id}/generate`, { method: "POST", signal: controller.signal, timeoutMs: GENERATION_TIMEOUT_MS });
       const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.detail || `Generation returned ${response.status}`);
+      if (!response.ok) throw new Error(body.detail || `Génération échouée (${response.status})`);
       if (body.lead) window.dispatchEvent(new CustomEvent("lead-updated", { detail: body.lead }));
       window.dispatchEvent(new CustomEvent("leads-refresh"));
     } catch (error) {
-      console.error("Package generation failed", error);
+      console.error("La génération du dossier a échoué", error);
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
       setGenerating(false);
@@ -257,21 +257,21 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
       </div>
       <div className="pipeline-job-side">
         <div className="pipeline-score-stack">
-          {matchScore > 0 && <span className={`pipeline-score ${matchScore >= 76 ? "good" : matchScore >= 50 ? "warn" : "bad"}`}>Fit {matchScore}</span>}
+          {matchScore > 0 && <span className={`pipeline-score ${matchScore >= 76 ? "good" : matchScore >= 50 ? "warn" : "bad"}`}>Match {matchScore}</span>}
           {signalScore > 0 && <span className={`pipeline-score ${signalScore >= 80 ? "hot" : signalScore >= 60 ? "warn" : ""}`}>Signal {signalScore}</span>}
-          {qualityScore > 0 && <span className={`pipeline-score ${qualityScore >= 80 ? "hot" : qualityScore >= 60 ? "warn" : ""}`}>Quality {qualityScore}</span>}
+          {qualityScore > 0 && <span className={`pipeline-score ${qualityScore >= 80 ? "hot" : qualityScore >= 60 ? "warn" : ""}`}>Qualité {qualityScore}</span>}
         </div>
         <div className="pipeline-job-actions">
           {showGenerate && (
             <button className="btn" onClick={handleGenerate} disabled={generating}>
-              <Icon name="file" size={12} /> {generating ? "Queued" : "Generate"}
+              <Icon name="file" size={12} /> {generating ? "En file" : "Générer"}
             </button>
           )}
           <button className="btn btn-icon" onClick={e => { e.stopPropagation(); if (lead.url) openExternalUrl(lead.url); }} title={lead.url} disabled={!lead.url}>
             <Icon name="external-link" size={13} />
           </button>
-          <button className="btn" onClick={e => { e.stopPropagation(); onOpen(lead); }}>Details</button>
-          <button className="btn btn-icon danger" onClick={e => { e.stopPropagation(); onDelete(lead.job_id); }} title="Delete lead">
+          <button className="btn" onClick={e => { e.stopPropagation(); onOpen(lead); }}>Détails</button>
+          <button className="btn btn-icon danger" onClick={e => { e.stopPropagation(); onDelete(lead.job_id); }} title="Supprimer l'offre">
             <Icon name="trash" size={13} />
           </button>
         </div>

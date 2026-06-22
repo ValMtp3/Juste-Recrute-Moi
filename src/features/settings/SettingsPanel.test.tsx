@@ -9,7 +9,7 @@ const discoveryPanel = readFileSync(new URL("./panels/DiscoverySettings.tsx", im
 describe("Settings UI contracts", () => {
   it("surfaces backend validation errors", () => {
     expect(modal).toContain("saveError");
-    expect(modal).toContain("Settings could not be saved");
+    expect(modal).toContain("Les paramètres n'ont pas pu être enregistrés");
   });
 
   it("submits settings through the API client", () => {

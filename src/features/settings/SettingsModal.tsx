@@ -14,14 +14,14 @@ import type { ApiFetch } from "../../types";
 
 const LEGAL_BASE = "https://github.com/vasu-devs/JustHireMe/blob/main/docs/legal";
 const LEGAL_LINKS: { label: string; href: string }[] = [
-  { label: "Terms of Use", href: `${LEGAL_BASE}/terms-of-use.md` },
-  { label: "Privacy Policy", href: `${LEGAL_BASE}/privacy-policy.md` },
+  { label: "Conditions d'utilisation", href: `${LEGAL_BASE}/terms-of-use.md` },
+  { label: "Politique de confidentialité", href: `${LEGAL_BASE}/privacy-policy.md` },
 ];
 
 function LegalSettings() {
   return (
     <div>
-      <SectionLabel label="Legal & Privacy" sub="JustHireMe is local-first — your data stays on this device" />
+      <SectionLabel label="Légal & confidentialité" sub="Juste Recrute Moi est local-first : tes données restent sur cet appareil" />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {LEGAL_LINKS.map(l => (
           <button key={l.href} className="btn ghost" onClick={() => openUrl(l.href)}
@@ -37,16 +37,16 @@ function LegalSettings() {
 interface Props { api: ApiFetch; onClose: () => void; }
 
 const THEME_OPTIONS: { value: ThemePref; label: string; icon: string }[] = [
-  { value: "light", label: "Light", icon: "sun" },
-  { value: "dark", label: "Dark", icon: "moon" },
-  { value: "system", label: "System", icon: "globe" },
+  { value: "light", label: "Clair", icon: "sun" },
+  { value: "dark", label: "Sombre", icon: "moon" },
+  { value: "system", label: "Système", icon: "globe" },
 ];
 
 function AppearanceSettings() {
   const { pref, setPref } = useTheme();
   return (
     <div>
-      <SectionLabel label="Appearance" sub="theme used across the app — System follows your OS" />
+      <SectionLabel label="Apparence" sub="thème utilisé dans l'app : Système suit ton OS" />
       <div style={{ display: "flex", gap: 8 }}>
         {THEME_OPTIONS.map(opt => {
           const active = pref === opt.value;
@@ -90,7 +90,7 @@ function DangerZone({ api }: { api: ApiFetch }) {
       const response = await settingsApi.resetData(api, { clearSettings });
       if (!response.ok) {
         const detail = await response.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Reset failed");
+        throw new Error(detail || "Réinitialisation échouée");
       }
       // Reload so every view re-fetches the now-empty data and returns to a clean
       // first-run state.
@@ -103,37 +103,37 @@ function DangerZone({ api }: { api: ApiFetch }) {
 
   return (
     <div>
-      <SectionLabel label="Danger zone" sub="Wipe local data to start fresh — this cannot be undone" />
+      <SectionLabel label="Zone dangereuse" sub="Efface les données locales pour repartir à zéro : action irréversible" />
       <div style={{ border: "1px solid var(--bad)", background: "var(--bad-soft, rgba(220,38,38,0.06))", borderRadius: 12, padding: 14 }}>
         {!open ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div style={{ fontSize: 12.5, color: "var(--ink-2)", maxWidth: 460 }}>
-              Delete all leads, your profile (graph + vectors), and generated documents on this device. Your settings and provider keys are kept.
+              Supprime toutes les offres, ton profil (graphe + vecteurs) et les documents générés sur cet appareil. Les paramètres et clés fournisseur sont conservés.
             </div>
             <button className="btn" onClick={() => setOpen(true)}
               style={{ color: "var(--bad)", borderColor: "var(--bad)", fontSize: 13, padding: "8px 16px", whiteSpace: "nowrap" }}>
-              <Icon name="trash" size={13} /> Delete all data
+              <Icon name="trash" size={13} /> Tout supprimer
             </button>
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
-              <Icon name="alert" size={13} /> This permanently deletes all leads, your profile (graph + vectors), and generated PDFs on this device. Type <b>DELETE</b> to confirm.
+              <Icon name="alert" size={13} /> Cette action supprime définitivement toutes les offres, ton profil (graphe + vecteurs) et les PDF générés sur cet appareil. Tape <b>DELETE</b> pour confirmer.
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--ink-2)", cursor: "pointer" }}>
               <input type="checkbox" checked={clearSettings} onChange={e => setClearSettings(e.target.checked)} />
-              Also reset settings &amp; provider config (full factory reset)
+              Réinitialiser aussi les paramètres et fournisseurs
             </label>
             <input type="text" value={confirmText} onChange={e => setConfirmText(e.target.value)}
-              placeholder="Type DELETE to confirm" autoFocus className="field-input" style={{ fontSize: 13 }} />
+              placeholder="Tape DELETE pour confirmer" autoFocus className="field-input" style={{ fontSize: 13 }} />
             {error && <div style={{ color: "var(--bad)", fontSize: 12, fontWeight: 700 }}>{error}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="btn" disabled={busy}
                 onClick={() => { setOpen(false); setConfirmText(""); setError(null); setClearSettings(false); }}
-                style={{ fontSize: 13, padding: "8px 16px" }}>Cancel</button>
+                style={{ fontSize: 13, padding: "8px 16px" }}>Annuler</button>
               <button className="btn" onClick={reset} disabled={busy || !armed}
                 style={{ background: "var(--bad)", color: "#fff", borderColor: "var(--bad)", fontSize: 13, padding: "8px 18px", opacity: (busy || !armed) ? 0.55 : 1 }}>
-                <Icon name="trash" size={13} /> {busy ? "Deleting..." : clearSettings ? "Delete everything" : "Delete all data"}
+                <Icon name="trash" size={13} /> {busy ? "Suppression..." : clearSettings ? "Tout supprimer" : "Supprimer les données"}
               </button>
             </div>
           </div>
@@ -171,7 +171,7 @@ export default function SettingsModal({ api, onClose }: Props) {
       });
       if (!response.ok) {
         const detail = await response.json().then(data => data.detail).catch(() => "");
-        throw new Error(detail || "Settings could not be saved");
+        throw new Error(detail || "Les paramètres n'ont pas pu être enregistrés");
       }
       if (cfg.x_enable_notifications === "true" && "Notification" in window && Notification.permission === "default") {
         Notification.requestPermission().catch(() => {});
@@ -191,8 +191,8 @@ export default function SettingsModal({ api, onClose }: Props) {
         <div style={{ padding: "18px 24px", borderBottom: "1px solid var(--line)", background: "var(--blue-soft)", display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
             <div className="eyebrow">Configuration</div>
-            <h2 style={{ fontSize: 26, marginTop: 2 }}>Settings</h2>
-            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>Configure local keys, scraper thresholds, ranker behavior, and customization models</div>
+            <h2 style={{ fontSize: 26, marginTop: 2 }}>Paramètres</h2>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>Configure les clés locales, seuils de scraping, scoring et modèles d'adaptation</div>
           </div>
           <button className="btn btn-icon" onClick={onClose}><Icon name="x" size={15} /></button>
         </div>
@@ -211,9 +211,9 @@ export default function SettingsModal({ api, onClose }: Props) {
 
         <div style={{ padding: "14px 24px", borderTop: "1px solid var(--line)", background: "var(--paper-2)", display: "flex", justifyContent: "flex-end", gap: 10 }}>
           {saveError && <div style={{ marginRight: "auto", alignSelf: "center", color: "var(--bad)", fontSize: 12, fontWeight: 700 }}>{saveError}</div>}
-          <button className="btn" onClick={onClose} style={{ padding: "9px 20px", fontSize: 13, borderRadius: 10 }}>Cancel</button>
+          <button className="btn" onClick={onClose} style={{ padding: "9px 20px", fontSize: 13, borderRadius: 10 }}>Annuler</button>
           <button className="btn btn-accent" onClick={save} disabled={saving} style={{ padding: "9px 26px", fontSize: 13, borderRadius: 10, minWidth: 110 }}>
-            {saved ? "Saved" : saving ? "Saving..." : "Save settings"}
+            {saved ? "Enregistré" : saving ? "Enregistrement..." : "Enregistrer"}
           </button>
         </div>
       </div>

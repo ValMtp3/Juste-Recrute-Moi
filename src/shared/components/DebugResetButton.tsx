@@ -22,12 +22,12 @@ export function DebugResetButton({ api }: { api: ApiFetch | null }) {
       const res = await settingsApi.resetData(api); // clearSettings defaults to false
       if (!res.ok) {
         const detail = await res.json().then((d: { detail?: string }) => d.detail).catch(() => "");
-        throw new Error(detail || `Reset failed (${res.status})`);
+        throw new Error(detail || `Réinitialisation échouée (${res.status})`);
       }
       window.location.reload();
     } catch (e) {
       setBusy(false);
-      alert("Wipe failed: " + (e instanceof Error ? e.message : String(e)));
+      alert("Suppression échouée : " + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -35,7 +35,7 @@ export function DebugResetButton({ api }: { api: ApiFetch | null }) {
     <button
       onClick={wipe}
       disabled={!api || busy}
-      title="DEBUG: delete all leads, profile (graph + vectors) and generated docs now. Settings/keys are kept."
+      title="DEBUG : supprime toutes les offres, le profil (graphe + vecteurs) et les documents générés. Les paramètres et clés sont conservés."
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -54,7 +54,7 @@ export function DebugResetButton({ api }: { api: ApiFetch | null }) {
         boxShadow: "var(--shadow-sm)",
       }}
     >
-      <Icon name="trash" size={13} color="#fff" /> {busy ? "Wiping…" : "Wipe all data (debug)"}
+      <Icon name="trash" size={13} color="#fff" /> {busy ? "Suppression..." : "Tout effacer (debug)"}
     </button>
   );
 }
