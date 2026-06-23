@@ -368,6 +368,24 @@ def test_runtime_pack_install_copies_incomplete_vector_runtime(monkeypatch, tmp_
     assert copied == [runtime_dir, browser_dir]
 
 
+def test_vector_runtime_ready_requires_real_import(monkeypatch, tmp_path):
+    from data.vector import runtime
+
+    monkeypatch.setattr(runtime, "_runtime_has_any_vector_payload", lambda _path: True)
+    monkeypatch.setattr(runtime, "vector_runtime_files_complete", lambda _path: True)
+    monkeypatch.setattr(runtime, "add_vector_runtime_to_path", lambda _path: None)
+    monkeypatch.setattr(runtime.importlib.util, "find_spec", lambda _name: object())
+
+    def import_module(name: str):
+        if name == "lancedb":
+            raise ImportError("native module load failed")
+        return types.SimpleNamespace()
+
+    monkeypatch.setattr(runtime.importlib, "import_module", import_module)
+
+    assert runtime.vector_runtime_ready(tmp_path / "vector-runtime") is False
+
+
 def test_hash_embedding_fallback_reports_ok(monkeypatch):
     from data.vector import embeddings
 

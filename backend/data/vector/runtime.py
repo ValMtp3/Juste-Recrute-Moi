@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import importlib
 import os
 import platform
 import shutil
@@ -313,7 +314,11 @@ def vector_runtime_ready(path: Path | None = None) -> bool:
         return False
     add_vector_runtime_to_path(root)
     try:
-        return bool(importlib.util.find_spec("lancedb") and importlib.util.find_spec("pyarrow"))
+        if not importlib.util.find_spec("lancedb") or not importlib.util.find_spec("pyarrow"):
+            return False
+        importlib.import_module("lancedb")
+        importlib.import_module("pyarrow")
+        return True
     except (ImportError, ValueError, AttributeError):
         return False
 
