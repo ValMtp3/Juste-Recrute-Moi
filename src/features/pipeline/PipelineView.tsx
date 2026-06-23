@@ -4,6 +4,7 @@ import { LeadFilterBar } from "./components/LeadFilterBar";
 import { PipelineJobCard, PipelineSkeleton } from "./components/JobCard";
 import type { ApiFetch, Lead, LeadSort, PipelineTab, SeniorityFilter } from "../../types";
 import { PAGE_SIZE, leadSearchText, sortLeads, seniorityMatches, uniqueLeadValues } from "../../shared/lib/leadUtils";
+import { emitAppEvent } from "../../shared/lib/appEvents";
 
 export function PipelineView({ leads, openDrawer, deleteLead, port, api, scanning, reevaluating, cleaning, onReevaluate, onStopReevaluate, onCleanup, loading, error, tab }: {
   leads: Lead[]; openDrawer: (l: Lead) => void;
@@ -73,7 +74,7 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
     if (failed > 0) alert(`${failed} suppressions sur ${count} ont échoué. Rafraîchissement de la liste.`);
     setSelected(new Set());
     setBulkSelecting(false);
-    window.dispatchEvent(new CustomEvent("leads-refresh"));
+    emitAppEvent("leads-refresh");
   };
 
   const bulkMarkApplied = async () => {
@@ -86,10 +87,10 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
     })));
     const failed = results.filter(r => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok)).length;
     if (failed > 0) alert(`${failed} offres sur ${ids.length} n'ont pas pu être marquées comme postulées.`);
-    ids.forEach(job_id => window.dispatchEvent(new CustomEvent("lead-updated", { detail: { job_id, status: "applied" } })));
+    ids.forEach(job_id => emitAppEvent("lead-updated", { job_id, status: "applied" }));
     setSelected(new Set());
     setBulkSelecting(false);
-    window.dispatchEvent(new CustomEvent("leads-refresh"));
+    emitAppEvent("leads-refresh");
   };
 
   const exportCsv = async () => {

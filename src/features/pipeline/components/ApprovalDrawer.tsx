@@ -7,6 +7,7 @@ import type { ApiFetch, KeywordCoverage, Lead } from "../../../types";
 import { isAbortLikeError } from "../../../api/client";
 import { GENERATION_TIMEOUT_MS } from "../../../api/generation";
 import { cleanLeadText, getTone, leadDisplayHeading } from "../../../shared/lib/leadUtils";
+import { emitAppEvent } from "../../../shared/lib/appEvents";
 import { FormReader } from "../../apply/components/FormReader";
 
 export function ApprovalDrawer({ j: initialLead, api, onClose }: {
@@ -183,7 +184,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
        if (!r.ok) throw new Error(body.detail || `Le serveur a renvoyé ${r.status}`);
       if (body.lead) setGeneratedLead(body.lead as Lead);
       await refreshLead(controller.signal).catch(() => null);
-      window.dispatchEvent(new CustomEvent("leads-refresh"));
+      emitAppEvent("leads-refresh");
       await loadVersions();
       setPdfPreviewAttempt(n => n + 1);
     } catch (err) {
@@ -214,7 +215,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
         setPipelineRunning(false);
         setPipelineMsg(null);
         refreshLead().catch(() => null);
-        window.dispatchEvent(new CustomEvent("leads-refresh"));
+        emitAppEvent("leads-refresh");
       }, 3000);
     } catch (err) {
       if (controller.signal.aborted || isAbortLikeError(err)) {
@@ -263,8 +264,8 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
         const detail = await r.json().then(d => d.detail).catch(() => "");
         throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
       }
-      window.dispatchEvent(new CustomEvent("lead-updated", { detail: { job_id: j.job_id, status } }));
-      window.dispatchEvent(new CustomEvent("leads-refresh"));
+      emitAppEvent("lead-updated", { job_id: j.job_id, status });
+      emitAppEvent("leads-refresh");
     } catch (err) {
       setStatusErr(err instanceof Error ? err.message : "Le statut n'a pas pu être mis à jour");
     } finally {

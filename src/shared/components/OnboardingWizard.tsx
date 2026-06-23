@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import Icon from "./Icon";
 import type { ApiFetch } from "../../types";
+import { emitAppEvent } from "../lib/appEvents";
 
 export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFetch; onFinish: (draft: string) => void; onOpenSettings: () => void }) {
   const [step, setStep] = useState(0);
@@ -116,8 +117,8 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
         const detail = await r.json().then(d => d.detail).catch(() => "");
         throw new Error(detail || `L'import du CV a renvoyé ${r.status}`);
       }
-      window.dispatchEvent(new CustomEvent("profile-refresh"));
-      window.dispatchEvent(new CustomEvent("graph-refresh"));
+      emitAppEvent("profile-refresh");
+      emitAppEvent("graph-refresh");
       setStep(1);
     } catch (e) {
       const message = e instanceof Error ? e.message : "L'import du CV a échoué";

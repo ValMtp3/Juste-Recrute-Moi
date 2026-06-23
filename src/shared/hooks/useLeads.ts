@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isAbortLikeError } from "../../api/client";
+import { parseLead, parseLeadsResponse } from "../../api/validation";
 import type { ApiFetch, Lead, LogLine } from "../../types";
+import { onAppEvent } from "../lib/appEvents";
 
 export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogLine["kind"], src?: string) => void) {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -49,8 +51,7 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
           trailingReload = window.setTimeout(() => load(true), 500);
           return;
         }
-        const items = Array.isArray(data) ? data : data.items;
-        const jobLeads = (items as Lead[]).filter(l => (l.kind || "job") !== "freelance");
+        const jobLeads = parseLeadsResponse(data).filter(l => (l.kind || "job") !== "freelance");
         setLeads(jobLeads);
         jobLeads.forEach(lead => knownLeadIds.current.add(lead.job_id));
         if (!background) initialLoadDone.current = true;
@@ -72,8 +73,10 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
     }, 900);
 
     // Keep leads fresh when backend broadcasts LEAD_UPDATED over WS
-    const onLeadUpdated = (e: Event) => {
-      const updated = (e as CustomEvent<Lead>).detail;
+    const offLeadUpdated = onAppEvent("lead-updated", detail => {
+      const updated = parseLead(detail);
+      if (!updated) return;
+      const hasRenderableTitle = typeof detail.title === "string" && detail.title.trim().length > 0;
       snapshotSeq++;
       setLoaded(true);
       setLoading(false);
@@ -82,7 +85,7 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
         if (idx === -1) {
           // Some producers dispatch partial payloads ({job_id, status});
           // inserting one as a full lead renders an "Untitled role" ghost row.
-          if (!updated.title) return prev;
+          if (!hasRenderableTitle) return prev;
           const isNew = !knownLeadIds.current.has(updated.job_id);
           knownLeadIds.current.add(updated.job_id);
           if (initialLoadDone.current && isNew) notifyStrongLead(updated);
@@ -92,10 +95,9 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
         next[idx] = { ...next[idx], ...updated };
         return next;
       });
-    };
-    window.addEventListener("lead-updated", onLeadUpdated);
+    });
     const onRefresh = () => load(true);
-    window.addEventListener("leads-refresh", onRefresh);
+    const offLeadsRefresh = onAppEvent("leads-refresh", onRefresh);
 
     api(`/api/v1/events?limit=200`, { signal: controller.signal })
       .then(r => r.json())
@@ -112,8 +114,8 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
       controller.abort();
       window.clearTimeout(retryTimer);
       if (trailingReload !== null) window.clearTimeout(trailingReload);
-      window.removeEventListener("lead-updated", onLeadUpdated);
-      window.removeEventListener("leads-refresh", onRefresh);
+      offLeadUpdated();
+      offLeadsRefresh();
     };
   }, [api]);
   return { leads, setLeads, loading: loading && !loaded, error };

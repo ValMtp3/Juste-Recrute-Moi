@@ -11,6 +11,7 @@ import { useLeads } from "./shared/hooks/useLeads";
 import { useDueFollowups } from "./shared/hooks/useDueFollowups";
 import { useGraphStats } from "./shared/hooks/useGraphStats";
 import { useKeyboardShortcuts } from "./shared/hooks/useKeyboardShortcuts";
+import { useSubsystemHealth, type SubsystemHealth } from "./shared/hooks/useSubsystemHealth";
 import { Sidebar } from "./shared/components/Sidebar";
 import { Topbar } from "./shared/components/Topbar";
 import ErrorBoundary from "./shared/components/ErrorBoundary";
@@ -27,6 +28,7 @@ import { HelpChat } from "./shared/components/HelpChat";
 import { UpdatePrompt } from "./shared/components/UpdatePrompt";
 import { SemanticRuntimePrompt } from "./shared/components/SemanticRuntimePrompt";
 import { CreatorFooter } from "./shared/components/CreatorFooter";
+import { emitAppEvent, onAppEvent } from "./shared/lib/appEvents";
 
 const PIPELINE_VIEW_TO_TAB: Partial<Record<View, PipelineTab>> = {
   pipeline: "all",
@@ -37,8 +39,6 @@ const PIPELINE_VIEW_TO_TAB: Partial<Record<View, PipelineTab>> = {
   "pipeline-applied": "applied",
   "pipeline-discarded": "discarded",
 };
-
-type SubsystemHealth = Record<string, { status: string; error?: string; reason?: string; [key: string]: unknown }>;
 
 const connLabel = (conn: string) => ({
   connected: "connecté",
@@ -73,7 +73,7 @@ export default function App() {
   const liveSel = sel ? (leads.find(l => l.job_id === sel.job_id) ?? sel) : null;
   const [startupSeconds, setStartupSeconds] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("jhm-sidebar-collapsed") === "1");
-  const [subsystems, setSubsystems] = useState<SubsystemHealth | null>(null);
+  const subsystems = useSubsystemHealth(api);
 
   useEffect(() => {
     localStorage.setItem("jhm-sidebar-collapsed", sidebarCollapsed ? "1" : "0");
@@ -81,18 +81,15 @@ export default function App() {
 
   useEffect(() => {
     const h = () => setScanning(false);
-    window.addEventListener("scan-done", h);
-    return () => window.removeEventListener("scan-done", h);
+    return onAppEvent("scan-done", h);
   }, []);
 
   useEffect(() => {
-    const h = (event: Event) => {
-      const detail = (event as CustomEvent<{ scanning?: boolean; reevaluating?: boolean }>).detail || {};
-      setScanning(Boolean(detail.scanning));
-      setReevaluating(Boolean(detail.reevaluating));
+    const h = (detail: { scanning?: boolean; reevaluating?: boolean } | undefined) => {
+      setScanning(Boolean(detail?.scanning));
+      setReevaluating(Boolean(detail?.reevaluating));
     };
-    window.addEventListener("backend-status", h);
-    return () => window.removeEventListener("backend-status", h);
+    return onAppEvent("backend-status", h);
   }, []);
 
   useEffect(() => {
@@ -115,32 +112,6 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [api]);
 
-  useEffect(() => {
-    if (!api) {
-      setSubsystems(null);
-      return;
-    }
-    let stopped = false;
-    const load = async () => {
-      try {
-        const response = await api("/api/v1/health/subsystems", { timeoutMs: 10000 });
-        if (!response.ok) return;
-        const payload = await response.json();
-        if (!stopped) setSubsystems(payload);
-      } catch {
-        if (!stopped) setSubsystems(null);
-      }
-    };
-    load();
-    const timer = window.setInterval(load, 30000);
-    window.addEventListener("subsystems-refresh", load);
-    return () => {
-      stopped = true;
-      window.removeEventListener("subsystems-refresh", load);
-      window.clearInterval(timer);
-    };
-  }, [api]);
-
   useKeyboardShortcuts({
     onEscape: closeDrawer,
     onCmdK: focusApplyView,
@@ -155,14 +126,12 @@ export default function App() {
 
   useEffect(() => {
     const h = () => setReevaluating(false);
-    window.addEventListener("reevaluate-done", h);
-    return () => window.removeEventListener("reevaluate-done", h);
+    return onAppEvent("reevaluate-done", h);
   }, []);
 
   useEffect(() => {
     const h = () => setCleaning(false);
-    window.addEventListener("cleanup-done", h);
-    return () => window.removeEventListener("cleanup-done", h);
+    return onAppEvent("cleanup-done", h);
   }, []);
 
   const onScan = useCallback(async () => {
@@ -238,7 +207,7 @@ export default function App() {
       }
       const result = await r.json();
       wsAddLog(`Nettoyage : ${result.candidates ?? 0} lignes masquées après analyse de ${result.scanned ?? 0}`, "system", "cleanup");
-      window.dispatchEvent(new CustomEvent("leads-refresh"));
+      emitAppEvent("leads-refresh");
     } catch (e: any) {
       const msg = e.message || "Le nettoyage a échoué";
       setScanErr(msg);

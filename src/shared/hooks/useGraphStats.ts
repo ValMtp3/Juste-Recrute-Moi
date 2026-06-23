@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { isAbortLikeError } from "../../api/client";
 import type { ApiFetch, GraphStats } from "../../types";
+import { onAppEvent } from "../lib/appEvents";
 
 export function useGraphStats(api: ApiFetch | null) {
   const [stats, setStats] = useState<GraphStats>({ candidate: 0, skill: 0, project: 0, experience: 0, joblead: 0, loaded: false, loading: false });
@@ -37,24 +38,20 @@ export function useGraphStats(api: ApiFetch | null) {
       debounceTimer = setTimeout(() => { debounceTimer = null; load(false); }, 800);
     };
     load();
-    window.addEventListener("lead-updated", refresh);
-    window.addEventListener("leads-refresh", refresh);
-    window.addEventListener("graph-refresh", refresh);
-    window.addEventListener("profile-refresh", refresh);
-    window.addEventListener("scan-done", refresh);
-    window.addEventListener("reevaluate-done", refresh);
-    window.addEventListener("cleanup-done", refresh);
+    const offEvents = [
+      onAppEvent("lead-updated", refresh),
+      onAppEvent("leads-refresh", refresh),
+      onAppEvent("graph-refresh", refresh),
+      onAppEvent("profile-refresh", refresh),
+      onAppEvent("scan-done", refresh),
+      onAppEvent("reevaluate-done", refresh),
+      onAppEvent("cleanup-done", refresh),
+    ];
     return () => {
       alive = false;
       if (debounceTimer !== null) clearTimeout(debounceTimer);
       controller.abort();
-      window.removeEventListener("lead-updated", refresh);
-      window.removeEventListener("leads-refresh", refresh);
-      window.removeEventListener("graph-refresh", refresh);
-      window.removeEventListener("profile-refresh", refresh);
-      window.removeEventListener("scan-done", refresh);
-      window.removeEventListener("reevaluate-done", refresh);
-      window.removeEventListener("cleanup-done", refresh);
+      offEvents.forEach(off => off());
     };
   }, [api]);
   return stats;

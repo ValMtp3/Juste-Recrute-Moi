@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "../../shared/components/Icon";
 import type { ApiFetch, ContactLookup, KeywordCoverage, Lead } from "../../types";
 import { roleFromLead } from "../../shared/lib/leadUtils";
+import { emitAppEvent, onAppEvent } from "../../shared/lib/appEvents";
 
 const CUSTOMIZE_START_TIMEOUT_MS = 10000;
 const CUSTOMIZE_WATCHDOG_MS = 12000;
@@ -69,14 +70,11 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
 
   useEffect(() => {
     if (!lead?.job_id) return;
-    const onLeadUpdated = (event: Event) => {
-      const updated = (event as CustomEvent<Lead>).detail;
+    return onAppEvent("lead-updated", updated => {
       // Merge: some producers dispatch partial payloads ({job_id, status});
       // replacing wholesale would wipe title/assets from the panel.
-      if (updated?.job_id === lead.job_id) setLead(prev => (prev ? { ...prev, ...updated } : updated));
-    };
-    window.addEventListener("lead-updated", onLeadUpdated);
-    return () => window.removeEventListener("lead-updated", onLeadUpdated);
+      if (updated?.job_id === lead.job_id) setLead(prev => (prev ? { ...prev, ...updated } : prev));
+    });
   }, [lead?.job_id]);
 
   useEffect(() => {
@@ -195,7 +193,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
       if (submitRunRef.current !== runId) return;
       setLead(started.lead || null);
       setBusy(false);
-      window.dispatchEvent(new CustomEvent("leads-refresh"));
+      emitAppEvent("leads-refresh");
     } catch (e) {
       if (mountedRef.current) {
         const message = e instanceof Error ? e.message : "La génération du dossier a échoué";

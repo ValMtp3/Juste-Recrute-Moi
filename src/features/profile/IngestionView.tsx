@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Icon from "../../shared/components/Icon";
 import type { ApiFetch } from "../../types";
+import { emitAppEvent } from "../../shared/lib/appEvents";
 
 async function responseErrorMessage(response: Response, fallback: string) {
       // M3 : afficher le délai Retry-After au lieu d'une erreur 429 générique.
@@ -113,8 +114,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         if (type === "education") setEduForm({ title: "" });
         if (type === "certification") setCertForm({ title: "" });
         if (type === "achievement") setAchievementForm({ title: "" });
-        window.dispatchEvent(new CustomEvent("profile-refresh"));
-        window.dispatchEvent(new CustomEvent("graph-refresh"));
+        emitAppEvent("profile-refresh");
+        emitAppEvent("graph-refresh");
       } else {
         setErrorMessage(await responseErrorMessage(r, "Le contexte du profil n'a pas pu être enregistré."));
         setStatus("error");
@@ -134,8 +135,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       const r = await api(`/api/v1/ingest`, { method: "POST", body: fd, timeoutMs: 0 });
       if (r.ok) {
         await r.json().catch(() => ({}));
-        window.dispatchEvent(new CustomEvent("profile-refresh"));
-        window.dispatchEvent(new CustomEvent("graph-refresh"));
+        emitAppEvent("profile-refresh");
+        emitAppEvent("graph-refresh");
         setStatus("done");
       } else {
         setErrorMessage(await responseErrorMessage(r, "Ce CV n'a pas pu être importé."));
@@ -168,8 +169,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
             certifications: data?.certifications?.length ?? 0,
           },
         } : data);
-        window.dispatchEvent(new CustomEvent("profile-refresh"));
-        window.dispatchEvent(new CustomEvent("graph-refresh"));
+        emitAppEvent("profile-refresh");
+        emitAppEvent("graph-refresh");
         setStatus("idle");
       } else {
         const data = await r.json().catch(() => ({}));
@@ -195,8 +196,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       if (r.ok) {
         const data = await r.json();
         setGithubResult(data);
-        window.dispatchEvent(new CustomEvent("profile-refresh"));
-        window.dispatchEvent(new CustomEvent("graph-refresh"));
+        emitAppEvent("profile-refresh");
+        emitAppEvent("graph-refresh");
         setStatus("idle");
       } else {
         const data = await r.json().catch(() => ({}));
@@ -261,8 +262,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         return;
       }
       setPortfolioResult({ ...portfolioResult, imported: data });
-      window.dispatchEvent(new CustomEvent("profile-refresh"));
-      window.dispatchEvent(new CustomEvent("graph-refresh"));
+      emitAppEvent("profile-refresh");
+      emitAppEvent("graph-refresh");
       setStatus("idle");
     } catch (err: any) {
       setPortfolioResult({ ...portfolioResult, importError: err?.message || "Le portfolio n'a pas pu être importé." });
@@ -308,8 +309,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       const data = await r.json().catch(() => ({}));
       if (r.ok) {
         setJsonResult(data);
-        window.dispatchEvent(new CustomEvent("profile-refresh"));
-        window.dispatchEvent(new CustomEvent("graph-refresh"));
+        emitAppEvent("profile-refresh");
+        emitAppEvent("graph-refresh");
         setStatus("idle");
       } else {
         setJsonError(data?.detail ? JSON.stringify(data.detail) : `Import échoué (${r.status})`);
@@ -329,8 +330,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
     try {
       const r = await api(`/api/v1/ingest`, { method: "POST", body: fd, timeoutMs: 0 });
       if (r.ok) {
-        window.dispatchEvent(new CustomEvent("profile-refresh"));
-        window.dispatchEvent(new CustomEvent("graph-refresh"));
+        emitAppEvent("profile-refresh");
+        emitAppEvent("graph-refresh");
         setStatus("done");
         setRawText("");
       } else {

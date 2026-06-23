@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { relaunch } from "@tauri-apps/plugin-process";
 import type { ApiFetch } from "../../types";
+import { emitAppEvent } from "../lib/appEvents";
 
 type RuntimeProgress = {
   status?: string;
@@ -117,8 +118,8 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
     updateState("ready");
     if (readyDispatchedRef.current) return;
     readyDispatchedRef.current = true;
-    window.dispatchEvent(new CustomEvent("subsystems-refresh"));
-    window.dispatchEvent(new CustomEvent("graph-refresh"));
+      emitAppEvent("subsystems-refresh");
+      emitAppEvent("graph-refresh");
   }, [updateState]);
 
   const applyPayload = useCallback((next: RuntimePayload) => {

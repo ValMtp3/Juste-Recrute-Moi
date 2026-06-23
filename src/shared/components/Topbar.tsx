@@ -1,6 +1,7 @@
 import Icon from "./Icon";
 import type { OperationProgress, View } from "../../types";
 import { useAppVersion } from "../hooks/useAppVersion";
+import { emitAppEvent } from "../lib/appEvents";
 import { useTheme } from "../lib/theme";
 
 export function Topbar({ view, progress }: { view: View; progress?: OperationProgress }) {
@@ -43,7 +44,7 @@ export function Topbar({ view, progress }: { view: View; progress?: OperationPro
         <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>{subtitles[view]}</div>
       </div>
       {view === "profile" && (
-        <button className="btn" onClick={() => window.dispatchEvent(new CustomEvent("profile-export"))}>
+        <button className="btn" onClick={() => emitAppEvent("profile-export")}>
           <Icon name="download" size={13} /> Exporter le graphe
         </button>
       )}

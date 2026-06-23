@@ -4,6 +4,7 @@ import Icon from "../../../shared/components/Icon";
 import type { ApiFetch, Lead } from "../../../types";
 import { GENERATION_TIMEOUT_MS } from "../../../api/generation";
 import { getMark, getTone, leadDisplayHeading, leadSeniority, seniorityLabel, seniorityTone } from "../../../shared/lib/leadUtils";
+import { emitAppEvent } from "../../../shared/lib/appEvents";
 
 const sourceReliability = (lead: Lead) => {
   const raw = String(lead.source_meta?.source_reliability || "").toLowerCase();
@@ -44,8 +45,8 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
       const response = await api(`/api/v1/leads/${lead.job_id}/generate`, { method: "POST", signal: controller.signal, timeoutMs: GENERATION_TIMEOUT_MS });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail || `Génération échouée (${response.status})`);
-      if (body.lead) window.dispatchEvent(new CustomEvent("lead-updated", { detail: body.lead }));
-      window.dispatchEvent(new CustomEvent("leads-refresh"));
+      if (body.lead) emitAppEvent("lead-updated", body.lead);
+      emitAppEvent("leads-refresh");
     } catch (error) {
       console.error("La génération du dossier a échoué", error);
     } finally {
@@ -219,8 +220,8 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
       const response = await api(`/api/v1/leads/${lead.job_id}/generate`, { method: "POST", signal: controller.signal, timeoutMs: GENERATION_TIMEOUT_MS });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.detail || `Génération échouée (${response.status})`);
-      if (body.lead) window.dispatchEvent(new CustomEvent("lead-updated", { detail: body.lead }));
-      window.dispatchEvent(new CustomEvent("leads-refresh"));
+      if (body.lead) emitAppEvent("lead-updated", body.lead);
+      emitAppEvent("leads-refresh");
     } catch (error) {
       console.error("La génération du dossier a échoué", error);
     } finally {

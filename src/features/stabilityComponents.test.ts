@@ -11,6 +11,7 @@ const approvalDrawer = readFileSync(new URL("./pipeline/components/ApprovalDrawe
 const semanticRuntimePrompt = readFileSync(new URL("../shared/components/SemanticRuntimePrompt.tsx", import.meta.url), "utf8");
 const updatePrompt = readFileSync(new URL("../shared/components/UpdatePrompt.tsx", import.meta.url), "utf8");
 const settingsModal = readFileSync(new URL("./settings/SettingsModal.tsx", import.meta.url), "utf8");
+const subsystemHealth = readFileSync(new URL("../shared/hooks/useSubsystemHealth.ts", import.meta.url), "utf8");
 const stylesheet = readFileSync(new URL("../index.css", import.meta.url), "utf8");
 
 describe("FIX.md frontend stability contracts", () => {
@@ -18,7 +19,8 @@ describe("FIX.md frontend stability contracts", () => {
     expect(app).toContain("ErrorBoundary");
     expect(app).toContain("SubsystemBanner");
     expect(app).toContain("SemanticRuntimePrompt");
-    expect(app).toContain("/api/v1/health/subsystems");
+    expect(app).toContain("useSubsystemHealth");
+    expect(subsystemHealth).toContain("/api/v1/health/subsystems");
   });
 
   it("keeps dashboard primary operations wired", () => {

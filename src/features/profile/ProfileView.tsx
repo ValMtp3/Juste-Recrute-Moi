@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import Icon from "../../shared/components/Icon";
 import type { ApiFetch, GraphStats, View } from "../../types";
 import { applyProfileDeleteMarkers, entryTitle, mergeProfileWithGraphFallback, normalizeProfileResponse, profileDeleteKey, profileDeletePath, profileHasDeleteMarker, removeProfileItem, type ProfileDeleteMarker } from "./profileUtils";
+import { emitAppEvent, onAppEvent } from "../../shared/lib/appEvents";
 
 const stackItems = (stack: any): string[] =>
   (Array.isArray(stack) ? stack : String(stack || "").split(","))
@@ -78,8 +79,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
   }, [applyLocalDeletes, stats]);
   useEffect(() => {
     const onProfileRefresh = () => { void fetchProfile(); };
-    window.addEventListener("profile-refresh", onProfileRefresh);
-    return () => window.removeEventListener("profile-refresh", onProfileRefresh);
+    return onAppEvent("profile-refresh", onProfileRefresh);
   }, [fetchProfile]);
   useEffect(() => { setExpandedProfileList(false); }, [activeProfileTab]);
   useEffect(() => {
@@ -132,7 +132,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       } else {
         setProfileErr(null);
       }
-      window.dispatchEvent(new CustomEvent("graph-refresh"));
+      emitAppEvent("graph-refresh");
     } catch (err: any) {
       console.error("Delete error:", err);
       removeDeleteMarker(marker);
@@ -158,8 +158,8 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       setEditData(null);
       setProfileErr(null);
       await fetchProfile();
-      window.dispatchEvent(new CustomEvent("profile-refresh"));
-      window.dispatchEvent(new CustomEvent("graph-refresh"));
+      emitAppEvent("profile-refresh");
+      emitAppEvent("graph-refresh");
     } catch (err: any) {
       setProfileErr(err?.message || "L'enregistrement du profil a échoué");
     }
@@ -176,8 +176,8 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       setEditingCandidate(false);
       setProfileErr(null);
       await fetchProfile({ errorPrefix: "Contexte d'identité enregistré, mais le rafraîchissement a échoué" });
-      window.dispatchEvent(new CustomEvent("profile-refresh"));
-      window.dispatchEvent(new CustomEvent("graph-refresh"));
+      emitAppEvent("profile-refresh");
+      emitAppEvent("graph-refresh");
     } catch (err: any) {
       setProfileErr(err?.message || "L'enregistrement du contexte d'identité a échoué");
     }
@@ -194,8 +194,8 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       setEditingIdentity(false);
       setProfileErr(null);
       await fetchProfile({ errorPrefix: "Coordonnées enregistrées, mais le rafraîchissement a échoué" });
-      window.dispatchEvent(new CustomEvent("profile-refresh"));
-      window.dispatchEvent(new CustomEvent("graph-refresh"));
+      emitAppEvent("profile-refresh");
+      emitAppEvent("graph-refresh");
     } catch (err: any) {
       setProfileErr(err?.message || "L'enregistrement du contact a échoué");
     }

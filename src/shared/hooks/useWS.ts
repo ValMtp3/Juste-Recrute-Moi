@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import type { ConnSt, Lead, LogLine, OperationProgress } from "../../types";
 import type { WSMessage } from "../../api/types";
+import { emitAppEvent } from "../lib/appEvents";
 
 const READY_RETRY_MS = 180;
 const READY_ATTEMPTS = 60;
@@ -133,7 +134,7 @@ export function useWS() {
         .then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
         .then(status => {
           if (!status?.scanning && !status?.reevaluating) setProgress(emptyProgress());
-          window.dispatchEvent(new CustomEvent("backend-status", { detail: status }));
+          emitAppEvent("backend-status", status);
         })
         .catch(error => {
           const msg = error instanceof Error ? error.message : String(error);
@@ -163,26 +164,26 @@ export function useWS() {
           }
           if (d.event === "eval_done") {
             setProgress(prev => nextProgressFromAgentEvent(prev, d.event, d.msg));
-            window.dispatchEvent(new CustomEvent("scan-done"));
+            emitAppEvent("scan-done");
           }
           if (d.event === "reeval_start" || d.event === "reeval_scored") {
             setProgress(prev => nextProgressFromAgentEvent(prev, d.event, d.msg));
           }
           if (d.event === "reeval_done") {
             setProgress(prev => nextProgressFromAgentEvent(prev, d.event, d.msg));
-            window.dispatchEvent(new CustomEvent("reevaluate-done"));
-            window.dispatchEvent(new CustomEvent("leads-refresh"));
+            emitAppEvent("reevaluate-done");
+            emitAppEvent("leads-refresh");
           }
           if (d.event === "cleanup_done") {
             setProgress(prev => nextProgressFromAgentEvent(prev, d.event, d.msg));
-            window.dispatchEvent(new CustomEvent("cleanup-done"));
-            window.dispatchEvent(new CustomEvent("leads-refresh"));
+            emitAppEvent("cleanup-done");
+            emitAppEvent("leads-refresh");
           }
-          if (d.event === "auto_discard_done") window.dispatchEvent(new CustomEvent("leads-refresh"));
+          if (d.event === "auto_discard_done") emitAppEvent("leads-refresh");
         } else if (d.type === "LEAD_UPDATED" && d.data) {
-          window.dispatchEvent(new CustomEvent("lead-updated", { detail: d.data }));
+          emitAppEvent("lead-updated", d.data as Lead);
         } else if (d.type === "HOT_X_LEAD" && d.data) {
-          window.dispatchEvent(new CustomEvent("hot-x-lead", { detail: d.data }));
+          emitAppEvent("hot-x-lead", d.data);
           if ("Notification" in window && Notification.permission === "granted") {
             const lead = d.data as Lead;
             new Notification("Offre prioritaire", { body: `${lead.company}: ${lead.title}` });
@@ -315,7 +316,7 @@ export function useWS() {
           setApiToken(null);
           setConn("disconnected");
           setProgress(emptyProgress());
-          window.dispatchEvent(new CustomEvent("backend-status", { detail: { scanning: false, reevaluating: false } }));
+          emitAppEvent("backend-status", { scanning: false, reevaluating: false });
           addLog("Sidecar backend arrêté", "system", "sidecar");
         });
         const prevUnlisten = unlisten;
