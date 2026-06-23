@@ -70,6 +70,7 @@ src-tauri/resources/backend/
 src-tauri/resources/backend-*/
 src-tauri/resources/backend-*
 src-tauri/resources/sidecar-internal/
+src-tauri/resources/runtime-pack/
 
 # Local data / DBs
 *.db

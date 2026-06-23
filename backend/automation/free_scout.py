@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from core.config import france_travail_target_from_plain
 from discovery.lead_intel import canonical_lead_id
 from discovery.normalizer import (
     budget_from_text,
@@ -96,6 +97,9 @@ def split_lines(raw: str | None) -> list[str]:
 
 def targets_from_settings(raw_targets: str | None, raw_watchlist: str | None) -> list[str]:
     targets = split_lines(raw_targets)
+    plain_france_target = france_travail_target_from_plain(targets)
+    if plain_france_target:
+        targets = [plain_france_target]
     targets.extend(_ats_targets_from_watchlist(raw_watchlist))
     return targets or list(DEFAULT_TARGETS)
 

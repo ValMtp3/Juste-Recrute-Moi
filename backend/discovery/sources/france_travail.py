@@ -50,7 +50,11 @@ async def _access_token() -> str:
     }
     async with guarded_async_client(timeout=20, follow_redirects=True) as cx:
         response = await cx.post(TOKEN_URL, data=data, headers={"Accept": "application/json"})
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            detail = _oauth_error_detail(response)
+            raise RuntimeError(f"France Travail OAuth failed: {detail}") from exc
         payload = response.json()
     token = str(payload.get("access_token") or "").strip()
     if not token:
@@ -58,6 +62,23 @@ async def _access_token() -> str:
     _TOKEN_CACHE["value"] = token
     _TOKEN_CACHE["expires_at"] = now + int(payload.get("expires_in") or 1500)
     return token
+
+
+def _oauth_error_detail(response: httpx.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    error = str(payload.get("error") or "").strip()
+    description = str(payload.get("error_description") or "").strip()
+    if error == "invalid_client":
+        return (
+            "invalid_client - vérifiez FRANCE_TRAVAIL_CLIENT_ID / "
+            "FRANCE_TRAVAIL_CLIENT_SECRET et l'activation de l'API Offres d'emploi"
+        )
+    if error or description:
+        return " - ".join(part for part in [error, description] if part)
+    return f"HTTP {response.status_code}"
 
 
 def _parse_target(target: str) -> dict[str, str]:

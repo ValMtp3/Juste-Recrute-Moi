@@ -56,6 +56,38 @@ FRANCE_JOB_TARGETS = [
     "site:apply.workable.com France",
 ]
 
+CONFIGURED_TARGET_PREFIXES = (
+    "http://",
+    "https://",
+    "site:",
+    "ats:",
+    "france_travail:",
+    "jobspy:",
+    "import:",
+    "github:",
+    "hn:",
+    "reddit:",
+)
+
+FRANCE_LOCATION_HINTS = {
+    "france",
+    "paris",
+    "lyon",
+    "marseille",
+    "lille",
+    "nantes",
+    "bordeaux",
+    "toulouse",
+    "rennes",
+    "strasbourg",
+    "montpellier",
+    "nice",
+    "grenoble",
+    "rouen",
+    "reims",
+    "dijon",
+}
+
 BLOCKED_JOB_TARGET_MARKERS = (
     "freelance",
     "upwork",
@@ -94,6 +126,35 @@ def dedupe_targets(targets: list[str]) -> list[str]:
     return out
 
 
+def _is_configured_target(value: str) -> bool:
+    lower = value.strip().lower()
+    return lower.startswith(CONFIGURED_TARGET_PREFIXES)
+
+
+def _clean_france_travail_value(value: str, fallback: str) -> str:
+    cleaned = re.sub(r"[;|=]+", " ", str(value or "")).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned or fallback
+
+
+def france_travail_target_from_plain(parts: list[str]) -> str | None:
+    """Convert simple France search text like "data, paris" into an API target."""
+    chunks: list[str] = []
+    for part in parts:
+        if _is_configured_target(part):
+            return None
+        chunks.extend(item.strip() for item in re.split(r"[,|;]", part) if item.strip())
+    if not chunks:
+        return None
+
+    location = "France"
+    if len(chunks) > 1 and chunks[-1].lower() in FRANCE_LOCATION_HINTS:
+        location = chunks.pop()
+    query = _clean_france_travail_value(" ".join(chunks), "developpeur")
+    location = _clean_france_travail_value(location, "France")
+    return f"france_travail:{query};lieu={location};range=0-49"
+
+
 def job_market_focus(value) -> str:
     focus = str(value or "global").strip().lower()
     if focus in {"india", "in", "indian", "indian_startups"}:
@@ -117,6 +178,11 @@ def job_targets(raw: str, market_focus: str = "global") -> list[str]:
         if focus == "france":
             return list(FRANCE_JOB_TARGETS)
         return list(DEFAULT_JOB_TARGETS)
+
+    if focus == "france":
+        plain_france_target = france_travail_target_from_plain(targets)
+        if plain_france_target:
+            targets = [plain_france_target]
 
     filtered: list[str] = []
     for target in targets:

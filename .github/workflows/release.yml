@@ -427,6 +427,12 @@ jobs:
           name: release-assets-runtime-windows
           path: runtime-assets/
 
+      - name: Embarquer le pack runtime Windows
+        shell: pwsh
+        run: |
+          $env:JHM_RUNTIME_PACK_SOURCE_DIR = "runtime-assets"
+          npm run stage:runtime-pack
+
       - name: Run Rust unit tests
         run: cd src-tauri && cargo test --lib
 
@@ -467,7 +473,7 @@ jobs:
       - name: Smoke installed Windows package
         shell: pwsh
         env:
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste Recrute Moi-runtime-pack-windows.zip
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste-Recrute-Moi-runtime-pack-windows.zip
         run: |
           $ErrorActionPreference = "Stop"
           $installer = Get-ChildItem -Path "src-tauri\target\release\bundle\nsis" -Filter "*.exe" -File -Recurse |
@@ -484,7 +490,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste Recrute Moi-runtime-pack-windows.zip
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste-Recrute-Moi-runtime-pack-windows.zip
         run: |
           $ErrorActionPreference = "Stop"
           $currentTag = "${{ github.ref_name }}"
@@ -530,7 +536,7 @@ jobs:
         shell: pwsh
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste Recrute Moi-runtime-pack-windows.zip
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste-Recrute-Moi-runtime-pack-windows.zip
         run: |
           $ErrorActionPreference = "Stop"
           $triple = (rustc -vV | Select-String "host:").ToString().Split(" ")[1].Trim()
@@ -610,6 +616,12 @@ jobs:
         with:
           name: release-assets-runtime-macos
           path: runtime-assets/
+
+      - name: Embarquer le pack runtime macOS
+        shell: bash
+        run: |
+          set -euo pipefail
+          JHM_RUNTIME_PACK_SOURCE_DIR=runtime-assets npm run stage:runtime-pack
 
       - name: Préparer le sidecar pour les tests Rust
         shell: bash
@@ -694,7 +706,7 @@ jobs:
         shell: bash
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets/Juste Recrute Moi-runtime-pack-macos.zip
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets/Juste-Recrute-Moi-runtime-pack-macos.zip
         run: |
           set -euo pipefail
           app_path="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name "*.app" -type d -print -quit)"
@@ -811,6 +823,12 @@ jobs:
         with:
           name: release-assets-runtime-linux
           path: runtime-assets/
+
+      - name: Embarquer le pack runtime Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          JHM_RUNTIME_PACK_SOURCE_DIR=runtime-assets npm run stage:runtime-pack
 
       - name: Préparer le sidecar pour les tests Rust
         shell: bash

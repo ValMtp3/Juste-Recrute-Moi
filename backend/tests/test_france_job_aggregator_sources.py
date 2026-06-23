@@ -17,6 +17,12 @@ def test_france_market_targets_prioritize_stable_and_best_effort_sources():
     assert any("welcometothejungle" in target for target in targets)
 
 
+def test_france_market_plain_search_targets_use_france_travail():
+    assert job_targets("data, paris", "france") == [
+        "france_travail:data;lieu=paris;range=0-49"
+    ]
+
+
 def test_france_travail_mapper_returns_stable_lead():
     lead = france_travail.offer_to_lead(france_travail.offer_from_result({
         "id": "123ABC",

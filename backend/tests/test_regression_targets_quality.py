@@ -169,6 +169,14 @@ class RegressionTests(unittest.TestCase):
             "custom_connectors": '[{"name":"JobFeed","url":"https://jobs-api.your-domain.test/jobs"}]',
         }))
 
+    def test_plain_france_free_source_target_becomes_france_travail(self):
+        from automation.free_scout import targets_from_settings
+
+        self.assertEqual(
+            targets_from_settings("data, paris", ""),
+            ["france_travail:data;lieu=paris;range=0-49"],
+        )
+
 class TestScoringEngineCaps(unittest.TestCase):
     def _profile(self, work_months: int = 0, embedded: bool = False) -> dict:
         from ranking.scoring_engine import infer_experience_level
