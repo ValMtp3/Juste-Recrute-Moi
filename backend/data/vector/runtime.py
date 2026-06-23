@@ -305,22 +305,31 @@ def add_vector_runtime_to_path(path: Path | None = None) -> None:
             _add_dll_dir(candidate / "numpy.libs")
 
 
-def vector_runtime_ready(path: Path | None = None) -> bool:
+def _vector_runtime_import_error(path: Path | None = None) -> str:
     root = path or vector_runtime_dir()
     has_payload = _runtime_has_any_vector_payload(root)
     if has_payload and not vector_runtime_files_complete(root):
-        return False
+        return "vector runtime files are incomplete"
     if getattr(sys, "frozen", False) and not vector_runtime_files_complete(root):
-        return False
+        return "vector runtime files are incomplete"
     add_vector_runtime_to_path(root)
     try:
-        if not importlib.util.find_spec("lancedb") or not importlib.util.find_spec("pyarrow"):
-            return False
-        importlib.import_module("lancedb")
-        importlib.import_module("pyarrow")
-        return True
-    except (ImportError, ValueError, AttributeError):
-        return False
+        if not importlib.util.find_spec("lancedb"):
+            return "lancedb module was not found"
+        if not importlib.util.find_spec("pyarrow"):
+            return "pyarrow module was not found"
+        for module_name in ("pyarrow", "lancedb"):
+            try:
+                importlib.import_module(module_name)
+            except Exception as exc:
+                return f"{module_name}: {type(exc).__name__}: {exc}"
+        return ""
+    except (ImportError, ValueError, AttributeError) as exc:
+        return f"{type(exc).__name__}: {exc}"
+
+
+def vector_runtime_ready(path: Path | None = None) -> bool:
+    return not _vector_runtime_import_error(path)
 
 
 def browser_runtime_ready(path: Path | None = None) -> bool:
@@ -642,8 +651,12 @@ def install_vector_runtime() -> Path:
 
             _set_progress(status="verifying", message="Verifying Juste Recrute Moi runtime pack.", percent=99)
             add_vector_runtime_to_path(runtime_dir)
-            if not vector_runtime_ready(runtime_dir):
-                error = "Vector runtime installation finished, but LanceDB or PyArrow could not be imported."
+            vector_import_error = _vector_runtime_import_error(runtime_dir)
+            if vector_import_error:
+                error = (
+                    "Vector runtime installation finished, but LanceDB or PyArrow could not be imported. "
+                    f"Details: {vector_import_error}"
+                )
                 _set_progress(status="error", message=error, error=error)
                 raise RuntimeError(error)
             _write_version_stamp()

@@ -304,13 +304,14 @@ function requireHealth(health, options = {}) {
 
 async function ensureVectorRuntime(port, token) {
   const archive = localVectorRuntimeArchive();
+  const runtimeRequired = process.env.JHM_VECTOR_RUNTIME_REQUIRED === "1";
   const initial = await readApi(port, token, "/api/v1/runtime/vector");
   if (initial.ready) {
     return initial;
   }
   if (!existsSync(archive)) {
     const message = `Runtime pack archive not found at ${archive}; OTA install smoke skipped.`;
-    if (process.env.JHM_VECTOR_RUNTIME_REQUIRED === "1") fail(message);
+    if (runtimeRequired) fail(message);
     console.warn(message);
     return initial;
   }
@@ -323,11 +324,17 @@ async function ensureVectorRuntime(port, token) {
       return last;
     }
     if (last.progress?.status === "error") {
-      fail(`Runtime pack install failed: ${JSON.stringify(last)}`);
+      const message = `Runtime pack install failed: ${JSON.stringify(last)}`;
+      if (runtimeRequired) fail(message);
+      console.warn(message);
+      return last;
     }
     await sleep(500);
   }
-  fail(`Runtime pack install did not become ready: ${JSON.stringify(last)}`);
+  const message = `Runtime pack install did not become ready: ${JSON.stringify(last)}`;
+  if (runtimeRequired) fail(message);
+  console.warn(message);
+  return last;
 }
 
 const explicitSidecar = resolveExplicitSidecar();

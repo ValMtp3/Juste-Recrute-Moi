@@ -384,6 +384,7 @@ def test_vector_runtime_ready_requires_real_import(monkeypatch, tmp_path):
     monkeypatch.setattr(runtime.importlib, "import_module", import_module)
 
     assert runtime.vector_runtime_ready(tmp_path / "vector-runtime") is False
+    assert runtime._vector_runtime_import_error(tmp_path / "vector-runtime") == "lancedb: ImportError: native module load failed"
 
 
 def test_hash_embedding_fallback_reports_ok(monkeypatch):

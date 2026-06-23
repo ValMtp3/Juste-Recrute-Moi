@@ -276,8 +276,9 @@ jobs:
           cat src-tauri/resources/backend/sidecar-manifest.json
 
       - name: Smoke sidecar startup
-        env:
-          JHM_VECTOR_RUNTIME_REQUIRED: "1"
+        # The raw macOS sidecar is not codesigned with library-validation
+        # entitlements yet. The packaged macOS smoke below verifies the vector
+        # runtime strictly after codesign.
         run: npm run smoke:sidecar
 
       - name: Publier l'artefact sidecar backend

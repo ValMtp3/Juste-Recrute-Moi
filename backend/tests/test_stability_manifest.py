@@ -152,6 +152,8 @@ def test_release_installer_stays_slim_and_runtime_pack_is_ota_only():
     assert release.count("path: src-tauri/resources/backend/") == 3
     assert "PLAYWRIGHT_BROWSERS_PATH" not in release
     assert "playwright install chromium" not in release
+    assert "The raw macOS sidecar is not codesigned" in release
+    assert "Smoke packaged macOS sidecar" in release
 
 
 def test_release_includes_frozen_backend_and_windows_smoke():
