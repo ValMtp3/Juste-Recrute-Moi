@@ -88,6 +88,21 @@ def test_chromium_executable_finds_macos_chrome(monkeypatch, tmp_path):
     assert result == str(chrome)
 
 
+def test_ensure_browser_runtime_accepts_system_browser(monkeypatch, tmp_path):
+    from automation import browser_runtime
+
+    runtime = tmp_path / "ms-playwright"
+    calls = []
+
+    monkeypatch.setattr(browser_runtime, "browser_runtime_dir", lambda: runtime)
+    monkeypatch.setattr(browser_runtime, "browser_runtime_ready", lambda _path=None: False)
+    monkeypatch.setattr(browser_runtime, "system_browser_executable", lambda: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser")
+    monkeypatch.setattr(browser_runtime, "install_vector_runtime", lambda: calls.append("install"))
+
+    assert browser_runtime.ensure_browser_runtime() == runtime
+    assert calls == []
+
+
 def test_chromium_executable_returns_none_when_nothing_exists(monkeypatch):
     from automation import browser_runtime
 

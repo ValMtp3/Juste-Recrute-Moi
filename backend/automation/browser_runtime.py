@@ -4,7 +4,7 @@ import os
 import platform
 from pathlib import Path
 
-from data.vector.runtime import browser_runtime_dir, browser_runtime_ready, install_vector_runtime
+from data.vector.runtime import browser_runtime_dir, browser_runtime_ready, install_vector_runtime, system_browser_executable
 
 
 _RELEASE_DOWNLOAD_BASE = "https://github.com/ValMtp3/Juste-Recrute-Moi/releases/latest/download"
@@ -90,6 +90,7 @@ def chromium_executable() -> str | None:
     candidates = [
         os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE", ""),
         _runtime_chromium_executable() or "",
+        system_browser_executable() or "",
         *_system_browser_candidates(),
     ]
     for candidate in candidates:
@@ -100,20 +101,20 @@ def chromium_executable() -> str | None:
 
 def ensure_browser_runtime() -> Path:
     runtime_dir = browser_runtime_dir()
-    if browser_runtime_ready(runtime_dir):
+    if browser_runtime_ready(runtime_dir) or system_browser_executable():
         return runtime_dir
 
     install_vector_runtime()
 
-    if not browser_runtime_ready(runtime_dir):
-        raise RuntimeError("Required runtime pack installation finished, but Playwright Chromium was not found.")
+    if not (browser_runtime_ready(runtime_dir) or system_browser_executable()):
+        raise RuntimeError("Required runtime pack installation finished, but Playwright Chromium or a system Chrome/Edge/Brave browser was not found.")
     return runtime_dir
 
 
 async def launch_chromium(playwright, *, headless: bool = True, **kwargs):
     runtime_launch_error: Exception | None = None
     if "executable_path" not in kwargs:
-        executable = _runtime_chromium_executable()
+        executable = _runtime_chromium_executable() or system_browser_executable()
         if executable:
             try:
                 return await playwright.chromium.launch(

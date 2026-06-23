@@ -125,6 +125,53 @@ def browser_runtime_dir() -> Path:
     return _data_root() / "browser-runtime" / "ms-playwright"
 
 
+def _system_browser_candidates() -> list[str]:
+    system = sys_platform()
+    if system == "windows":
+        return [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+            r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe",
+        ]
+    if system == "darwin":
+        return [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+            os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+            os.path.expanduser("~/Applications/Chromium.app/Contents/MacOS/Chromium"),
+            os.path.expanduser("~/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"),
+        ]
+    return [
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/microsoft-edge",
+        "/usr/bin/microsoft-edge-stable",
+        "/usr/bin/brave-browser",
+        "/usr/bin/brave-browser-stable",
+        "/snap/bin/chromium",
+        "/usr/local/bin/chromium",
+    ]
+
+
+def system_browser_executable() -> str | None:
+    configured = os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE", "")
+    for candidate in [configured, *_system_browser_candidates()]:
+        if candidate and Path(candidate).exists():
+            return candidate
+    return None
+
+
+def system_browser_ready() -> bool:
+    return bool(system_browser_executable())
+
+
 def runtime_pack_asset_name() -> str:
     system = sys_platform()
     if system == "windows":
@@ -279,9 +326,7 @@ def browser_runtime_ready(path: Path | None = None) -> bool:
 
 
 def runtime_pack_ready() -> bool:
-    vector_ready = vector_runtime_ready(vector_runtime_dir())
-    browser_ready = browser_runtime_ready(browser_runtime_dir())
-    return vector_ready and (browser_ready or _legacy_vector_runtime_override())
+    return vector_runtime_ready(vector_runtime_dir())
 
 
 def _archive_payload_dir(extract_dir: Path) -> Path | None:
@@ -470,8 +515,8 @@ def install_vector_runtime() -> Path:
         stale = _runtime_pack_is_stale()
         vector_ready_before = vector_runtime_ready(runtime_dir) and not stale
         vector_files_complete_before = vector_runtime_files_complete(runtime_dir) and not stale
-        browser_ready_before = browser_runtime_ready(browser_dir) and not stale
-        if vector_ready_before and vector_files_complete_before and (browser_ready_before or _legacy_vector_runtime_override()):
+        browser_ready_before = (browser_runtime_ready(browser_dir) or system_browser_ready()) and not stale
+        if vector_ready_before and vector_files_complete_before:
             _set_progress(
                 status="installed",
                 message="Required runtime pack is installed.",
@@ -535,11 +580,6 @@ def install_vector_runtime() -> Path:
                     error = "Downloaded runtime pack did not contain LanceDB and PyArrow."
                     _set_progress(status="error", message=error, error=error)
                     raise RuntimeError(error)
-                if browser_payload is None and not _legacy_vector_runtime_override() and not browser_runtime_ready(browser_dir):
-                    error = "Downloaded runtime pack did not contain Playwright Chromium."
-                    _set_progress(status="error", message=error, error=error)
-                    raise RuntimeError(error)
-
                 if vector_ready_before and vector_files_complete_before:
                     _set_progress(
                         status="copying",
@@ -601,10 +641,6 @@ def install_vector_runtime() -> Path:
                 error = "Vector runtime installation finished, but LanceDB or PyArrow could not be imported."
                 _set_progress(status="error", message=error, error=error)
                 raise RuntimeError(error)
-            if not _legacy_vector_runtime_override() and not browser_runtime_ready(browser_dir):
-                error = "Runtime pack installation finished, but Playwright Chromium was not found."
-                _set_progress(status="error", message=error, error=error)
-                raise RuntimeError(error)
             _write_version_stamp()
             _set_progress(
                 status="installed",
@@ -628,8 +664,8 @@ def vector_runtime_status() -> dict:
     browser_dir = browser_runtime_dir()
     stale = _runtime_pack_is_stale()
     vector_ready = vector_runtime_ready(runtime_dir) and not stale
-    browser_ready = browser_runtime_ready(browser_dir) and not stale
-    ready = vector_ready and (browser_ready or _legacy_vector_runtime_override())
+    browser_ready = (browser_runtime_ready(browser_dir) or system_browser_ready()) and not stale
+    ready = vector_ready
     if ready and runtime_dir.exists():
         status = "installed"
     elif ready:
@@ -658,5 +694,6 @@ def vector_runtime_status() -> dict:
         "browser": {
             "ready": browser_ready,
             "dir": str(browser_dir),
+            "system_executable": system_browser_executable() or "",
         },
     }

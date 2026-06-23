@@ -115,11 +115,12 @@ def test_ci_enforces_manifest_guardrails():
     assert "macos-latest" in ci
 
 
-def test_runtime_pack_installs_browser_runtime_for_clean_ci_checkout():
+def test_runtime_pack_keeps_browser_runtime_optional_by_default():
     runtime_pack = _read(ROOT / "scripts/package-runtime-pack.mjs")
-    assert "PLAYWRIGHT_BROWSERS_PATH" in runtime_pack
+    assert "JHM_RUNTIME_PACK_INCLUDE_BROWSER" in runtime_pack
+    assert "Skipping bundled Playwright Chromium runtime" in runtime_pack
     assert '"playwright", "install", "chromium"' in runtime_pack
-    assert "hasChromiumRuntime" in runtime_pack
+    assert "includeBrowserRuntime" in runtime_pack
 
 
 def test_tauri_relaunch_acl_is_granted():
