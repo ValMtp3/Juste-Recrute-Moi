@@ -174,10 +174,10 @@ jobs:
         with:
           workspaces: "src-tauri -> target"
 
-      - name: Install frontend dependencies
+      - name: Installer les dépendances frontend
         run: npm ci
 
-      - name: Install backend dependencies
+      - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
       - name: Run release smoke

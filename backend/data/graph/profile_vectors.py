@@ -342,7 +342,7 @@ def embed_rows(table_name: str, rows: list[dict], texts: Iterable[str]) -> None:
 
 
 def profile_text(name: str, summary: str) -> str:
-    return f"Candidate profile\nName: {name}\nSummary: {summary}".strip()
+    return f"Profil candidat\nNom : {name}\nRésumé : {summary}".strip()
 
 
 def skill_text(name: str, category: str) -> str:

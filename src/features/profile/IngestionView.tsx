@@ -4,12 +4,11 @@ import Icon from "../../shared/components/Icon";
 import type { ApiFetch } from "../../types";
 
 async function responseErrorMessage(response: Response, fallback: string) {
-  // M3: surface rate-limit cooldown using the standard Retry-After header so
-  // the user sees "Please wait X seconds" instead of a generic 429 error.
+      // M3 : afficher le délai Retry-After au lieu d'une erreur 429 générique.
   if (response.status === 429) {
     const retryAfter = Number(response.headers.get("Retry-After"));
     if (Number.isFinite(retryAfter) && retryAfter > 0) {
-      return `Too many requests. Please wait ${retryAfter} second${retryAfter === 1 ? "" : "s"} and try again.`;
+      return `Trop de requêtes. Patientez ${retryAfter} seconde${retryAfter === 1 ? "" : "s"}, puis réessayez.`;
     }
   }
   try {
@@ -88,11 +87,11 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       if (r.ok) {
         setStatus("done");
       } else {
-        setErrorMessage(await responseErrorMessage(r, "Could not save resume template."));
+        setErrorMessage(await responseErrorMessage(r, "Le modèle de CV n'a pas pu être enregistré."));
         setStatus("error");
       }
     } catch (err) {
-      setErrorMessage(requestErrorMessage(err, "Could not save resume template."));
+      setErrorMessage(requestErrorMessage(err, "Le modèle de CV n'a pas pu être enregistré."));
       setStatus("error");
     }
   };
@@ -117,11 +116,11 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         window.dispatchEvent(new CustomEvent("profile-refresh"));
         window.dispatchEvent(new CustomEvent("graph-refresh"));
       } else {
-        setErrorMessage(await responseErrorMessage(r, "Could not save profile context."));
+        setErrorMessage(await responseErrorMessage(r, "Le contexte du profil n'a pas pu être enregistré."));
         setStatus("error");
       }
     } catch (err) {
-      setErrorMessage(requestErrorMessage(err, "Could not save profile context."));
+      setErrorMessage(requestErrorMessage(err, "Le contexte du profil n'a pas pu être enregistré."));
       setStatus("error");
     }
   };
@@ -139,11 +138,11 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         window.dispatchEvent(new CustomEvent("graph-refresh"));
         setStatus("done");
       } else {
-        setErrorMessage(await responseErrorMessage(r, "Could not import this resume."));
+        setErrorMessage(await responseErrorMessage(r, "Ce CV n'a pas pu être importé."));
         setStatus("error");
       }
     } catch (err) {
-      setErrorMessage(requestErrorMessage(err, "Could not import this resume."));
+      setErrorMessage(requestErrorMessage(err, "Ce CV n'a pas pu être importé."));
       setStatus("error");
     }
   };
@@ -174,11 +173,11 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         setStatus("idle");
       } else {
         const data = await r.json().catch(() => ({}));
-        setLinkedinResult({ errorMsg: data?.detail || `Import failed (${r.status})` });
+        setLinkedinResult({ errorMsg: data?.detail || `Import échoué (${r.status})` });
         setStatus("idle");
       }
     } catch (err: any) {
-      setLinkedinResult({ errorMsg: err?.message || "Could not import LinkedIn context." });
+      setLinkedinResult({ errorMsg: err?.message || "Le contexte LinkedIn n'a pas pu être importé." });
       setStatus("idle");
     }
   };
@@ -201,11 +200,11 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         setStatus("idle");
       } else {
         const data = await r.json().catch(() => ({}));
-        setGithubResult({ errorMsg: data?.detail || `GitHub import failed (${r.status})` });
+        setGithubResult({ errorMsg: data?.detail || `Import GitHub échoué (${r.status})` });
         setStatus("idle");
       }
     } catch (err: any) {
-      setGithubResult({ errorMsg: err?.message || "Could not reach the local backend." });
+      setGithubResult({ errorMsg: err?.message || "Le backend local est injoignable." });
       setStatus("idle");
     }
   };
@@ -225,11 +224,11 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         setPortfolioResult(data);
         setStatus("idle");
       } else {
-        setPortfolioResult({ errorMsg: data?.detail || "Could not fetch portfolio." });
+        setPortfolioResult({ errorMsg: data?.detail || "Impossible de récupérer le portfolio." });
         setStatus("idle");
       }
     } catch (err: any) {
-      setPortfolioResult({ errorMsg: err?.message || "Could not fetch portfolio." });
+      setPortfolioResult({ errorMsg: err?.message || "Impossible de récupérer le portfolio." });
       setStatus("idle");
     }
   };
@@ -257,7 +256,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) {
-        setPortfolioResult({ ...portfolioResult, importError: data?.detail || `Import failed (${r.status})` });
+        setPortfolioResult({ ...portfolioResult, importError: data?.detail || `Import échoué (${r.status})` });
         setStatus("idle");
         return;
       }
@@ -266,7 +265,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       window.dispatchEvent(new CustomEvent("graph-refresh"));
       setStatus("idle");
     } catch (err: any) {
-      setPortfolioResult({ ...portfolioResult, importError: err?.message || "Could not import portfolio." });
+      setPortfolioResult({ ...portfolioResult, importError: err?.message || "Le portfolio n'a pas pu être importé." });
       setStatus("idle");
     }
   };
@@ -274,7 +273,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
   const downloadProfileTemplate = async () => {
     try {
       const r = await api(`/api/v1/ingest/profile/template`);
-      if (!r.ok) throw new Error(`Template download failed (${r.status})`);
+      if (!r.ok) throw new Error(`Téléchargement du modèle échoué (${r.status})`);
       const data = await r.json();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -284,7 +283,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      setJsonError("Could not download template.");
+      setJsonError("Le modèle n'a pas pu être téléchargé.");
     }
   };
 
@@ -295,7 +294,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
     try {
       parsed = JSON.parse(jsonText);
     } catch (err: any) {
-      setJsonError(err?.message || "Invalid JSON.");
+      setJsonError(err?.message || "JSON invalide.");
       return;
     }
     setStatus("loading");
@@ -313,11 +312,11 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         window.dispatchEvent(new CustomEvent("graph-refresh"));
         setStatus("idle");
       } else {
-        setJsonError(data?.detail ? JSON.stringify(data.detail) : `Import failed (${r.status})`);
+        setJsonError(data?.detail ? JSON.stringify(data.detail) : `Import échoué (${r.status})`);
         setStatus("idle");
       }
     } catch {
-      setJsonError("Could not import profile JSON.");
+      setJsonError("Le profil JSON n'a pas pu être importé.");
       setStatus("idle");
     }
   };
@@ -335,32 +334,32 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         setStatus("done");
         setRawText("");
       } else {
-        setErrorMessage(await responseErrorMessage(r, "Could not sync raw context."));
+        setErrorMessage(await responseErrorMessage(r, "Impossible de synchroniser le contexte brut."));
         setStatus("error");
       }
     } catch (err) {
-      setErrorMessage(requestErrorMessage(err, "Could not sync raw context."));
+      setErrorMessage(requestErrorMessage(err, "Impossible de synchroniser le contexte brut."));
       setStatus("error");
     }
   };
 
   const TABS = [
-    { id: "resume" as const, label: "Resume", description: "PDF, DOCX, text", icon: "upload", accent: "teal" },
-    { id: "manual" as const, label: "Manual", description: "Skills, roles, projects", icon: "plus", accent: "blue" },
-    { id: "raw" as const, label: "Raw Text", description: "Paste notes", icon: "file", accent: "yellow" },
-    { id: "template" as const, label: "Template", description: "Resume format", icon: "layers", accent: "purple" },
-    { id: "linkedin" as const, label: "LinkedIn", description: "Data export", icon: "brief", accent: "blue" },
-    { id: "github" as const, label: "GitHub", description: "Repo signals", icon: "external-link", accent: "green" },
-    { id: "portfolio" as const, label: "Portfolio", description: "Personal site", icon: "globe", accent: "orange" },
-    { id: "json-import" as const, label: "JSON", description: "Structured import", icon: "download", accent: "pink" },
+    { id: "resume" as const, label: "CV", description: "PDF, DOCX, texte", icon: "upload", accent: "teal" },
+    { id: "manual" as const, label: "Manuel", description: "Compétences, rôles, projets", icon: "plus", accent: "blue" },
+    { id: "raw" as const, label: "Texte brut", description: "Coller des notes", icon: "file", accent: "yellow" },
+    { id: "template" as const, label: "Modèle", description: "Format de CV", icon: "layers", accent: "purple" },
+    { id: "linkedin" as const, label: "LinkedIn", description: "Export de données", icon: "brief", accent: "blue" },
+    { id: "github" as const, label: "GitHub", description: "Signaux dépôt", icon: "external-link", accent: "green" },
+    { id: "portfolio" as const, label: "Portfolio", description: "Site personnel", icon: "globe", accent: "orange" },
+    { id: "json-import" as const, label: "JSON", description: "Import structuré", icon: "download", accent: "pink" },
   ];
   const activeTabMeta = TABS.find(t => t.id === activeTab) ?? TABS[0];
   const githubProgressSteps = [
-    "Fetching repository list",
-    "Reading READMEs and language maps",
-    "Cleaning stack evidence",
-    "Saving profile records",
-    "Syncing graph and vectors",
+    "Récupération des dépôts",
+    "Lecture des README et langages",
+    "Nettoyage des signaux de stack",
+    "Enregistrement du profil",
+    "Synchronisation graphe et vecteurs",
   ];
 
   return (
@@ -368,14 +367,14 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       <div className="ingestion-shell">
         <div className="ingestion-hero">
           <div className="ingestion-hero-copy">
-            <span className="eyebrow">Append-only Pipeline</span>
-            <h2>Add Context</h2>
-            <p>Merge resumes, repos, portfolio pages, exports, and hand-written notes into one clean Identity Graph.</p>
+            <span className="eyebrow">Pipeline append-only</span>
+            <h2>Ajouter du contexte</h2>
+            <p>Fusionnez CV, dépôts, pages portfolio, exports et notes manuelles dans un graphe d'identité propre.</p>
           </div>
           <div className={`ingestion-active-card ingestion-accent-${activeTabMeta.accent}`}>
             <div className="ingestion-active-icon"><Icon name={activeTabMeta.icon} size={18} /></div>
             <div>
-              <span>Current source</span>
+              <span>Source active</span>
               <strong>{activeTabMeta.label}</strong>
             </div>
           </div>
@@ -398,94 +397,94 @@ export function IngestionView({ api }: { api: ApiFetch }) {
 
         {status === "done" && (
           <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} className="ingestion-alert success">
-            <Icon name="check" size={18} /><div style={{fontWeight:600}}>Saved successfully!</div>
+            <Icon name="check" size={18} /><div style={{fontWeight:600}}>Enregistré avec succès.</div>
           </motion.div>
         )}
         {status === "error" && (
           <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} className="ingestion-alert error">
-            {errorMessage || "An error occurred."}
+            {errorMessage || "Une erreur est survenue."}
           </motion.div>
         )}
 
         {activeTab === "resume" && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} className="card col gap-4" style={{ padding: "64px 32px", alignItems: "center", textAlign: "center", border: "2px dashed var(--line)", background: "var(--paper-2)" }}>
             <div style={{ width: 64, height: 64, borderRadius: 16, background: "var(--teal-soft)", color: "var(--teal)", display: "grid", placeItems: "center" }}><Icon name="upload" size={28} /></div>
-            <div style={{ fontWeight: 600, fontSize: 18 }}>Drop a fresh resume</div>
-            <div style={{ fontSize: 14, color: "var(--ink-3)", maxWidth: 360, lineHeight: 1.5 }}>PDF, DOCX, TXT, or Markdown. The ingestion agent discovers skills, roles, and projects and maps them into your graph.</div>
+            <div style={{ fontWeight: 600, fontSize: 18 }}>Déposez un CV récent</div>
+            <div style={{ fontSize: 14, color: "var(--ink-3)", maxWidth: 360, lineHeight: 1.5 }}>PDF, DOCX, TXT ou Markdown. L'agent détecte compétences, rôles et projets, puis les ajoute au graphe.</div>
             <input type="file" accept=".pdf,.docx,.txt,.md" onChange={e => e.target.files?.[0] && ingestResume(e.target.files[0])} style={{ display: "none" }} id="resume-in" />
-            <button className="btn btn-primary" style={{ marginTop: 16, padding: "12px 32px", fontSize: 15 }} onClick={() => document.getElementById("resume-in")?.click()}>Select Resume File</button>
-            {status === "loading" && <div className="mono pulse" style={{ fontSize: 12, marginTop: 16 }}>Parsing resume, saving profile, syncing graph...</div>}
+            <button className="btn btn-primary" style={{ marginTop: 16, padding: "12px 32px", fontSize: 15 }} onClick={() => document.getElementById("resume-in")?.click()}>Choisir un fichier CV</button>
+            {status === "loading" && <div className="mono pulse" style={{ fontSize: 12, marginTop: 16 }}>Analyse du CV, enregistrement du profil, synchronisation du graphe...</div>}
           </motion.div>
         )}
 
         {activeTab === "manual" && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} className="col gap-8">
             <div className="card col gap-4" style={{ padding: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="spark" size={16}/> Add Skill</h3>
-              <input className="field-input" placeholder="Skill name" value={skillForm.n} onChange={v => setSkillForm({...skillForm, n: v.target.value})} />
+              <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="spark" size={16}/> Ajouter une compétence</h3>
+              <input className="field-input" placeholder="Nom de la compétence" value={skillForm.n} onChange={v => setSkillForm({...skillForm, n: v.target.value})} />
               <select className="field-input" value={skillForm.cat} onChange={v => setSkillForm({...skillForm, cat: v.target.value})}>
-                <option value="technical">Technical</option>
-                <option value="soft">Soft Skill</option>
-                <option value="tool">Tool / Utility</option>
-                <option value="language">Language</option>
+                <option value="technical">Technique</option>
+                <option value="soft">Compétence humaine</option>
+                <option value="tool">Outil / utilitaire</option>
+                 <option value="language">Langage</option>
                 <option value="framework">Framework</option>
               </select>
-              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("skill", skillForm)} disabled={status==="loading" || !skillForm.n.trim()}>Add Skill</button>
+               <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("skill", skillForm)} disabled={status==="loading" || !skillForm.n.trim()}>Ajouter la compétence</button>
             </div>
             <div className="card col gap-4" style={{ padding: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="brief" size={16}/> Add Experience</h3>
-              <input className="field-input" placeholder="Role Title" value={expForm.role} onChange={v => setExpForm({...expForm, role: v.target.value})} />
-              <input className="field-input" placeholder="Company" value={expForm.co} onChange={v => setExpForm({...expForm, co: v.target.value})} />
-              <input className="field-input" placeholder="Period (e.g. 2022-2024)" value={expForm.period} onChange={v => setExpForm({...expForm, period: v.target.value})} />
+              <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="brief" size={16}/> Ajouter une expérience</h3>
+              <input className="field-input" placeholder="Intitulé du poste" value={expForm.role} onChange={v => setExpForm({...expForm, role: v.target.value})} />
+              <input className="field-input" placeholder="Entreprise" value={expForm.co} onChange={v => setExpForm({...expForm, co: v.target.value})} />
+              <input className="field-input" placeholder="Période (ex. 2022-2024)" value={expForm.period} onChange={v => setExpForm({...expForm, period: v.target.value})} />
               <textarea className="field-input" placeholder="Description" rows={3} value={expForm.d} onChange={v => setExpForm({...expForm, d: v.target.value})} />
-              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("exp", expForm)} disabled={status==="loading" || (!expForm.role.trim() && !expForm.co.trim())}>Add Experience</button>
+              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("exp", expForm)} disabled={status==="loading" || (!expForm.role.trim() && !expForm.co.trim())}>Ajouter l'expérience</button>
             </div>
             <div className="card col gap-4" style={{ padding: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="layers" size={16}/> Add Project</h3>
-              <input className="field-input" placeholder="Project Title" value={projForm.title} onChange={v => setProjForm({...projForm, title: v.target.value})} />
-              <input className="field-input" placeholder="Stack (comma-separated)" value={projForm.stack} onChange={v => setProjForm({...projForm, stack: v.target.value})} />
-              <input className="field-input" placeholder="Repo URL (optional)" value={projForm.repo} onChange={v => setProjForm({...projForm, repo: v.target.value})} />
-              <textarea className="field-input" placeholder="Impact / Description" rows={3} value={projForm.impact} onChange={v => setProjForm({...projForm, impact: v.target.value})} />
-              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("project", projForm)} disabled={status==="loading" || !projForm.title.trim()}>Add Project</button>
+              <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="layers" size={16}/> Ajouter un projet</h3>
+              <input className="field-input" placeholder="Titre du projet" value={projForm.title} onChange={v => setProjForm({...projForm, title: v.target.value})} />
+              <input className="field-input" placeholder="Stack (séparée par des virgules)" value={projForm.stack} onChange={v => setProjForm({...projForm, stack: v.target.value})} />
+              <input className="field-input" placeholder="URL du repo (facultatif)" value={projForm.repo} onChange={v => setProjForm({...projForm, repo: v.target.value})} />
+              <textarea className="field-input" placeholder="Impact / description" rows={3} value={projForm.impact} onChange={v => setProjForm({...projForm, impact: v.target.value})} />
+              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("project", projForm)} disabled={status==="loading" || !projForm.title.trim()}>Ajouter le projet</button>
             </div>
             <div className="card col gap-4" style={{ padding: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="user" size={16}/> Contact & Social Links</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="user" size={16}/> Contact et liens</h3>
               <div className="grid-2 gap-3">
-                <input className="field-input" placeholder="Email address" value={identityForm.email} onChange={v => setIdentityForm({...identityForm, email: v.target.value})} />
-                <input className="field-input" placeholder="Phone number" value={identityForm.phone} onChange={v => setIdentityForm({...identityForm, phone: v.target.value})} />
+                <input className="field-input" placeholder="Adresse email" value={identityForm.email} onChange={v => setIdentityForm({...identityForm, email: v.target.value})} />
+                <input className="field-input" placeholder="Téléphone" value={identityForm.phone} onChange={v => setIdentityForm({...identityForm, phone: v.target.value})} />
                 <input className="field-input" placeholder="LinkedIn URL" value={identityForm.linkedin_url} onChange={v => setIdentityForm({...identityForm, linkedin_url: v.target.value})} />
                 <input className="field-input" placeholder="GitHub URL" value={identityForm.github_url} onChange={v => setIdentityForm({...identityForm, github_url: v.target.value})} />
-                <input className="field-input" placeholder="Portfolio / website URL" value={identityForm.website_url} onChange={v => setIdentityForm({...identityForm, website_url: v.target.value})} />
-                <input className="field-input" placeholder="City / location" value={identityForm.city} onChange={v => setIdentityForm({...identityForm, city: v.target.value})} />
+                <input className="field-input" placeholder="Portfolio / site web" value={identityForm.website_url} onChange={v => setIdentityForm({...identityForm, website_url: v.target.value})} />
+                <input className="field-input" placeholder="Ville / localisation" value={identityForm.city} onChange={v => setIdentityForm({...identityForm, city: v.target.value})} />
               </div>
-              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("identity", identityForm)} disabled={status==="loading"}>Save Contact</button>
+              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("identity", identityForm)} disabled={status==="loading"}>Enregistrer le contact</button>
             </div>
             <div className="grid-2 gap-4">
               <div className="card col gap-4" style={{ padding: 24 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="file" size={16}/> Add Education</h3>
-                <input className="field-input" placeholder="Degree, school, year" value={eduForm.title} onChange={v => setEduForm({...eduForm, title: v.target.value})} />
-                <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("education", eduForm)} disabled={status==="loading" || !eduForm.title.trim()}>Add Education</button>
+                <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="file" size={16}/> Ajouter une formation</h3>
+                <input className="field-input" placeholder="Diplôme, école, année" value={eduForm.title} onChange={v => setEduForm({...eduForm, title: v.target.value})} />
+                <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("education", eduForm)} disabled={status==="loading" || !eduForm.title.trim()}>Ajouter la formation</button>
               </div>
               <div className="card col gap-4" style={{ padding: 24 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="check" size={16}/> Add Certification</h3>
-                <input className="field-input" placeholder="Certification, issuer, year" value={certForm.title} onChange={v => setCertForm({...certForm, title: v.target.value})} />
-                <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("certification", certForm)} disabled={status==="loading" || !certForm.title.trim()}>Add Certification</button>
+                <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="check" size={16}/> Ajouter une certification</h3>
+                <input className="field-input" placeholder="Certification, organisme, année" value={certForm.title} onChange={v => setCertForm({...certForm, title: v.target.value})} />
+                <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("certification", certForm)} disabled={status==="loading" || !certForm.title.trim()}>Ajouter la certification</button>
               </div>
             </div>
             <div className="card col gap-4" style={{ padding: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="trending" size={16}/> Add Achievement</h3>
-              <input className="field-input" placeholder="Award, publication, shipped milestone, competition result" value={achievementForm.title} onChange={v => setAchievementForm({...achievementForm, title: v.target.value})} />
-              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("achievement", achievementForm)} disabled={status==="loading" || !achievementForm.title.trim()}>Add Achievement</button>
+              <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="trending" size={16}/> Ajouter une réussite</h3>
+              <input className="field-input" placeholder="Prix, publication, jalon livré, résultat de concours" value={achievementForm.title} onChange={v => setAchievementForm({...achievementForm, title: v.target.value})} />
+              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("achievement", achievementForm)} disabled={status==="loading" || !achievementForm.title.trim()}>Ajouter la réussite</button>
             </div>
           </motion.div>
         )}
 
         {activeTab === "raw" && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} className="card col gap-4" style={{ padding: 24 }}>
-            <div className="eyebrow">Raw Text Aggregator</div>
-            <textarea className="field-input" placeholder="Paste unstructured text from LinkedIn, personal websites, or notes..." rows={16} value={rawText} onChange={v => setRawText(v.target.value)} style={{ fontSize: 14, lineHeight: 1.6 }} />
+            <div className="eyebrow">Agrégateur de texte brut</div>
+            <textarea className="field-input" placeholder="Collez du texte non structuré depuis LinkedIn, un site personnel ou des notes..." rows={16} value={rawText} onChange={v => setRawText(v.target.value)} style={{ fontSize: 14, lineHeight: 1.6 }} />
             <button className="btn btn-primary" style={{ padding: 16, fontSize: 15 }} onClick={ingestRaw} disabled={status==="loading"}>
-              {status === "loading" ? "Processing..." : "Sync Raw Context"}
+              {status === "loading" ? "Traitement..." : "Synchroniser le contexte brut"}
             </button>
           </motion.div>
         )}
@@ -506,13 +505,13 @@ export function IngestionView({ api }: { api: ApiFetch }) {
             >
               <div style={{ width: 64, height: 64, borderRadius: 16, background: "var(--teal-soft)", color: "var(--teal)", display: "grid", placeItems: "center" }}><Icon name="upload" size={28} /></div>
               <div style={{ fontWeight: 600, fontSize: 18 }}>
-                {linkedinFile ? linkedinFile.name : "Drop your LinkedIn export (.zip) or profile PDF here"}
+                {linkedinFile ? linkedinFile.name : "Déposez votre export LinkedIn (.zip) ou PDF de profil ici"}
               </div>
               <div style={{ fontSize: 14, color: "var(--ink-3)", maxWidth: 400, lineHeight: 1.5 }}>
-                {linkedinFile ? "File ready to import." : "or click to browse"}
+                {linkedinFile ? "Fichier prêt à importer." : "ou cliquez pour parcourir"}
               </div>
               <div style={{ fontSize: 12, color: "var(--ink-4)", maxWidth: 420, lineHeight: 1.6, marginTop: 4 }}>
-                Use a LinkedIn data export ZIP for structured import, or a saved LinkedIn profile PDF for quick profile extraction.
+                Utilisez un export LinkedIn ZIP pour un import structuré, ou un PDF de profil LinkedIn pour une extraction rapide.
               </div>
               <input type="file" accept=".zip,.pdf,application/zip,application/pdf" id="linkedin-zip-in" style={{ display: "none" }}
                 onChange={e => { const f = e.target.files?.[0]; if (f) { setLinkedinFile(f); setLinkedinResult(null); } }} />
@@ -520,7 +519,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
             <button className="btn btn-primary" style={{ padding: 16, fontSize: 15 }}
               disabled={!linkedinFile || status === "loading"}
               onClick={ingestLinkedin}>
-              {status === "loading" ? "Importing..." : linkedinFile?.name.toLowerCase().endsWith(".pdf") ? "Import LinkedIn PDF" : "Import LinkedIn data"}
+              {status === "loading" ? "Import..." : linkedinFile?.name.toLowerCase().endsWith(".pdf") ? "Importer le PDF LinkedIn" : "Importer les données LinkedIn"}
             </button>
             {linkedinResult?.errorMsg && (
               <div style={{ padding: 16, background: "var(--bad-soft)", color: "var(--bad)", borderRadius: 12, border: "1px solid var(--bad)", fontSize: 14 }}>
@@ -536,13 +535,13 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                 border: `1px solid ${linkedinResult.status === "ok" ? "var(--green)" : "var(--line)"}`,
               }}>
                 <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                  Imported: {linkedinResult.stats?.skills ?? 0} skills - {linkedinResult.stats?.experience ?? 0} jobs - {linkedinResult.stats?.projects ?? 0} projects - {linkedinResult.stats?.certifications ?? 0} certifications
+                  Importé : {linkedinResult.stats?.skills ?? 0} compétences - {linkedinResult.stats?.experience ?? 0} expériences - {linkedinResult.stats?.projects ?? 0} projets - {linkedinResult.stats?.certifications ?? 0} certifications
                 </div>
                 {linkedinResult.source === "pdf" && (
-                  <div style={{ fontSize: 13, marginTop: 4, color: "var(--ink-3)" }}>Parsed as a profile PDF and synced into your Identity Graph.</div>
+                  <div style={{ fontSize: 13, marginTop: 4, color: "var(--ink-3)" }}>PDF de profil analysé et synchronisé dans le graphe d'identité.</div>
                 )}
                 {linkedinResult.status === "partial" && (
-                  <div style={{ fontSize: 13, marginTop: 4, color: "var(--ink-3)" }}>Some items could not be imported.</div>
+                  <div style={{ fontSize: 13, marginTop: 4, color: "var(--ink-3)" }}>Certains éléments n'ont pas pu être importés.</div>
                 )}
               </div>
             )}
@@ -552,24 +551,24 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         {activeTab === "github" && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} className="col gap-4">
             <div className="card col gap-4" style={{ padding: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600 }}>GitHub username</h3>
-              <input className="field-input" placeholder="e.g. torvalds" value={githubUsername}
+              <h3 style={{ fontSize: 16, fontWeight: 600 }}>Nom d'utilisateur GitHub</h3>
+              <input className="field-input" placeholder="ex. torvalds" value={githubUsername}
                 onChange={e => setGithubUsername(e.target.value)} />
               <button className="btn btn-ghost" style={{ alignSelf: "flex-start", fontSize: 13, padding: "6px 12px" }}
                 onClick={() => setShowToken(t => !t)}>
-                {showToken ? "- Hide token" : "+ Add GitHub token for higher rate limits"}
+                {showToken ? "- Masquer le token" : "+ Ajouter un token GitHub pour lever les limites"}
               </button>
               {showToken && (
                 <div className="col gap-2">
                   <input className="field-input" type="password" placeholder="ghp_..." value={githubToken}
                     onChange={e => setGithubToken(e.target.value)} />
                   <div style={{ fontSize: 12, color: "var(--ink-4)", lineHeight: 1.5 }}>
-                    Optional: increases API rate limit from 60 to 5,000 req/hr. Never stored remotely.
+                    Facultatif : passe la limite API de 60 à 5 000 requêtes/heure. Jamais stocké à distance.
                   </div>
                 </div>
               )}
               <div className="row gap-3" style={{ alignItems: "center" }}>
-                <span style={{ fontSize: 14, color: "var(--ink-2)" }}>Max repos to scan:</span>
+                <span style={{ fontSize: 14, color: "var(--ink-2)" }}>Repos max à scanner :</span>
                 <input className="field-input" type="number" min={1} max={500} value={githubMaxRepos}
                   style={{ width: 80 }}
                   onChange={e => setGithubMaxRepos(Math.max(1, Math.min(500, parseInt(e.target.value) || 100)))} />
@@ -578,15 +577,15 @@ export function IngestionView({ api }: { api: ApiFetch }) {
             <button className="btn btn-primary" style={{ padding: 16, fontSize: 15 }}
               disabled={!githubUsername.trim() || status === "loading"}
               onClick={ingestGithub}>
-              {status === "loading" ? "Scanning GitHub and syncing graph..." : "Scan GitHub profile"}
+              {status === "loading" ? "Scan GitHub et synchronisation du graphe..." : "Scanner le profil GitHub"}
             </button>
             {status === "loading" && (
               <div className="ingestion-progress-card" role="status" aria-live="polite">
                 <div className="ingestion-progress-head">
                   <span className="ingestion-progress-spinner" aria-hidden="true" />
                   <div>
-                    <strong>{githubUsername.trim() ? `Scanning @${githubUsername.trim()}` : "Scanning GitHub"}</strong>
-                    <span>No fixed timeout; this stays open until GitHub returns or the local sync finishes.</span>
+                    <strong>{githubUsername.trim() ? `Scan de @${githubUsername.trim()}` : "Scan GitHub"}</strong>
+                    <span>Pas de timeout fixe ; la carte reste ouverte jusqu'à la réponse GitHub ou la fin de la synchro locale.</span>
                   </div>
                 </div>
                 <div className="ingestion-progress-track" aria-hidden="true"><span /></div>
@@ -614,10 +613,10 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                   </div>
                 </div>
                 <div style={{ fontSize: 14, color: "var(--ink-2)" }}>
-                  Found {githubResult.stats?.repos_fetched ?? 0} repos - Enriched {githubResult.stats?.repos_enriched ?? 0} - Extracted {githubResult.stats?.projects_extracted ?? 0} projects - {githubResult.stats?.skills_extracted ?? 0} skills
+                  {githubResult.stats?.repos_fetched ?? 0} repos trouvés - {githubResult.stats?.repos_enriched ?? 0} enrichis - {githubResult.stats?.projects_extracted ?? 0} projets extraits - {githubResult.stats?.skills_extracted ?? 0} compétences
                 </div>
                 <div style={{ fontSize: 12, color: "var(--ink-4)", lineHeight: 1.5 }}>
-                  Read {githubResult.stats?.readmes_read ?? 0} READMEs, {githubResult.stats?.languages_read ?? 0} language maps, and {githubResult.stats?.manifests_read ?? 0} manifest files.
+                  Lecture de {githubResult.stats?.readmes_read ?? 0} README, {githubResult.stats?.languages_read ?? 0} cartes de langages et {githubResult.stats?.manifests_read ?? 0} manifestes.
                 </div>
                 {githubResult.errors?.length > 0 && (
                   <div style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.5 }}>{githubResult.errors[0]}</div>
@@ -635,13 +634,13 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         {activeTab === "portfolio" && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} className="col gap-4">
             <div className="card col gap-4" style={{ padding: 24 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600 }}>Your portfolio / personal site URL</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 600 }}>URL de votre portfolio ou site personnel</h3>
               <input className="field-input" placeholder="https://yoursite.com" value={portfolioUrl}
                 onChange={e => { setPortfolioUrl(e.target.value); setPortfolioResult(null); }} />
               <button className="btn btn-primary" style={{ alignSelf: "flex-start", padding: "10px 24px" }}
                 disabled={!portfolioUrl.trim() || status === "loading"}
                 onClick={() => scanPortfolio(false)}>
-                {status === "loading" ? "Fetching and reading your site..." : "Scan portfolio"}
+                {status === "loading" ? "Lecture du site..." : "Scanner le portfolio"}
               </button>
             </div>
             {portfolioResult?.errorMsg && (
@@ -657,21 +656,21 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                 {portfolioResult.candidate ? (
                   <>
                     <div style={{ fontSize: 14, color: "var(--ink-2)" }}>
-                      Scanned {portfolioResult.stats?.pages_scanned ?? 0} pages - Structured {portfolioResult.stats?.skills ?? 0} skills - {portfolioResult.stats?.projects ?? 0} projects
+                  {portfolioResult.stats?.pages_scanned ?? 0} pages scannées - {portfolioResult.stats?.skills ?? 0} compétences structurées - {portfolioResult.stats?.projects ?? 0} projets
                     </div>
                     <div style={{ fontSize: 12, color: "var(--ink-4)", lineHeight: 1.5 }}>
-                      Read {portfolioResult.stats?.links_seen ?? 0} links and preserved raw evidence{portfolioResult.stats?.llm_used ? " with LLM cleanup." : " with deterministic cleanup."}
+                  {portfolioResult.stats?.links_seen ?? 0} liens lus et preuves brutes conservées{portfolioResult.stats?.llm_used ? " avec nettoyage IA." : " avec nettoyage déterministe."}
                     </div>
                     <div style={{ maxHeight: 360, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8, padding: 14, background: "var(--paper-2)" }}>
                       {portfolioResult.candidate?.summary && (
                         <div style={{ marginBottom: 14 }}>
-                          <div className="eyebrow" style={{ marginBottom: 6 }}>Summary</div>
+                          <div className="eyebrow" style={{ marginBottom: 6 }}>Résumé</div>
                           <div style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{portfolioResult.candidate.summary}</div>
                         </div>
                       )}
                       {(portfolioResult.skills || []).length > 0 && (
                         <div style={{ marginBottom: 14 }}>
-                          <div className="eyebrow" style={{ marginBottom: 8 }}>Skills</div>
+                          <div className="eyebrow" style={{ marginBottom: 8 }}>Compétences</div>
                           <div className="row gap-1" style={{ flexWrap: "wrap" }}>
                             {portfolioResult.skills.map((skill: any, idx: number) => (
                               <span key={`${skill.name || skill.n}-${idx}`} className="pill" style={{ fontSize: 11 }}>{skill.name || skill.n}</span>
@@ -681,7 +680,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                       )}
                       {(portfolioResult.projects || []).length > 0 && (
                         <div>
-                          <div className="eyebrow" style={{ marginBottom: 8 }}>Projects</div>
+                          <div className="eyebrow" style={{ marginBottom: 8 }}>Projets</div>
                           <div className="col gap-2">
                             {portfolioResult.projects.map((project: any, idx: number) => (
                               <div key={`${project.title}-${idx}`} style={{ padding: 12, border: "1px solid var(--line)", borderRadius: 8, background: "var(--paper)" }}>
@@ -696,13 +695,13 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                     </div>
                     {portfolioResult.imported ? (
                       <div style={{ padding: 12, background: "var(--green-soft)", color: "var(--green-ink)", borderRadius: 8, border: "1px solid var(--green)", fontWeight: 600, lineHeight: 1.5 }}>
-                        Imported: {portfolioResult.imported?.stats?.skills ?? 0} skills - {portfolioResult.imported?.stats?.projects ?? 0} projects - {portfolioResult.imported?.stats?.experience ?? 0} experience items
+                        Importé : {portfolioResult.imported?.stats?.skills ?? 0} compétences - {portfolioResult.imported?.stats?.projects ?? 0} projets - {portfolioResult.imported?.stats?.experience ?? 0} expériences
                       </div>
                     ) : (
                       <button className="btn btn-primary" style={{ alignSelf: "flex-start", padding: "10px 24px" }}
                         disabled={status === "loading"}
                         onClick={importPortfolioResult}>
-                        {status === "loading" ? "Importing..." : "Import shown items to Profile"}
+                        {status === "loading" ? "Import..." : "Importer les éléments affichés dans Profil"}
                       </button>
                     )}
                     {portfolioResult.importError && (
@@ -713,7 +712,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                   </>
                 ) : (
                   <div style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5 }}>
-                    {portfolioResult.error || "No structured data was extracted."}
+                    {portfolioResult.error || "Aucune donnée structurée n'a été extraite."}
                   </div>
                 )}
               </div>
@@ -725,10 +724,10 @@ export function IngestionView({ api }: { api: ApiFetch }) {
           <motion.div initial={{opacity:0}} animate={{opacity:1}} className="col gap-4">
             <div className="card col gap-4" style={{ padding: 24 }}>
               <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Paste your profile JSON here</h3>
+                <h3 style={{ fontSize: 16, fontWeight: 600 }}>Collez votre profil JSON ici</h3>
                 <button className="btn btn-ghost" style={{ fontSize: 13, padding: "8px 12px", flexShrink: 0 }}
                   onClick={downloadProfileTemplate}>
-                  Download template
+                  Télécharger le modèle
                 </button>
               </div>
               <textarea className="field-input" value={jsonText}
@@ -738,7 +737,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
               <button className="btn btn-primary" style={{ alignSelf: "flex-start", padding: "10px 24px" }}
                 disabled={!jsonText.trim() || status === "loading"}
                 onClick={importProfileJson}>
-                {status === "loading" ? "Importing..." : "Import profile"}
+                {status === "loading" ? "Import..." : "Importer le profil"}
               </button>
             </div>
             {jsonError && (
@@ -755,10 +754,10 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                 border: `1px solid ${jsonResult.status === "ok" ? "var(--green)" : "var(--line)"}`,
               }}>
                 <div style={{ fontWeight: 600 }}>
-                  Imported: {jsonResult.stats?.skills ?? 0} skills - {jsonResult.stats?.experience ?? 0} jobs - {jsonResult.stats?.projects ?? 0} projects - {jsonResult.stats?.certifications ?? 0} certifications
+                  Importé : {jsonResult.stats?.skills ?? 0} compétences - {jsonResult.stats?.experience ?? 0} expériences - {jsonResult.stats?.projects ?? 0} projets - {jsonResult.stats?.certifications ?? 0} certifications
                 </div>
                 {jsonResult.status === "partial" && (
-                  <div style={{ fontSize: 13, marginTop: 4, color: "var(--ink-3)" }}>Some items were skipped.</div>
+                  <div style={{ fontSize: 13, marginTop: 4, color: "var(--ink-3)" }}>Certains éléments ont été ignorés.</div>
                 )}
               </div>
             )}
@@ -768,19 +767,19 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         {activeTab === "template" && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} className="col gap-4">
             <div className="card" style={{ padding: 24, background: "var(--purple-soft)", border: "1px solid var(--purple)" }}>
-              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>Resume Template</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>Modèle de CV</h3>
               <p style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6 }}>
-                Paste your preferred resume format here (plain text or Markdown). When the agent generates a tailored resume, it will follow this structure: section order, headings, and layout, and fill it in with your profile and the job requirements.
+                Collez ici votre format de CV préféré (texte brut ou Markdown). Quand l'agent génère un CV adapté, il suit cette structure : ordre des sections, titres et mise en page, puis la remplit avec votre profil et les exigences de l'offre.
               </p>
             </div>
             <div className="card col gap-4" style={{ padding: 24 }}>
               <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Template content</span>
-                {template && <span className="pill mono" style={{ fontSize: 10, background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" }}>Template saved</span>}
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Contenu du modèle</span>
+                {template && <span className="pill mono" style={{ fontSize: 10, background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" }}>Modèle enregistré</span>}
               </div>
               <textarea
                 className="field-input"
-                placeholder={`Paste your resume template here. For example:\n\n# [Name]\n[Contact info]\n\n## Summary\n[2-3 sentence professional summary]\n\n## Experience\n### [Role] - [Company] ([Period])\n- [Bullet points]\n\n## Projects\n### [Project Name]\n- Stack: ...\n- Impact: ...\n\n## Skills\n[Comma-separated list]`}
+                placeholder={`Collez votre modèle de CV ici. Par exemple :\n\n# [Nom]\n[Coordonnées]\n\n## Résumé\n[2-3 phrases de présentation]\n\n## Expérience\n### [Poste] - [Entreprise] ([Période])\n- [Points clés]\n\n## Projets\n### [Nom du projet]\n- Stack : ...\n- Impact : ...\n\n## Compétences\n[Liste séparée par des virgules]`}
                 rows={24}
                 value={template}
                 onChange={e => setTemplate(e.target.value)}
@@ -788,14 +787,14 @@ export function IngestionView({ api }: { api: ApiFetch }) {
               />
               <div className="row gap-3" style={{ alignItems: "center" }}>
                 <button className="btn btn-primary" style={{ padding: "12px 28px", fontSize: 14 }} onClick={saveTemplate} disabled={status==="loading"}>
-                  {status === "loading" ? "Saving..." : "Save Template"}
+                  {status === "loading" ? "Enregistrement..." : "Enregistrer le modèle"}
                 </button>
                 {template && (
                   <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => { setTemplate(""); }}>
-                    Clear
+                    Effacer
                   </button>
                 )}
-                <span style={{ fontSize: 12, color: "var(--ink-4)" }}>{template.length} chars</span>
+                <span style={{ fontSize: 12, color: "var(--ink-4)" }}>{template.length} caractères</span>
               </div>
             </div>
           </motion.div>

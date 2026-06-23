@@ -52,16 +52,16 @@ def asset_ready(path: str) -> bool:
 
 def fire_blocker(lead: dict, asset: str) -> tuple[int, str]:
     if not lead:
-        return 404, "Lead not found"
+        return 404, "Offre introuvable"
     if lead.get("status") == "applied":
-        return 409, "Lead is already marked applied"
+        return 409, "Cette offre est déjà marquée comme postulée"
     if not lead.get("url"):
-        return 409, "Lead has no application URL"
+        return 409, "Cette offre n'a pas d'URL de candidature"
     if not asset_ready(asset):
-        return 409, "Generate a resume before firing this application"
+        return 409, "Générez un CV avant de lancer cette candidature"
     cover = lead.get("cover_letter_asset") or lead.get("cover_letter_path") or ""
     if not asset_ready(cover):
-        return 409, "Generate a cover letter before firing this application"
+        return 409, "Générez une lettre avant de lancer cette candidature"
     return 0, ""
 
 
@@ -149,7 +149,7 @@ def create_router(manager) -> APIRouter:
     ):
         lead = repo.leads.get_lead_by_id(job_id)
         if not lead:
-            raise HTTPException(404, "lead not found")
+            raise HTTPException(404, "Offre introuvable")
 
         url = (body.url or lead.get("url") or "").strip()
         if not url:

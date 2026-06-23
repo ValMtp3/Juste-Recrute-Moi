@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""JustHireMe — one-command local startup.
+"""Juste Recrute Moi — one-command local startup.
 
 Run this and nothing else:
 
@@ -46,7 +46,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 # Tauri bundle identifier — keep in sync with src-tauri/tauri.conf.json. The dev
 # sidecar reads its app-data dir from here (Tauri sets JHM_APP_DATA_DIR to it).
-APP_IDENTIFIER = "com.vasudev-siddh.justhireme"
+APP_IDENTIFIER = "com.valentinfiess.justerecrutemoi"
 
 _USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
 
@@ -100,12 +100,12 @@ def require(command: str, *, cwd: Path | None = None, env: dict | None = None, s
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Set up and launch JustHireMe locally.")
+    parser = argparse.ArgumentParser(description="Set up and launch Juste Recrute Moi locally.")
     parser.add_argument("--no-run", action="store_true", help="set everything up but do not launch the app")
     parser.add_argument("--force", action="store_true", help="re-fetch the runtime assets (model) even if present")
     args = parser.parse_args()
 
-    print(_c("JustHireMe local startup", "1"))
+    print(_c("Juste Recrute Moi local startup", "1"))
     print(f"  repo: {ROOT}")
 
     # 1) prerequisites
@@ -152,7 +152,7 @@ def main() -> None:
         return
 
     # 6) launch the full app (frontend + Rust shell + Python sidecar)
-    step("Launching JustHireMe  (npm run tauri dev)")
+    step("Launching Juste Recrute Moi  (npm run tauri dev)")
     print("  (Ctrl-C to stop. The app window will open once the Rust shell builds.)")
     sys.exit(run("npm run tauri dev", cwd=ROOT))
 

@@ -11,8 +11,8 @@ const timeoutMs = Number(process.env.JHM_WINDOWS_UPDATE_TIMEOUT_MS || 120_000);
 // Hard cap on a single silent NSIS install so a stuck installer (e.g. blocked
 // on a locked binary) fails fast instead of hanging the job for hours.
 const installerTimeoutMs = Number(process.env.JHM_WINDOWS_INSTALLER_TIMEOUT_MS || 480_000);
-const uninstallRegistryKeySuffix = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\JustHireMe";
-const vendorRegistryKeySuffix = "Software\\vasudev-siddh\\JustHireMe";
+const uninstallRegistryKeySuffix = "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Juste Recrute Moi";
+const vendorRegistryKeySuffix = "Software\\vasudev-siddh\\Juste Recrute Moi";
 const uninstallRegistryKey = `HKCU\\${uninstallRegistryKeySuffix}`;
 
 function fail(message) {
@@ -56,10 +56,10 @@ function localVectorRuntimeArchive() {
   if (process.env.JHM_SMOKE_RUNTIME_PACK_ARCHIVE) {
     return process.env.JHM_SMOKE_RUNTIME_PACK_ARCHIVE;
   }
-  const runtimePack = join(repoRoot, "release-assets", "JustHireMe-runtime-pack-windows.zip");
+  const runtimePack = join(repoRoot, "release-assets", "Juste-Recrute-Moi-runtime-pack-windows.zip");
   return existsSync(runtimePack)
     ? runtimePack
-    : join(repoRoot, "release-assets", "JustHireMe-vector-runtime-windows.zip");
+    : join(repoRoot, "release-assets", "Juste-Recrute-Moi-vector-runtime-windows.zip");
 }
 
 function localRuntimePackUrl() {
@@ -163,9 +163,9 @@ function snapshotRegistryFiles(root) {
 function windowsShortcutPaths() {
   if (process.platform !== "win32") return [];
   return [
-    join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "JustHireMe.lnk"),
-    join(process.env.USERPROFILE || "", "Desktop", "JustHireMe.lnk"),
-    join(process.env.APPDATA || "", "Microsoft", "Internet Explorer", "Quick Launch", "User Pinned", "TaskBar", "JustHireMe.lnk"),
+    join(process.env.APPDATA || "", "Microsoft", "Windows", "Start Menu", "Programs", "Juste Recrute Moi.lnk"),
+    join(process.env.USERPROFILE || "", "Desktop", "Juste Recrute Moi.lnk"),
+    join(process.env.APPDATA || "", "Microsoft", "Internet Explorer", "Quick Launch", "User Pinned", "TaskBar", "Juste Recrute Moi.lnk"),
   ].filter(Boolean);
 }
 
@@ -243,7 +243,7 @@ function readShortcutTarget(shortcut) {
 
 function assertInstalledMetadata(installDir, expectedVersion = "") {
   if (process.platform !== "win32") return;
-  const expectedApp = join(installDir, "justhireme.exe");
+  const expectedApp = join(installDir, "juste-recrute-moi.exe");
   if (!existsSync(expectedApp)) {
     fail(`Installed app executable is missing: ${expectedApp}`);
   }
@@ -285,7 +285,7 @@ async function cleanupInstalledPackage(installDir, registrySnapshots) {
   if (existsSync(uninstaller)) {
     const result = runQuiet(uninstaller, ["/S"]);
     if (result.status !== 0) {
-      console.warn(`Cleanup warning: JustHireMe uninstaller exited with ${result.status}.`);
+      console.warn(`Cleanup warning: Juste Recrute Moi uninstaller exited with ${result.status}.`);
     }
     await sleep(2500);
   }
@@ -561,7 +561,7 @@ async function freshInstallerSmoke() {
     await smokeInstalledSidecar(installDir, appDataDir);
     console.log(`Windows installed package smoke passed: ${installDir}`);
   } finally {
-    killImage("justhireme.exe");
+    killImage("juste-recrute-moi.exe");
     killImage("jhm-sidecar-next.exe");
     killImage("backend.exe");
     await cleanupInstalledPackage(installDir, registrySnapshot);
@@ -591,7 +591,7 @@ async function updateInstallerSmoke() {
 
   try {
     run(oldInstaller, ["/S", `/D=${installDir}`], { timeout: installerTimeoutMs });
-    const app = join(installDir, "justhireme.exe");
+    const app = join(installDir, "juste-recrute-moi.exe");
     let appProcess = null;
     if (existsSync(app)) {
       appProcess = spawn(app, [], {
@@ -610,18 +610,18 @@ async function updateInstallerSmoke() {
       killProcessTree(appProcess);
       await waitForChildClose(appProcess, 5_000);
     }
-    killImage("justhireme.exe");
+    killImage("juste-recrute-moi.exe");
     killImage("jhm-sidecar-next.exe");
     await sleep(1000);
 
     run(newInstaller, ["/S", `/D=${installDir}`], { timeout: installerTimeoutMs });
     assertInstalledMetadata(installDir, expectedVersion);
-    killImage("justhireme.exe");
+    killImage("juste-recrute-moi.exe");
     killImage("jhm-sidecar-next.exe");
     await smokeInstalledSidecar(installDir, appDataDir);
     console.log(`Windows installer-over-existing smoke passed: ${installDir}`);
   } finally {
-    killImage("justhireme.exe");
+    killImage("juste-recrute-moi.exe");
     killImage("jhm-sidecar-next.exe");
     killImage("backend.exe");
     await cleanupInstalledPackage(installDir, registrySnapshot);

@@ -1,11 +1,11 @@
 import { cacheableJson, cleanId, countersWritable, createMemoryCache, envInt, json, redisConfigured, redisPipeline, redisScript, send, visitorKey } from "./_counter.js";
 
-const TOTAL_KEY = "justhireme:downloads:total";
-const UNIQUE_PREFIX = "justhireme:downloads:visitor:";
+const TOTAL_KEY = "juste-recrute-moi:downloads:total";
+const UNIQUE_PREFIX = "juste-recrute-moi:downloads:visitor:";
 const PLATFORM_KEYS = {
-  windows: "justhireme:downloads:windows",
-  mac: "justhireme:downloads:mac",
-  linux: "justhireme:downloads:linux",
+  windows: "juste-recrute-moi:downloads:windows",
+  mac: "juste-recrute-moi:downloads:mac",
+  linux: "juste-recrute-moi:downloads:linux",
 };
 const COUNT_CACHE = createMemoryCache(envInt("COUNTER_SERVER_CACHE_SECONDS", 30 * 60) * 1000);
 const VISITOR_TTL_SECONDS = envInt("COUNTER_VISITOR_TTL_DAYS", 400) * 24 * 60 * 60;
@@ -52,7 +52,7 @@ function countsFromResults(results, baseline) {
   };
 }
 
-async function getDownloadCounts(configured, baseline) {
+async function getTelechargerCounts(configured, baseline) {
   if (!configured) {
     return { configured: false, total: baseline, windows: 0, mac: 0, linux: 0 };
   }
@@ -75,7 +75,7 @@ export default async function handler(request, response) {
     const baseline = Number.parseInt(process.env.DOWNLOAD_COUNT_BASELINE || "0", 10);
 
     if (request.method === "GET") {
-      return send(response, cacheableJson(await getDownloadCounts(configured, baseline)));
+      return send(response, cacheableJson(await getTelechargerCounts(configured, baseline)));
     }
 
     if (request.method !== "POST") {
@@ -126,7 +126,7 @@ export default async function handler(request, response) {
     }));
   } catch (error) {
     return send(response, json({
-      error: "Download counter unavailable",
+      error: "Telecharger counter unavailable",
       total: Number.parseInt(process.env.DOWNLOAD_COUNT_BASELINE || "0", 10),
       windows: 0,
       mac: 0,

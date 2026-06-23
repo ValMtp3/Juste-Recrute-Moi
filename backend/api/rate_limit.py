@@ -60,9 +60,8 @@ def require_rate_limit(limiter: RateLimiter, key: str = "global") -> None:
         # M3: tell the client exactly how long to wait, both via the standard
         # Retry-After header and a human-readable message.
         wait = limiter.retry_after(key)
-        plural = "" if wait == 1 else "s"
         raise HTTPException(
             status_code=429,
-            detail=f"Too many requests. Please wait {wait} second{plural}.",
+            detail=f"Trop de requêtes. Patientez {wait} seconde{'' if wait == 1 else 's'}, puis réessayez.",
             headers={"Retry-After": str(wait)},
         )

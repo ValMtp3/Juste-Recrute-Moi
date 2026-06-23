@@ -107,7 +107,7 @@ fn probe_install_dir_writable(install_dir: &std::path::Path) -> Result<(), Strin
         .map(|duration| duration.as_nanos())
         .unwrap_or_default();
     let probe_path = install_dir.join(format!(
-        ".justhireme-update-write-test-{}-{stamp}",
+        ".juste-recrute-moi-update-write-test-{}-{stamp}",
         std::process::id()
     ));
 
@@ -143,19 +143,19 @@ fn macos_update_block_reason(
 
     if app_path.contains("/AppTranslocation/") {
         return Some(
-            "JustHireMe is running from macOS Gatekeeper App Translocation. Move JustHireMe.app to /Applications or ~/Applications, open it from there, then run the update again.".into(),
+            "Juste Recrute Moi fonctionne from macOS Gatekeeper App Translocation. Move Juste Recrute Moi.app to /Applications or ~/Applications, open it from there, then run the update again.".into(),
         );
     }
 
     if app_path.starts_with("/Volumes/") || install_path.starts_with("/Volumes/") {
         return Some(
-            "JustHireMe is running from a mounted disk image, which macOS exposes as read-only. Drag JustHireMe.app into /Applications or ~/Applications, open the installed copy, then run the update again.".into(),
+            "Juste Recrute Moi fonctionne from a mounted disk image, which macOS exposes as read-only. Drag Juste Recrute Moi.app into /Applications or ~/Applications, open the installed copy, then run the update again.".into(),
         );
     }
 
     if let Err(error) = writable_result {
         return Some(format!(
-            "JustHireMe cannot write to its install folder ({install_path}). Install the latest DMG manually into a writable Applications folder, then future in-app updates can continue. Details: {error}"
+            "Juste Recrute Moi ne peut pas ecrire to its install folder ({install_path}). Install the latest DMG manually into a writable Applications folder, then future in-app updates can continue. Details: {error}"
         ));
     }
 
@@ -169,17 +169,17 @@ mod tests {
 
     #[test]
     fn finds_macos_app_bundle_from_executable_path() {
-        let exe = Path::new("/Applications/JustHireMe.app/Contents/MacOS/JustHireMe");
+        let exe = Path::new("/Applications/Juste Recrute Moi.app/Contents/MacOS/Juste Recrute Moi");
         let bundle = find_app_bundle_path(exe).expect("bundle path");
 
-        assert_eq!(bundle, Path::new("/Applications/JustHireMe.app"));
+        assert_eq!(bundle, Path::new("/Applications/Juste Recrute Moi.app"));
     }
 
     #[test]
     fn blocks_updates_from_mounted_disk_image() {
         let reason = macos_update_block_reason(
-            Path::new("/Volumes/JustHireMe/JustHireMe.app"),
-            Path::new("/Volumes/JustHireMe"),
+            Path::new("/Volumes/Juste Recrute Moi/Juste Recrute Moi.app"),
+            Path::new("/Volumes/Juste Recrute Moi"),
             Ok(()),
         )
         .expect("blocked reason");
@@ -191,7 +191,7 @@ mod tests {
     #[test]
     fn blocks_updates_from_app_translocation() {
         let reason = macos_update_block_reason(
-            Path::new("/private/var/folders/xx/AppTranslocation/123/d/JustHireMe.app"),
+            Path::new("/private/var/folders/xx/AppTranslocation/123/d/Juste Recrute Moi.app"),
             Path::new("/private/var/folders/xx/AppTranslocation/123/d"),
             Ok(()),
         )
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn blocks_updates_when_install_folder_is_not_writable() {
         let reason = macos_update_block_reason(
-            Path::new("/Applications/JustHireMe.app"),
+            Path::new("/Applications/Juste Recrute Moi.app"),
             Path::new("/Applications"),
             Err("Permission denied (os error 13)".into()),
         )
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn allows_updates_from_writable_applications_folder() {
         let reason = macos_update_block_reason(
-            Path::new("/Users/alice/Applications/JustHireMe.app"),
+            Path::new("/Users/alice/Applications/Juste Recrute Moi.app"),
             Path::new("/Users/alice/Applications"),
             Ok(()),
         );
@@ -237,7 +237,7 @@ fn get_update_install_status() -> UpdateInstallStatus {
                     can_update: false,
                     needs_manual_install: true,
                     reason: format!(
-                        "JustHireMe could not determine its app location before updating: {error}"
+                        "Juste Recrute Moi n a pas pu determiner its app location before updating: {error}"
                     ),
                     install_dir: None,
                     app_bundle: None,
@@ -252,7 +252,7 @@ fn get_update_install_status() -> UpdateInstallStatus {
                     platform: "macos".into(),
                     can_update: true,
                     needs_manual_install: false,
-                    reason: "JustHireMe is not running from a macOS app bundle.".into(),
+                    reason: "Juste Recrute Moi ne fonctionne pas from a macOS app bundle.".into(),
                     install_dir: exe.parent().map(display_path),
                     app_bundle: None,
                 };
@@ -267,7 +267,7 @@ fn get_update_install_status() -> UpdateInstallStatus {
                     can_update: false,
                     needs_manual_install: true,
                     reason:
-                        "JustHireMe could not determine the folder that contains the app bundle."
+                        "Juste Recrute Moi n a pas pu determiner the folder that contains the app bundle."
                             .into(),
                     install_dir: None,
                     app_bundle: Some(display_path(&app_bundle)),
@@ -285,7 +285,7 @@ fn get_update_install_status() -> UpdateInstallStatus {
             can_update: reason.is_none(),
             needs_manual_install: reason.is_some(),
             reason: reason.unwrap_or_else(|| {
-                "JustHireMe is installed in a writable location and can use in-app updates.".into()
+                "Juste Recrute Moi est installe in a writable location and can use in-app updates.".into()
             }),
             install_dir: Some(display_path(&install_dir)),
             app_bundle: Some(display_path(&app_bundle)),
@@ -347,11 +347,11 @@ fn local_venv_python_path(backend_dir: &Path) -> Option<PathBuf> {
 fn bundled_runtime_pack_path(app: &AppHandle) -> Option<PathBuf> {
     let resource_dir = app.path().resource_dir().ok()?;
     let asset = if cfg!(target_os = "windows") {
-        "JustHireMe-runtime-pack-windows.zip"
+        "Juste-Recrute-Moi-runtime-pack-windows.zip"
     } else if cfg!(target_os = "macos") {
-        "JustHireMe-runtime-pack-macos.zip"
+        "Juste-Recrute-Moi-runtime-pack-macos.zip"
     } else {
-        "JustHireMe-runtime-pack-linux.zip"
+        "Juste-Recrute-Moi-runtime-pack-linux.zip"
     };
     [
         resource_dir
@@ -415,7 +415,7 @@ fn packaged_sidecar_path(app: &AppHandle) -> Result<PathBuf, String> {
         .collect::<Vec<_>>()
         .join("; ");
     Err(format!(
-        "Bundled backend sidecar was not found. Checked: {checked}. Reinstall JustHireMe or rebuild the package with `npm run build:sidecar` before `tauri build`."
+        "Bundled backend sidecar was not found. Checked: {checked}. Reinstallez Juste Recrute Moi or rebuild the package with `npm run build:sidecar` before `tauri build`."
     ))
 }
 
@@ -545,7 +545,7 @@ fn cleanup_stale_sidecar(app: &AppHandle) {
         eprintln!("[tauri] Cleaning stale sidecar process tree from pid file: {pid}");
         kill_process_tree(pid);
     } else {
-        eprintln!("[tauri] Ignoring stale sidecar pid file for non-JustHireMe process: {pid}");
+        eprintln!("[tauri] Ignoring stale sidecar pid file for processus qui n appartient pas a Juste Recrute Moi: {pid}");
     }
     let _ = std::fs::remove_file(pid_path);
 }

@@ -15,7 +15,7 @@ lancedb = None
 _LANCEDB_IMPORT_ERROR = ""
 _LANCEDB_RESTART_REQUIRED = False
 _LANCEDB_PYO3_DEGRADED = False
-PYO3_RESTART_MESSAGE = "Native vector search is temporarily unavailable; JustHireMe will continue with deterministic matching."
+PYO3_RESTART_MESSAGE = "Native vector search is temporarily unavailable; Juste Recrute Moi will continue with deterministic matching."
 
 
 def default_base_dir() -> str:

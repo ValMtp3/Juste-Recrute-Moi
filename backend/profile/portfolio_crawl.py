@@ -181,7 +181,7 @@ async def _crawl_portfolio_browser(url: str) -> tuple[list[PageSnapshot], str]:
         browser = await launch_chromium(pw, headless=True)
         context = await browser.new_context(
             viewport={"width": 1440, "height": 1100},
-            user_agent="JustHireMe portfolio importer",
+            user_agent="Juste Recrute Moi portfolio importer",
         )
         # SSRF guard: abort any document navigation (incl. HTTP redirects) that
         # resolves to a non-public host, so a redirect can't reach internal IPs.
@@ -350,7 +350,7 @@ def _crawl_portfolio_http(url: str) -> list[PageSnapshot]:
     with httpx.Client(
         timeout=16,
         follow_redirects=True,
-        headers={"User-Agent": "JustHireMe portfolio importer"},
+        headers={"User-Agent": "Juste Recrute Moi portfolio importer"},
         event_hooks={"request": [_block_private_request]},
     ) as client:
         while queue and len(pages) < MAX_PAGES:

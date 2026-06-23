@@ -1,67 +1,70 @@
 # Architecture
 
-JustHireMe is a local-first desktop app with a Tauri shell, React frontend, and Python backend sidecar.
+Juste Recrute Moi est une application desktop local-first composee d'un shell Tauri, d'une interface React et d'un sidecar Python FastAPI.
 
-## High-Level Flow
+## Flux principal
 
 ```text
-Profile ingestion
-  -> Kuzu graph + LanceDB vectors
-  -> Source scrapers
-  -> Lead quality gate
-  -> Fit ranking / semantic matching
-  -> Customization package generation
-  -> Local CRM and review UI
+Profil candidat
+  -> graphe Kuzu + vecteurs LanceDB
+  -> connecteurs d'offres
+  -> normalisation JobOffer
+  -> filtre qualite
+  -> deduplication
+  -> scoring profil/offre
+  -> pipeline local et generation de documents
 ```
 
 ## Frontend
 
-The React app in `src/` is responsible for:
+L'application React dans `src/` gere :
 
-- navigation and workspace UI
-- lead cards and filters
-- settings
-- profile and ingestion screens
-- customization package review
-- WebSocket event display
+- la navigation et les vues de travail ;
+- les cartes d'offres, filtres et badges de source ;
+- les reglages ;
+- les ecrans profil et import ;
+- le pipeline local ;
+- l'affichage des evenements WebSocket.
 
-The frontend talks to the backend through authenticated local HTTP requests. Tauri provides the backend port and API token at runtime.
+Le frontend communique avec le backend via des requetes HTTP locales authentifiees. Tauri fournit le port du backend et le jeton runtime au demarrage.
 
 ## Backend
 
-The Python backend in `backend/` is responsible for:
+Le backend Python dans `backend/` gere :
 
-- FastAPI routes
-- source scraping
-- quality gating
-- ranking and evaluation
-- profile ingestion
-- vector search fallback behavior
-- PDF and outreach generation
-- local persistence
+- les routes FastAPI ;
+- les connecteurs d'offres ;
+- la normalisation vers `JobOffer` ;
+- la quality gate ;
+- la deduplication ;
+- le scoring et l'evaluation ;
+- l'ingestion de profil ;
+- la recherche vectorielle de secours ;
+- la generation de CV, lettres et messages ;
+- la persistance locale.
 
-Important modules:
+Modules importants :
 
-- `backend/automation/free_scout.py`: direct/free source scraping
-- `backend/automation/scout.py`: broader source scraping orchestration
-- `backend/discovery/quality_gate.py`: pre-save quality checks
-- `backend/ranking/scoring_engine.py`: deterministic fit scoring
-- `backend/ranking/semantic.py`: LanceDB semantic matching and fallback behavior
-- `backend/generation/service.py` and `backend/generation/generators/`: resume, cover letter, outreach, and package generation
-- `backend/data/repository.py`: repository facade for local persistence
-- `backend/data/sqlite/`, `backend/data/graph/`, and `backend/data/vector/`: SQLite, Kuzu, and LanceDB access helpers
+- `backend/discovery/sources/` : connecteurs France Travail, ATS, JobSpy, import URL et sources best effort ;
+- `backend/discovery/sources/common.py` : modele normalise et helpers communs ;
+- `backend/discovery/quality_gate.py` : controle qualite avant enregistrement ;
+- `backend/ranking/scoring_engine.py` : scoring deterministe ;
+- `backend/ranking/semantic.py` : matching semantique LanceDB avec fallback ;
+- `backend/generation/service.py` et `backend/generation/generators/` : generation des documents et messages ;
+- `backend/data/repository.py` : facade de persistance locale ;
+- `backend/data/sqlite/`, `backend/data/graph/`, `backend/data/vector/` : acces SQLite, Kuzu et LanceDB.
 
-## Storage
+## Stockage local
 
-Local storage includes:
+Les donnees locales incluent :
 
-- SQLite for leads, settings, events, generated asset metadata
-- Kuzu for profile graph data
-- LanceDB for profile vectors
-- local files for generated PDFs
+- SQLite pour les offres, reglages, evenements et metadonnees ;
+- Kuzu pour le graphe profil ;
+- LanceDB pour les vecteurs ;
+- des fichiers locaux pour les documents generes.
 
-These files should not be committed or uploaded in public issues.
+Ces donnees ne doivent jamais etre commitees ni jointes a une issue publique.
 
-## Experimental Automation
+## Automatisation experimentale
 
-Browser automation exists as a contributor lab and is intentionally separate from the core OSS promise. The supported workflow is scraper, ranker, vector matching, and customizer.
+L'automatisation navigateur reste un laboratoire contributeur. Le coeur stable du produit est l'agregation d'offres, le scoring, la revue locale et la generation de documents.

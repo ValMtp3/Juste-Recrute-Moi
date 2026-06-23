@@ -1,20 +1,20 @@
-# JustHireMe Backend
+# Backend Juste Recrute Moi
 
-Python backend sidecar for JustHireMe.
+Backend Python local de l'application Juste Recrute Moi.
 
-## Responsibilities
+## Responsabilités
 
-- FastAPI HTTP/WebSocket API
-- local CRM persistence
-- source scraping
-- lead quality gating
-- deterministic and semantic ranking
-- profile graph/vector ingestion
-- resume, cover letter, and outreach generation
+- API HTTP/WebSocket FastAPI ;
+- persistance CRM locale ;
+- collecte des sources d'offres ;
+- filtre qualité des leads ;
+- ranking déterministe et sémantique ;
+- ingestion du profil dans le graphe et les vecteurs ;
+- génération de CV, lettres et messages d'approche.
 
-## Setup
+## Installation
 
-From the repository root:
+Depuis la racine du dépôt :
 
 ```bash
 cd backend
@@ -23,18 +23,25 @@ uv sync --dev
 
 ## Tests
 
-Windows:
+Windows :
 
 ```bash
 backend/.venv/Scripts/python.exe -m pytest backend/tests
 ```
 
-macOS/Linux:
+macOS/Linux :
 
 ```bash
 backend/.venv/bin/python -m pytest backend/tests
 ```
 
-## Notes
+Dans le sandbox Codex, utilisez un cache local :
 
-The backend stores local user data through SQLite, Kuzu, LanceDB, and generated files. Do not commit local app data, vector stores, graph databases, generated PDFs, API keys, cookies, or private resumes.
+```bash
+cd backend
+UV_CACHE_DIR=../.uv-cache uv run python -m pytest tests -q
+```
+
+## Données Sensibles
+
+Le backend manipule des données locales via SQLite, Kuzu, LanceDB et des fichiers générés. Ne commitez jamais les données d'application, stores vectoriels, graphes, PDF générés, clés API, cookies ou CV privés.

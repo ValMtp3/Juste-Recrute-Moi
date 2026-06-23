@@ -922,7 +922,7 @@ class TestIngestionEndpoints(unittest.TestCase):
             resp = post("/api/v1/ingest/github", json={"username": "example-candidate"})
 
         self.assertEqual(resp.status_code, 502)
-        self.assertIn("Could not ingest the GitHub profile", resp.json()["detail"])
+        self.assertIn("Le profil GitHub n'a pas pu être importé", resp.json()["detail"])
 
     def test_profile_import_empty_body(self):
         resp = post("/api/v1/ingest/profile", json={})

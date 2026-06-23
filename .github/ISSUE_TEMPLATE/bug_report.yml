@@ -1,31 +1,31 @@
-name: Bug report
-description: Report a reproducible problem
-title: "[Bug]: "
+name: Rapport de bug
+description: Signaler un problème reproductible
+title: "[Bug] "
 labels: ["bug"]
 body:
   - type: textarea
     id: summary
     attributes:
-      label: Summary
-      description: What happened?
+      label: Résumé
+      description: Que s'est-il passé ?
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: Steps to reproduce
-      description: Use sanitized data only. Do not include API keys or private resumes.
-      placeholder: "1. Open...\n2. Run...\n3. See..."
+      label: Étapes de reproduction
+      description: Utilisez seulement des données anonymisées. N'incluez aucune clé API ni aucun CV privé.
+      placeholder: "1. Ouvrir...\n2. Lancer...\n3. Constater..."
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
+      label: Comportement attendu
     validations:
       required: true
   - type: input
     id: platform
     attributes:
-      label: OS / app version
-      placeholder: "Windows 11, JustHireMe v0.1"
+      label: OS / version de l'app
+      placeholder: "Windows 11, Juste Recrute Moi v0.1"

@@ -197,7 +197,7 @@ This role is a great fit for customer-facing technical professionals. Apply here
 
         scrape_target.assert_not_called()
         self.assertEqual(leads, [])
-        self.assertIn("No free-source targets configured", free_scout.LAST_ERRORS[0])
+        self.assertIn("Aucune cible de source gratuite configurée", free_scout.LAST_ERRORS[0])
         self.assertNotIn("openai", " ".join(free_scout.DEFAULT_TARGETS).lower())
         self.assertNotIn("anthropic", " ".join(free_scout.DEFAULT_TARGETS).lower())
         self.assertNotIn("perplexity", " ".join(free_scout.DEFAULT_TARGETS).lower())

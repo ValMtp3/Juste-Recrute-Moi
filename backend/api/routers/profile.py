@@ -52,14 +52,14 @@ async def delete_skill_endpoint(sid: str, service=Depends(get_profile_service)):
 @router.post("/profile/experience")
 async def add_experience_endpoint(body: ExperienceBody, service=Depends(get_profile_service)):
     if not body.role.strip() and not body.co.strip():
-        raise HTTPException(status_code=422, detail="Role or company is required")
+        raise HTTPException(status_code=422, detail="Le poste ou l'entreprise est obligatoire")
     return await _call_service(service.add_experience, body.role, body.co, body.period, body.d)
 
 
 @router.put("/profile/experience/{eid}")
 async def update_experience_endpoint(eid: str, body: ExperienceBody, service=Depends(get_profile_service)):
     if not body.role.strip() and not body.co.strip():
-        raise HTTPException(status_code=422, detail="Role or company is required")
+        raise HTTPException(status_code=422, detail="Le poste ou l'entreprise est obligatoire")
     return await _call_service(service.update_experience, eid, body.role, body.co, body.period, body.d)
 
 

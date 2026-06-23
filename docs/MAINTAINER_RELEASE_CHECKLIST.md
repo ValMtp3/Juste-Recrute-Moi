@@ -1,47 +1,50 @@
-# Maintainer Release Checklist
+# Checklist mainteneur de release
 
-Use this before cutting a public release or sharing a build link.
+A utiliser avant de publier une release ou de partager un build.
 
-For the full production release plan, see [Production Release Roadmap](PRODUCTION_RELEASE_ROADMAP.md).
+Pour la strategie complete, voir [Roadmap de release production](PRODUCTION_RELEASE_ROADMAP.md).
 
-## Required Local Checks
+## Controles locaux requis
 
 - [ ] `npm ci`
-- [ ] `npm run check:all`
+- [ ] `npm run typecheck`
+- [ ] `npm test`
+- [ ] `npm run build`
 - [ ] `npm run lint`
-- [ ] `npm run test:coverage`
-- [ ] `cd backend && .\.venv\Scripts\python.exe -m ruff check .`
-- [ ] `cd backend && .\.venv\Scripts\python.exe -m mypy . --ignore-missing-imports`
-- [ ] `cd backend && .\.venv\Scripts\python.exe -m pytest tests -q --cov=. --cov-report=term-missing --cov-fail-under=60`
+- [ ] `cd backend && uv run python -m pytest tests -q`
+- [ ] `cd backend && uv run ruff check .`
+- [ ] `cd src-tauri && cargo check`
 - [ ] `npm run release:smoke`
 - [ ] `npm run smoke:windows-update`
 
-`npm run release:smoke` is the normal local release validation path. Do not require local signed installer builds for RC validation.
+`npm run release:smoke` est le chemin local normal. Une machine locale ne doit pas etre obligatoire pour produire un installateur public signe.
 
-## CI Release Checks
+## Controles CI de release
 
-- [ ] Tagged release verifies `TAURI_SIGNING_PRIVATE_KEY` and, when used, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-- [ ] Windows NSIS installer is produced by the Tauri build in GitHub Actions.
-- [ ] `npm run release:verify-updater -- release-assets vX.Y.Z` passes for generated release assets.
-- [ ] GitHub Actions installs the newly built Windows installer into a temp directory and smokes the installed sidecar.
-- [ ] Update-over-existing smoke passes when a previous stable Windows installer is available.
+- [ ] Le tag verifie la coherence des versions.
+- [ ] Les secrets `TAURI_SIGNING_PRIVATE_KEY` et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` sont presents si la signature updater est active.
+- [ ] L'installateur Windows NSIS est produit par Tauri dans GitHub Actions.
+- [ ] `latest.json` correspond au tag, aux artefacts et aux fichiers `.sig`.
+- [ ] La CI installe l'installateur fraichement construit dans un dossier temporaire.
+- [ ] Le sidecar installe repond a `/health`.
+- [ ] Le smoke de mise a jour par-dessus une ancienne version passe quand un ancien installateur stable est disponible.
 
-## Privacy And Safety
+## Confidentialite et securite
 
-- [ ] No `.env`, API keys, cookies, bearer tokens, private resumes, generated PDFs, local databases, graph stores, vector stores, private app data, or packaged sidecar binaries are committed.
-- [ ] Live-fire and test fixtures use fake `.test` identity data, not personal emails, phone numbers, or LinkedIn profiles.
-- [ ] Browser automation and auto-apply behavior is documented as experimental and opt-in.
-- [ ] Release notes describe JustHireMe as local-first and do not imply a hosted backend.
-- [ ] Release notes include SHA256 checksums for uploaded installer assets.
-- [ ] Tauri updater signing secrets live in the GitHub Actions release environment, not in local docs or committed files.
-- [ ] Tauri capabilities remain narrow; frontend code should not receive broad shell execution permissions.
-- [ ] The bundled sidecar listens on `127.0.0.1` and requires the runtime token for HTTP and WebSocket access.
+- [ ] Aucun `.env`, secret, cookie, bearer token, CV prive, PDF genere, base locale, graphe, vecteur, donnees d'app ou sidecar package n'est committe.
+- [ ] Les fixtures utilisent des donnees `.test`, pas des emails, telephones ou profils LinkedIn reels.
+- [ ] L'automatisation navigateur et l'auto-apply sont presentes comme experimentaux et opt-in.
+- [ ] Les notes de release decrivent Juste Recrute Moi comme local-first, sans backend heberge implicite.
+- [ ] Les SHA256 de chaque artefact public sont publies.
+- [ ] Les secrets de signature Tauri restent dans l'environnement GitHub Actions.
+- [ ] Les capabilities Tauri restent limitees.
+- [ ] Le sidecar ecoute sur `127.0.0.1` et exige le jeton runtime.
 
-## Release Flow
+## Deroule de release
 
-1. Update versions with `npm run version:bump -- X.Y.Z`.
-2. Run the required local checks above.
-3. Create a tag like `vX.Y.Z`.
-4. Push the tag and let the release workflow build, sign, verify updater artifacts, smoke the Windows installer, and publish the GitHub Release from CI.
-5. Download and smoke-test the GitHub-built Windows installer before sharing the release link widely.
-6. If a previous stable installer exists, confirm the in-app update installs the new version and preserves local app data.
+1. Mettre les versions a jour avec `npm run version:bump -- X.Y.Z`.
+2. Lancer les controles locaux.
+3. Creer un tag `vX.Y.Z`.
+4. Pousser le tag et laisser la CI construire, signer, verifier et publier.
+5. Installer le build Windows produit par GitHub Actions avant de partager le lien.
+6. Si une release precedente existe, verifier que la mise a jour conserve les donnees locales.

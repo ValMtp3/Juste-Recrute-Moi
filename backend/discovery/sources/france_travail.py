@@ -104,7 +104,7 @@ async def _json_search(params: dict[str, str]) -> dict:
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/json",
-        "User-Agent": "JustHireMe France Travail connector",
+        "User-Agent": "Juste Recrute Moi France Travail connector",
     }
     async with guarded_async_client(timeout=httpx.Timeout(25.0), headers=headers, follow_redirects=True) as cx:
         response = await cx.get(SEARCH_URL, params=params)

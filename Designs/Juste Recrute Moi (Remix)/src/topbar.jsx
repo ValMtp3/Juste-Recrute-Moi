@@ -12,7 +12,7 @@ const Topbar = ({ view, leadCounts, ghost, setGhost }) => {
     <header className="topbar">
       <div className="col gap-1" style={{ flex: 1 }}>
         <div className="row gap-2 mono" style={{ fontSize: 10.5, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.14em" }}>
-          <span>JustHireMe</span>
+          <span>Juste Recrute Moi</span>
           <span style={{ opacity: 0.5 }}>/</span>
           <span style={{ color: `var(--${meta.tone}-ink)` }}>{meta.label}</span>
         </div>

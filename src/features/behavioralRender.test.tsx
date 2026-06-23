@@ -83,8 +83,8 @@ describe("high-risk component behavioral render coverage", () => {
     const profileHtml = renderToStaticMarkup(<ProfileView api={api} setView={vi.fn()} />);
     const ingestionHtml = renderToStaticMarkup(<IngestionView api={api} />);
 
-    expect(profileHtml).toContain("Profile");
-    expect(ingestionHtml).toContain("Resume");
+    expect(profileHtml).toContain("Profil candidat");
+    expect(ingestionHtml).toContain("Ajouter du contexte");
   });
 
   it("renders apply and approval workflows with mocked API surface", () => {
@@ -93,7 +93,7 @@ describe("high-risk component behavioral render coverage", () => {
     );
     const drawerHtml = renderToStaticMarkup(<ApprovalDrawer j={lead} api={api} onClose={vi.fn()} />);
 
-    expect(applyHtml).toContain("job");
+    expect(applyHtml).toContain("offre");
     expect(drawerHtml).toContain("Backend Engineer");
     expect(drawerHtml).toContain("Marquer comme postulée");
   });

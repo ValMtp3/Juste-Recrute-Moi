@@ -1,37 +1,37 @@
-# JustHireMe MCP
+# MCP Juste Recrute Moi
 
-JustHireMe exposes a lightweight stdio MCP server for agent workflows that need job lead intelligence without running the full desktop app.
+Juste Recrute Moi expose un petit serveur MCP sur `stdio` pour les agents qui ont besoin d'evaluer ou d'enrichir des offres sans lancer toute l'application desktop.
 
-## Start
+## Demarrage
 
-From the repository root:
+Depuis la racine du depot :
 
 ```powershell
 backend\.venv\Scripts\python.exe backend\mcp_server.py
 ```
 
-In the client config below, replace `<ABSOLUTE_PATH_TO_REPO>` with the absolute path to your local checkout of this repository.
+Dans la configuration client, remplacez `<CHEMIN_ABSOLU_DU_DEPOT>` par le chemin absolu de votre checkout local.
 
-The server implements `initialize`, `tools/list`, and `tools/call` over newline-delimited JSON-RPC on stdio.
+Le serveur implemente `initialize`, `tools/list` et `tools/call` en JSON-RPC delimite par ligne sur `stdio`.
 
-## Tools
+## Outils disponibles
 
-- `score_job_fit`: scores a raw posting against a JustHireMe candidate profile JSON.
-- `evaluate_lead_quality`: runs the deterministic lead quality gate for a normalized lead.
-- `extract_lead_intel`: extracts company, location, budget, urgency, stack, and signal quality from raw text.
+- `score_job_fit` : note une offre brute par rapport a un profil candidat Juste Recrute Moi.
+- `evaluate_lead_quality` : applique la quality gate deterministe sur une offre normalisee.
+- `extract_lead_intel` : extrait l'entreprise, la localisation, le budget, l'urgence, la stack et les signaux de qualite depuis un texte brut.
 
-## Example Client Config
+## Exemple de configuration client
 
 ```json
 {
   "mcpServers": {
-    "justhireme": {
-      "command": "<ABSOLUTE_PATH_TO_REPO>\\backend\\.venv\\Scripts\\python.exe",
-      "args": ["<ABSOLUTE_PATH_TO_REPO>\\backend\\mcp_server.py"],
-      "cwd": "<ABSOLUTE_PATH_TO_REPO>"
+    "juste-recrute-moi": {
+      "command": "<CHEMIN_ABSOLU_DU_DEPOT>\\backend\\.venv\\Scripts\\python.exe",
+      "args": ["<CHEMIN_ABSOLU_DU_DEPOT>\\backend\\mcp_server.py"],
+      "cwd": "<CHEMIN_ABSOLU_DU_DEPOT>"
     }
   }
 }
 ```
 
-Keep the MCP layer small and deterministic. If a tool needs persisted lead state, generated PDFs, or long-running scans, expose the existing FastAPI sidecar instead of duplicating that behavior here.
+La couche MCP doit rester petite et deterministe. Si un outil a besoin d'etat persistant, de PDF generes ou de scans longs, il vaut mieux exposer le sidecar FastAPI existant que dupliquer cette logique ici.

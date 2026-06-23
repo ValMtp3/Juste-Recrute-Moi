@@ -1,31 +1,31 @@
-class JustHireMeError(Exception):
+class JusteRecruteMoiError(Exception):
     """Base class for domain-level errors."""
 
 
-class LeadNotFoundError(JustHireMeError):
+class LeadNotFoundError(JusteRecruteMoiError):
     pass
 
 
-class ProfileNotFoundError(JustHireMeError):
+class ProfileNotFoundError(JusteRecruteMoiError):
     pass
 
 
-class IngestionError(JustHireMeError):
+class IngestionError(JusteRecruteMoiError):
     pass
 
 
-class ScoringError(JustHireMeError):
+class ScoringError(JusteRecruteMoiError):
     pass
 
 
-class GenerationError(JustHireMeError):
+class GenerationError(JusteRecruteMoiError):
     pass
 
 
-class DiscoveryError(JustHireMeError):
+class DiscoveryError(JusteRecruteMoiError):
     pass
 
 
-class ConfigurationError(JustHireMeError):
+class ConfigurationError(JusteRecruteMoiError):
     pass
 

@@ -36,7 +36,7 @@ def create_app(
     websocket_token_guard=None,
 ) -> FastAPI:
     app = FastAPI(
-        title="JustHireMe",
+        title="Juste Recrute Moi",
         version=APP_VERSION,
         lifespan=lifespan,
     )

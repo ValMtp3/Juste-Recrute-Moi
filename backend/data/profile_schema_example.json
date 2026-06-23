@@ -1,5 +1,5 @@
 {
-  "$comment": "JustHireMe profile import format. Remove $comment keys before importing.",
+  "$comment": "Juste Recrute Moi profile import format. Remove $comment keys before importing.",
   "candidate": {
     "name": "Your Full Name",
     "summary": "2–4 sentence professional summary."
@@ -28,10 +28,10 @@
   ],
   "projects": [
     {
-      "title":  "JustHireMe",
+      "title":  "Juste Recrute Moi",
       "stack":  "Tauri, React, Python, FastAPI, Kùzu",
-      "repo":   "https://github.com/yourhandle/justhireme",
-      "impact": "Local-first autonomous job application engine."
+      "repo":   "https://github.com/yourhandle/juste-recrute-moi",
+      "impact": "Agrégateur local-first d'offres d'emploi pour le marché français."
     }
   ],
   "education": [

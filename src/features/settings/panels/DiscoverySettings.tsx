@@ -29,49 +29,49 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
 
   return (
     <>
-{/* 3. Scraping */}
+{/* 3. Sources */}
           <div style={{ borderTop: "1px dashed var(--line)", paddingTop: 18 }}>
-            <SectionLabel label="Scraping & Discovery" />
+            <SectionLabel label="Sources et découverte" />
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <LabelledField label="Target roles / titles" hint="optional; the profile graph still stays primary">
+              <LabelledField label="Postes ou intitulés ciblés" hint="facultatif ; le graphe profil reste prioritaire">
                 <textarea value={cfg.desired_position || cfg.onboarding_target_role || ""} onChange={e => {
                   onChange("desired_position", e.target.value);
                   onChange("onboarding_target_role", e.target.value);
                 }} rows={3} className="mono field-input"
-                  placeholder={"Backend Engineer\nAI Engineer\nFull-stack Developer"}
+                  placeholder={"Développeur backend\nChef de projet digital\nCommercial B2B"}
                   style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
               </LabelledField>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <LabelledField label="Apify Token" hint="for LinkedIn/X scraping">
+                <LabelledField label="Token Apify" hint="optionnel, pour scraping LinkedIn/X">
                   <input type="password" placeholder="apify_api_***" value={cfg.apify_token} onChange={set("apify_token")} className="mono field-input"
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                 </LabelledField>
-                <LabelledField label="Apify Actor ID" hint="actor to run">
+                <LabelledField label="Actor Apify" hint="actor à exécuter">
                   <input type="text" placeholder="drobnikj/..." value={cfg.apify_actor} onChange={set("apify_actor")} className="mono field-input"
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                 </LabelledField>
               </div>
-              <LabelledField label="LinkedIn session cookie" hint="li_at value">
+              <LabelledField label="Cookie de session LinkedIn" hint="valeur li_at">
                 <input type="password" placeholder="li_at=***" value={cfg.linkedin_cookie} onChange={set("linkedin_cookie")} className="mono field-input"
                   style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
               </LabelledField>
               <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
-                <SectionLabel label="Recruiter Lookup" sub="Hunter.io emails, optional Proxycurl LinkedIn" />
+                <SectionLabel label="Recherche de contacts" sub="emails Hunter.io, LinkedIn Proxycurl optionnel" />
                 <BigToggle
                   active={cfg.contact_lookup_enabled !== "false"}
                   onToggle={() => onChange("contact_lookup_enabled", cfg.contact_lookup_enabled === "false" ? "true" : "false")}
                   icon="user"
-                  label="Who to contact"
+                  label="Contact à privilégier"
                   badge={cfg.contact_lookup_enabled !== "false" ? "on" : "off"}
-                  sub="Runs after package generation and stores the best contact on the lead"
+                  sub="Après génération du dossier, ajoute le meilleur contact trouvé à l'offre"
                   tone="blue"
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <LabelledField label="Hunter.io API key" hint="domain search">
+                  <LabelledField label="Clé API Hunter.io" hint="recherche par domaine">
                     <input type="password" placeholder="hunter key" value={cfg.hunter_api_key} onChange={set("hunter_api_key")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
-                  <LabelledField label="Proxycurl API key" hint="optional LinkedIn resolve">
+                  <LabelledField label="Clé API Proxycurl" hint="résolution LinkedIn optionnelle">
                     <input type="password" placeholder="proxycurl key" value={cfg.proxycurl_api_key} onChange={set("proxycurl_api_key")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
@@ -79,12 +79,12 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
               </div>
 
               <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
-                <SectionLabel label="X Signals" sub="recent posts for job leads" />
-                <LabelledField label="X API Bearer Token" hint="Developer Console token">
+                <SectionLabel label="Signaux X" sub="posts récents pouvant signaler une offre" />
+                <LabelledField label="Bearer token X" hint="token de la console développeur">
                   <input type="password" placeholder="Bearer token" value={cfg.x_bearer_token} onChange={set("x_bearer_token")} className="mono field-input"
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                 </LabelledField>
-                <LabelledField label="X recent-search queries" hint="one query per line; leave blank for AI defaults">
+                <LabelledField label="Requêtes X recent-search" hint="une requête par ligne ; vide = valeurs IA par défaut">
                   <textarea value={cfg.x_search_queries} onChange={set("x_search_queries")} rows={4} className="mono field-input"
                     placeholder={[
                       "(\"hiring\" OR \"job opening\" OR \"open role\") (\"marketing\" OR \"sales\" OR \"operations\" OR \"developer\") lang:en -is:retweet",
@@ -93,25 +93,25 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                     ].join("\n")}
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
                 </LabelledField>
-                <LabelledField label="X watchlist handles" hint="one founder, hiring, or company account per line">
+                <LabelledField label="Comptes X à surveiller" hint="un fondateur, recruteur ou compte entreprise par ligne">
                   <textarea value={cfg.x_watchlist} onChange={set("x_watchlist")} rows={3} className="mono field-input"
                     placeholder={"@target_company\n@founder_or_hiring_team\n@job_board_handle"}
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
                 </LabelledField>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8 }}>
-                  <LabelledField label="Requests" hint="per scan">
+                  <LabelledField label="Requêtes" hint="par scan">
                     <input type="number" min={1} max={50} value={cfg.x_max_requests_per_scan} onChange={set("x_max_requests_per_scan")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
-                  <LabelledField label="Posts" hint="per query">
+                  <LabelledField label="Posts" hint="par requête">
                     <input type="number" min={10} max={100} value={cfg.x_max_results_per_query} onChange={set("x_max_results_per_query")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
-                  <LabelledField label="Min signal" hint="0-100">
+                  <LabelledField label="Signal min." hint="0-100">
                     <input type="number" min={0} max={100} value={cfg.x_min_signal_score} onChange={set("x_min_signal_score")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
-                  <LabelledField label="Hot score" hint="0-100">
+                  <LabelledField label="Score chaud" hint="0-100">
                     <input type="number" min={1} max={100} value={cfg.x_hot_lead_threshold} onChange={set("x_hot_lead_threshold")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
@@ -120,24 +120,24 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                   active={cfg.x_enable_notifications === "true"}
                   onToggle={() => onChange("x_enable_notifications", cfg.x_enable_notifications === "true" ? "false" : "true")}
                   icon="spark"
-                  label="Hot X notifications"
+                  label="Notifications X prioritaires"
                   badge={cfg.x_enable_notifications === "true" ? "on" : "off"}
-                  sub="Desktop alert when an X lead crosses the hot score"
+                  sub="Alerte desktop quand une offre X dépasse le score chaud"
                   tone="orange"
                 />
               </div>
               <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
-                <SectionLabel label="Free Source Stack" sub="Optional job-only ATS, GitHub, HN, and Reddit sources" />
+                <SectionLabel label="Sources gratuites" sub="France Travail, JobSpy, ATS, GitHub, HN et Reddit" />
                 <BigToggle
                   active={cfg.free_sources_enabled !== "false"}
                   onToggle={() => onChange("free_sources_enabled", cfg.free_sources_enabled === "false" ? "true" : "false")}
                   icon="search"
-                  label="Free scouts"
+                  label="Scans gratuits"
                   badge={cfg.free_sources_enabled !== "false" ? "on" : "off"}
-                  sub="Off by default; saves job leads and classifies seniority for filtering"
+                  sub="Activé par défaut ; enregistre les offres et classe leur niveau pour le filtrage"
                   tone="green"
                 />
-                <LabelledField label="Company watchlist" hint="provider,slug per line: greenhouse,<company-slug>">
+                <LabelledField label="Entreprises à surveiller" hint="fournisseur,slug par ligne : greenhouse,<slug-entreprise>">
                   <textarea value={cfg.company_watchlist} onChange={set("company_watchlist")} rows={4} className="mono field-input"
                     placeholder={[
                       "greenhouse,<company-slug>",
@@ -148,7 +148,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                     ].join("\n")}
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
                 </LabelledField>
-                <LabelledField label="Free source targets" hint="github:, hn:, reddit:, or ats: targets">
+                <LabelledField label="Cibles de sources gratuites" hint="france_travail:, jobspy:, import:, github:, hn:, reddit: ou ats:">
                   <textarea value={cfg.free_source_targets} onChange={set("free_source_targets")} rows={5} className="mono field-input"
                     placeholder={[
                       "github:<target role> hiring help wanted",
@@ -159,28 +159,28 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
                 </LabelledField>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
-                  <LabelledField label="Free requests" hint="per scan">
+                  <LabelledField label="Requêtes gratuites" hint="par scan">
                     <input type="number" min={1} max={80} value={cfg.free_source_max_requests} onChange={set("free_source_max_requests")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
-                  <LabelledField label="Free min signal" hint="0-100">
+                  <LabelledField label="Signal gratuit min." hint="0-100">
                     <input type="number" min={0} max={100} value={cfg.free_source_min_signal_score} onChange={set("free_source_min_signal_score")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
                 </div>
               </div>
               <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
-                <SectionLabel label="Custom Connectors" sub="Premium/private JSON APIs normalized into job leads" />
+                <SectionLabel label="Connecteurs personnalisés" sub="APIs JSON privées ou premium normalisées en offres" />
                 <BigToggle
                   active={cfg.custom_connectors_enabled === "true"}
                   onToggle={() => onChange("custom_connectors_enabled", cfg.custom_connectors_enabled === "true" ? "false" : "true")}
                   icon="layers"
-                  label="Connector scan"
+                  label="Scan des connecteurs"
                   badge={cfg.custom_connectors_enabled === "true" ? "on" : "off"}
-                  sub="Use this for paid tools, internal feeds, private job APIs, and premium lead providers"
+                  sub="Pour outils payants, flux internes, APIs d'emploi privées et fournisseurs premium"
                   tone="purple"
                 />
-                <LabelledField label="Connector definitions" hint="JSON array; no secrets here">
+                <LabelledField label="Définitions des connecteurs" hint="tableau JSON ; pas de secret ici">
                   <textarea value={cfg.custom_connectors} onChange={set("custom_connectors")} rows={9} className="mono field-input"
                     placeholder={JSON.stringify([
                       {
@@ -201,7 +201,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                     ], null, 2)}
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
                 </LabelledField>
-                <LabelledField label="Connector headers" hint="JSON object; sensitive, preserved when masked">
+                <LabelledField label="Headers des connecteurs" hint="objet JSON ; sensible, conservé si masqué">
                   <textarea value={cfg.custom_connector_headers} onChange={set("custom_connector_headers")} rows={5} className="mono field-input"
                     placeholder={JSON.stringify({
                       JobFeed: {
@@ -212,17 +212,17 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
                 </LabelledField>
                 <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.45 }}>
-                  Each connector fetches JSON, reads <span className="mono">items_path</span>, maps fields, then sends leads through the same quality gate. Keep tokens in headers, not definitions.
+                  Chaque connecteur récupère du JSON, lit <span className="mono">items_path</span>, mappe les champs, puis envoie les offres dans le même filtre qualité. Gardez les tokens dans les headers, pas dans les définitions.
                 </div>
               </div>
-              <LabelledField label="Target job boards / search URLs" hint="comma-separated">
+              <LabelledField label="Jobboards / URLs de recherche ciblés" hint="séparés par des virgules">
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Market focus</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Marché ciblé</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {[
-                      { id: "france", label: "France market", sub: "France Travail, Indeed France via JobSpy, ATS pages, and French job boards" },
-                      { id: "global", label: "Global market", sub: "Worldwide job boards, ATS pages, remote feeds, and role-neutral sources" },
-                      { id: "india", label: "India market", sub: "India job boards, Indian startups, local ATS pages, and remote-India roles" },
+                      { id: "france", label: "Marché français", sub: "France Travail, Indeed France via JobSpy, ATS et jobboards français" },
+                      { id: "global", label: "International", sub: "Jobboards mondiaux, ATS, flux remote et sources généralistes" },
+                      { id: "india", label: "Marché indien", sub: "Jobboards indiens, startups locales, ATS et offres remote India" },
                     ].map(mode => {
                       const active = (cfg.job_market_focus || "global") === mode.id;
                       return (
@@ -251,24 +251,24 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                           addSiteSource();
                         }
                       }}
-                      placeholder="Paste a job site, ATS board, RSS/API URL, or domain"
+                      placeholder="Collez un jobboard, un ATS, une URL RSS/API ou un domaine"
                       style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5 }}
                     />
                     <button className="btn btn-accent" onClick={addSiteSource} disabled={!siteDraft.trim()} style={{ minWidth: 110, justifyContent: "center" }}>
-                      Add source
+                      Ajouter
                     </button>
                   </div>
                   {siteDraft.trim() && (
                     <div className="mono" style={{ marginBottom: 10, color: "var(--ink-3)", fontSize: 10.5, lineHeight: 1.45 }}>
-                      Will add: {sourceTargetFromSite(siteDraft)}
+                      Sera ajouté : {sourceTargetFromSite(siteDraft)}
                     </div>
                   )}
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7 }}>Quick add sources</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7 }}>Ajout rapide</div>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                     {[
-                      { label: "Global preset", url: GLOBAL_SOURCE_PRESET },
-                      { label: "France preset", url: FRANCE_SOURCE_PRESET },
-                      { label: "India preset", url: INDIA_SOURCE_PRESET },
+                      { label: "Preset international", url: GLOBAL_SOURCE_PRESET },
+                      { label: "Preset France", url: FRANCE_SOURCE_PRESET },
+                      { label: "Preset Inde", url: INDIA_SOURCE_PRESET },
                       { label: "HN Hiring", url: "hn-hiring" },
                       { label: "RemoteOK", url: "https://remoteok.com/api" },
                       { label: "LinkedIn", url: "site:linkedin.com/jobs" },
@@ -299,9 +299,9 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                         <button key={p.label} onClick={() => {
                           if (already) return;
                           const sep = cfg.job_boards.trim() ? ",\n" : "";
-                          if (p.label === "France preset") onChange("job_market_focus", "france");
-                          if (p.label === "India preset") onChange("job_market_focus", "india");
-                          if (p.label === "Global preset") onChange("job_market_focus", "global");
+                          if (p.label === "Preset France") onChange("job_market_focus", "france");
+                          if (p.label === "Preset Inde") onChange("job_market_focus", "india");
+                          if (p.label === "Preset international") onChange("job_market_focus", "global");
                           onChange("job_boards", cfg.job_boards.trim() + sep + p.url);
                         }} style={{
                           padding: "4px 10px", borderRadius: 7, fontSize: 10.5, cursor: already ? "default" : "pointer",
@@ -311,7 +311,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                           border: `1px solid ${already ? "var(--blue)" : "var(--line)"}`,
                           opacity: already ? 0.7 : 1,
                         }}>
-                          {already ? "Added " : "+ "}{p.label}
+                          {already ? "Ajouté " : "+ "}{p.label}
                         </button>
                       );
                     })}
@@ -319,18 +319,18 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                 </div>
                 <textarea value={cfg.job_boards} onChange={set("job_boards")} rows={5} className="mono field-input"
                   placeholder={[
-                    "# France market stable/best-effort sources",
+                    "# Sources France stables / best effort",
                     "france_travail:developpeur;lieu=France;range=0-49,",
                     "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168,",
                     "# Hacker News Who is Hiring (Algolia API)",
                     "hn-hiring,",
-                    "# Direct API / RSS feeds",
+                    "# APIs directes / flux RSS",
                     "https://remoteok.com/api,",
                     "https://remotive.com/api/remote-jobs,",
                     "https://jobicy.com/api/v2/remote-jobs?count=50,",
                     "https://jobicy.com/feed/newjobs,",
                     "https://weworkremotely.com/remote-jobs.rss,",
-                    "# ATS and job boards (query generation tailors these to your profile)",
+                    "# ATS et jobboards (les requêtes sont adaptées à votre profil)",
                     "site:boards.greenhouse.io,",
                     "site:jobs.lever.co,",
                     "site:jobs.ashbyhq.com,",

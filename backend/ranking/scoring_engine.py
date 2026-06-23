@@ -740,7 +740,7 @@ def score_job_lead(jd: str, candidate_data: dict) -> ScoreResult:
     from ranking.criteria.stack_coverage import evaluate_stack_coverage
 
     candidate = analyze_candidate(candidate_data)
-    posting = analyze_posting(jd, "Job lead")
+    posting = analyze_posting(jd, "Offre d'emploi")
     # Field-agnostic step: credit the candidate's own domain vocabulary and make
     # the wrong-field judgement relative to the candidate (must run before the
     # criteria and caps read posting.terms / posting.wrong_field).

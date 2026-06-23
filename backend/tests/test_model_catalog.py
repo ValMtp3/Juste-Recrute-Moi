@@ -1,7 +1,7 @@
 """Tests for the always-current model catalog (llm/model_catalog.py).
 
 The catalog pulls models.dev live (cached) and falls back to a bundled snapshot
-offline, mapping models.dev's provider keys to JustHireMe's. These tests pin the
+offline, mapping models.dev's provider keys to Juste Recrute Moi's. These tests pin the
 mapping, the live-vs-snapshot precedence, and the graceful offline fallback —
 without hitting the network (httpx.get is monkeypatched).
 """

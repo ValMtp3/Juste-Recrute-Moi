@@ -132,7 +132,7 @@ class FakeProfileService:
             "s": "Applied AI engineer building local-first FastAPI and React systems.",
             "skills": [{"n": "Python", "cat": "language"}, {"n": "FastAPI", "cat": "backend"}, {"n": "React", "cat": "frontend"}],
             "exp": [{"role": "Full Stack Engineer", "co": "Freelance", "period": "2025-2026", "d": "Built AI workflows."}],
-            "projects": [{"title": "JustHireMe", "stack": ["Python", "FastAPI", "React"], "impact": "Automated job intelligence."}],
+            "projects": [{"title": "Juste Recrute Moi", "stack": ["Python", "FastAPI", "React"], "impact": "Automated job intelligence."}],
             "education": [],
             "certifications": [],
             "achievements": [],
@@ -178,7 +178,7 @@ class FakeGenerationService:
             package={
                 "resume": str(resume),
                 "cover_letter": str(cover),
-                "selected_projects": ["JustHireMe"],
+                "selected_projects": ["Juste Recrute Moi"],
                 "keyword_coverage": {"coverage_pct": 100},
                 "founder_message": "Relevant FastAPI and React work.",
             },
@@ -270,7 +270,7 @@ def test_profile_to_score_to_generate_flow(tmp_path, monkeypatch):
         assert generated.status_code == 200
         payload = generated.json()
         assert payload["status"] == "ready"
-        assert payload["lead"]["selected_projects"] == ["JustHireMe"]
+        assert payload["lead"]["selected_projects"] == ["Juste Recrute Moi"]
         assert Path(payload["lead"]["resume_asset"]).exists()
         assert Path(payload["lead"]["cover_letter_asset"]).exists()
         assert repo.leads.get_lead_by_id(best["job_id"])["status"] == "approved"

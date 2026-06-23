@@ -81,7 +81,7 @@ def __getattr__(name: str):
 
 
 def _parse_args():
-    parser = argparse.ArgumentParser(description="JustHireMe backend gateway runner")
+    parser = argparse.ArgumentParser(description="Juste Recrute Moi backend gateway runner")
     parser.add_argument("--port", type=int, default=0)
     # Accepted for backward compatibility: the desktop shell still passes it.
     # The app is always the in-process monolith now (no service subprocesses).

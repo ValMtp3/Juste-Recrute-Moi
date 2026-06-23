@@ -18,7 +18,7 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
     setSigningIn(true);
     try {
       await settingsApi.subscriptionLogin(api, prov);
-      // the browser OAuth happens out-of-band; poll status until it flips logged-in
+      // L'OAuth navigateur se fait à côté ; on attend que le statut passe connecté.
       const start = Date.now();
       while (Date.now() - start < 120000) {
         await new Promise(res => window.setTimeout(res, 2500));
@@ -54,10 +54,10 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
     setErr(null);
     try {
       const r = await settingsApi.validate(api, cfg);
-      if (!r.ok) throw new Error(`Server returned ${r.status}`);
+      if (!r.ok) throw new Error(`Le serveur a renvoyé ${r.status}`);
       setResults(await r.json());
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Key validation failed");
+      setErr(e instanceof Error ? e.message : "La vérification des clés a échoué");
     } finally {
       setChecking(false);
     }
@@ -73,10 +73,10 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
 
   const label = (status: KeyStatus) => ({
     ok: "ok",
-    invalid_key: "invalid key",
-    unreachable: "unreachable",
-    not_configured: "not set",
-    unchecked: "unchecked",
+    invalid_key: "clé invalide",
+    unreachable: "injoignable",
+    not_configured: "non configuré",
+    unchecked: "non vérifié",
   }[status]);
 
   const resultEntries = results
@@ -89,9 +89,9 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
 
   return (
     <>
-{/* 1. Global default */}
+{/* 1. Réglage global */}
           <div>
-            <SectionLabel label="Global Default" sub="fallback for any step not overridden" />
+            <SectionLabel label="Réglage global" sub="utilisé quand une étape n'a pas son propre modèle" />
             <div style={{ padding: 16, borderRadius: 14, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 12 }}>
               <ProviderPills value={prov} onChange={v => onChange("llm_provider", v)} />
               {prov !== "ollama" && !isSubscriptionProvider(prov) && (
@@ -114,16 +114,16 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
               )}
               {globalModelField && (
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7 }}>Global Model</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7 }}>Modèle global</div>
                   <ModelChips provider={prov} value={cfg[globalModelField] as string} onChange={v => onChange(globalModelField, v)} api={api} cfg={cfg} />
                 </div>
               )}
               <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
                 <button className="btn" onClick={checkKeys} disabled={checking} style={{ alignSelf: "flex-start", fontSize: 12 }}>
-                  {checking ? "Checking keys..." : "Check keys"}
+                  {checking ? "Vérification..." : "Vérifier les clés"}
                 </button>
                 {checking && (
-                  <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>Checking configured providers...</div>
+                  <div className="mono" style={{ fontSize: 11, color: "var(--ink-3)" }}>Vérification des fournisseurs configurés...</div>
                 )}
                 {err && <div style={{ fontSize: 12, color: "var(--bad)" }}>{err}</div>}
                 {results && (

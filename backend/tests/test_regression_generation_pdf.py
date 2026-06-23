@@ -96,7 +96,7 @@ Applied AI engineer building production-grade LLM pipelines and automation with 
 **Core Concepts:** Data Structures & Algorithms, REST APIs, Automation, Prompt Evaluation
 
 ## PROJECTS
-### JustHireMe - Multi-Agent RAG Pipeline for Hiring : (github.com/alex-example/JustHireMe) Jan'24
+### Juste Recrute Moi - Multi-Agent RAG Pipeline for Hiring : (github.com/alex-example/Juste Recrute Moi) Jan'24
 - Built a multi-agent RAG pipeline using Python and LLM integrations to scrape job postings, rank candidate fit, and generate ATS-friendly documents.
 - Integrated semantic search with vector database and background jobs for async processing.
 - Tech: Python, LLM, RAG, Semantic Search, Vector Database, Multi-agent
@@ -107,7 +107,7 @@ Applied AI engineer building production-grade LLM pipelines and automation with 
 - Tech: Python, LLM, Gemini, OpenAI, DeepSeek, MCP
 
 ## ACHIEVEMENTS
-- 1,146+ GitHub stars on JustHireMe - open-source AI hiring pipeline Nov'24
+- 1,146+ GitHub stars on Juste Recrute Moi - open-source AI hiring pipeline Nov'24
 
 ## EDUCATION
 ### University Name Location
@@ -123,7 +123,7 @@ Bachelor's in Computer Science (Expected) 2022 - 2026
                 reader = PdfReader(fh)
                 self.assertEqual(len(reader.pages), 1)
                 text = reader.pages[0].extract_text()
-            self.assertIn("JustHireMe", text)
+            self.assertIn("Juste Recrute Moi", text)
             self.assertIn("A18-INFNION", text)
             self.assertNotIn("Feb'24(github", text)
         finally:

@@ -55,17 +55,17 @@ export const EMPTY: Cfg = {
   apify_token: "", apify_actor: "", linkedin_cookie: "", x_bearer_token: "", x_search_queries: "", x_watchlist: "",
   hunter_api_key: "", proxycurl_api_key: "", contact_lookup_enabled: "true",
   x_max_requests_per_scan: "5", x_max_results_per_query: "50", x_min_signal_score: "60", x_hot_lead_threshold: "80", x_enable_notifications: "false",
-  free_sources_enabled: "false", free_source_targets: "", company_watchlist: "", free_source_max_requests: "20", free_source_min_signal_score: "60",
+  free_sources_enabled: "true", free_source_targets: "", company_watchlist: "", free_source_max_requests: "20", free_source_min_signal_score: "60",
   custom_connectors_enabled: "false", custom_connectors: "", custom_connector_headers: "",
-  desired_position: "", onboarding_target_role: "", job_boards: "", job_market_focus: "global",
+  desired_position: "", onboarding_target_role: "", job_boards: "", job_market_focus: "france",
   ghost_mode: "false", auto_apply: "false", headed_browser: "false",
 };
 
 export const PROVIDERS = [
-  { id: "claude_cli", label: "Claude · sub", tone: "purple", sub: "Your plan" },
-  { id: "codex_cli",  label: "Codex · sub",  tone: "blue",   sub: "Your plan" },
-  { id: "gemini_cli", label: "Gemini · sub", tone: "orange", sub: "Your plan" },
-  { id: "copilot_cli", label: "Copilot · sub", tone: "green", sub: "Your plan" },
+  { id: "claude_cli", label: "Claude · abo", tone: "purple", sub: "Votre offre" },
+  { id: "codex_cli",  label: "Codex · abo",  tone: "blue",   sub: "Votre offre" },
+  { id: "gemini_cli", label: "Gemini · abo", tone: "orange", sub: "Votre offre" },
+  { id: "copilot_cli", label: "Copilot · abo", tone: "green", sub: "Votre offre" },
   { id: "gemini",    label: "Gemini",    tone: "green",  sub: "2.5 Flash" },
   { id: "deepseek",  label: "DeepSeek",  tone: "teal",   sub: "V3 / R1"   },
   { id: "nvidia",    label: "NVIDIA",    tone: "green",  sub: "GLM / NIM" },
@@ -73,11 +73,11 @@ export const PROVIDERS = [
   { id: "xai",       label: "Grok",      tone: "blue",   sub: "xAI"       },
   { id: "kimi",      label: "Kimi",      tone: "purple", sub: "Moonshot"  },
   { id: "mistral",   label: "Mistral",   tone: "orange", sub: "Large"     },
-  { id: "openrouter", label: "OpenRouter", tone: "teal", sub: "Many"      },
+  { id: "openrouter", label: "OpenRouter", tone: "teal", sub: "Multi"     },
   { id: "together",  label: "Together",  tone: "pink",   sub: "OSS"       },
-  { id: "fireworks", label: "Fireworks", tone: "yellow", sub: "Fast OSS"  },
-  { id: "cerebras",  label: "Cerebras",  tone: "green",  sub: "Fast"      },
-  { id: "perplexity", label: "Perplexity", tone: "blue", sub: "Search"    },
+  { id: "fireworks", label: "Fireworks", tone: "yellow", sub: "OSS rapide" },
+  { id: "cerebras",  label: "Cerebras",  tone: "green",  sub: "Rapide"    },
+  { id: "perplexity", label: "Perplexity", tone: "blue", sub: "Recherche" },
   { id: "huggingface", label: "HuggingFace", tone: "yellow", sub: "Router" },
   { id: "cohere",   label: "Cohere",   tone: "green",  sub: "Command"   },
   { id: "sambanova", label: "SambaNova", tone: "orange", sub: "Cloud"    },
@@ -85,11 +85,11 @@ export const PROVIDERS = [
   { id: "azure",    label: "Azure",     tone: "blue",   sub: "OpenAI"    },
   { id: "openai",    label: "OpenAI",    tone: "blue",   sub: "GPT-4o"    },
   { id: "anthropic", label: "Anthropic", tone: "purple", sub: "Claude"    },
-  { id: "custom",    label: "Custom",    tone: "pink",   sub: "OpenAI API" },
+  { id: "custom",    label: "Custom",    tone: "pink",   sub: "API OpenAI" },
   { id: "ollama",    label: "Ollama",    tone: "pink",   sub: "Local"     },
 ];
 
-// Providers that use the user's own logged-in CLI subscription (no API key).
+// Fournisseurs qui utilisent l'abonnement CLI connecté de l'utilisateur.
 export const SUBSCRIPTION_PROVIDERS = new Set(["claude_cli", "codex_cli", "gemini_cli", "copilot_cli"]);
 export const isSubscriptionProvider = (id: string) => SUBSCRIPTION_PROVIDERS.has(id);
 
@@ -135,7 +135,7 @@ export const STEPS = [
   { id: "generator", label: "Generator", icon: "file",   tone: "orange",
     desc: "Writes tailored resumes + cover letters - quality matters here" },
   { id: "ingestor",  label: "Ingestor",  icon: "upload", tone: "green",
-    desc: "Parses your resume into the knowledge graph" },
+    desc: "Analyse votre CV et l'ajoute au graphe de connaissances" },
   { id: "actuator",  label: "Experimental Actuator",  icon: "ghost",  tone: "pink",
     desc: "Unsupported browser automation lab - not part of the core OSS workflow" },
 ];
@@ -358,7 +358,7 @@ export function ModelChips({ provider, value, onChange, api, cfg }: {
           onChange={e => { onChange(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onBlur={() => window.setTimeout(() => setOpen(false), 160)}
-          placeholder={ids.length ? `Search ${ids.length} models or type any id…` : "Type any model id…"}
+          placeholder={ids.length ? `Chercher parmi ${ids.length} modèles ou saisir un id...` : "Saisir un id de modèle..."}
           className="mono field-input"
           style={{ width: "100%", paddingRight: 70, fontSize: 12 }}
         />
@@ -367,7 +367,7 @@ export function ModelChips({ provider, value, onChange, api, cfg }: {
             ? <span className="spinner-sm" aria-hidden="true" />
             : ids.length > 0 && <span style={{ fontSize: 10, color: "var(--ink-3)", fontFamily: "var(--font-mono)" }}>{ids.length}</span>}
           <button type="button" onMouseDown={e => { e.preventDefault(); setOpen(o => !o); }}
-            aria-label="Toggle model list" title="Browse models"
+            aria-label="Afficher ou masquer la liste des modèles" title="Parcourir les modèles"
             style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--ink-3)", padding: 0, fontSize: 11, lineHeight: 1 }}>
             {open ? "▴" : "▾"}
           </button>
@@ -377,10 +377,10 @@ export function ModelChips({ provider, value, onChange, api, cfg }: {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
           {ids.slice(0, 8).map(m => {
             const active = value === m;
-            const label = m === "" ? "Plan default" : (m.length > 28 ? `…${m.slice(-26)}` : m);
+            const label = m === "" ? "Défaut de l'abonnement" : (m.length > 28 ? `…${m.slice(-26)}` : m);
             return (
               <button key={m || "__default"} type="button" onClick={() => onChange(m)}
-                title={m || "Use your plan's own default model"}
+                title={m || "Utiliser le modèle par défaut de votre abonnement"}
                 style={{
                   padding: "3px 10px", borderRadius: 999, fontSize: 11, cursor: "pointer",
                   fontFamily: m === "" ? "inherit" : "var(--font-mono)",
@@ -392,7 +392,7 @@ export function ModelChips({ provider, value, onChange, api, cfg }: {
               </button>
             );
           })}
-          {ids.length > 8 && <span style={{ fontSize: 10.5, color: "var(--ink-3)", alignSelf: "center" }}>+{ids.length - 8} more — search above</span>}
+          {ids.length > 8 && <span style={{ fontSize: 10.5, color: "var(--ink-3)", alignSelf: "center" }}>+{ids.length - 8} autres ; cherchez ci-dessus</span>}
         </div>
       )}
       {open && shown.length > 0 && (
@@ -414,13 +414,13 @@ export function ModelChips({ provider, value, onChange, api, cfg }: {
                 }}
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "var(--paper-2)"; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = active ? "var(--paper-2)" : "transparent"; }}>
-                <span className={m === "" ? "" : "mono"} style={{ fontSize: 12, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m === "" ? "Plan default" : m}</span>
+                <span className={m === "" ? "" : "mono"} style={{ fontSize: 12, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m === "" ? "Défaut de l'abonnement" : m}</span>
                 {metaText && <span style={{ fontSize: 10, color: "var(--ink-3)" }}>{metaText}</span>}
               </button>
             );
           })}
           {filtered.length > shown.length && (
-            <div style={{ fontSize: 10.5, color: "var(--ink-3)", padding: "6px 9px" }}>+{filtered.length - shown.length} more — keep typing to filter</div>
+            <div style={{ fontSize: 10.5, color: "var(--ink-3)", padding: "6px 9px" }}>+{filtered.length - shown.length} autres ; continuez à taper pour filtrer</div>
           )}
         </div>
       )}
@@ -437,11 +437,11 @@ export function ApiKeyInput({ value, onChange, provider, isStep, disabled = fals
     openai: "sk-****", deepseek: "sk-****", xai: "xai-****", kimi: "sk-****",
     mistral: "****", openrouter: "sk-or-****", together: "****", fireworks: "fw_****",
     cerebras: "csk-****", perplexity: "pplx-****", huggingface: "hf_****", cohere: "co_****",
-    sambanova: "****", qwen: "sk-****", azure: "Azure OpenAI key", custom: "API key",
+    sambanova: "****", qwen: "sk-****", azure: "Clé Azure OpenAI", custom: "Clé API",
   };
   return (
     <input type="password" value={SECRET_MASKS.has(value) ? "" : value} onChange={e => onChange(e.target.value)} disabled={disabled}
-      placeholder={placeholder || (isStep ? `API key for ${provider}` : ph[provider] || "API key")}
+      placeholder={placeholder || (isStep ? `Clé API pour ${provider}` : ph[provider] || "Clé API")}
       className="mono field-input"
       style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: disabled ? "var(--paper-3)" : "var(--card)", fontSize: 12, opacity: disabled ? 0.75 : 1, cursor: disabled ? "not-allowed" : "text" }}
     />
@@ -479,37 +479,37 @@ export function SubscriptionNote({ provider, status, onSignIn, busy }: {
 
   let inner: React.ReactNode;
   if (!status) {
-    inner = subBadge("yellow", `Checking for the ${cli} CLI…`);
+    inner = subBadge("yellow", `Recherche du CLI ${cli}...`);
   } else if (!status.installed) {
     const h = status.install_hint;
     inner = (
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-        {subBadge("bad", `${cli} CLI not installed`)}
+        {subBadge("bad", `CLI ${cli} non installé`)}
         {h && <>
-          <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>Install it, then click Sign in:</div>
+          <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>Installez-le, puis connectez-vous :</div>
           <code style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 7, padding: "6px 9px", userSelect: "all" }}>{h.cmd}</code>
-          <a href={h.url} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: "var(--accent)" }}>installation guide ↗</a>
+          <a href={h.url} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, color: "var(--accent)" }}>guide d'installation ↗</a>
         </>}
       </div>
     );
   } else if (!status.logged_in) {
     inner = (
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        {subBadge("yellow", `${cli} CLI found — not signed in`)}
+        {subBadge("yellow", `CLI ${cli} trouvé ; non connecté`)}
         <button className="btn" onClick={onSignIn} disabled={busy} style={{ fontSize: 12 }}>
-          {busy ? "Opening sign-in…" : "Sign in"}
+          {busy ? "Ouverture de la connexion..." : "Se connecter"}
         </button>
-        <span style={{ fontSize: 11, color: "var(--ink-3)" }}>opens a browser to your {plan} account</span>
+        <span style={{ fontSize: 11, color: "var(--ink-3)" }}>ouvre le navigateur vers votre compte {plan}</span>
       </div>
     );
   } else {
-    inner = subBadge("green", `Signed in${status.email ? ` as ${status.email}` : ""}${status.plan ? ` · ${status.plan} plan` : ""} — ready`);
+    inner = subBadge("green", `Connecté${status.email ? ` en tant que ${status.email}` : ""}${status.plan ? ` · offre ${status.plan}` : ""} ; prêt`);
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 9, padding: "11px 13px", borderRadius: 11, background: "var(--paper-2)", border: "1px solid var(--line)" }}>
       <div style={{ fontSize: 12, color: "var(--ink-2)", lineHeight: 1.5 }}>
-        Runs on <b>your {plan} subscription</b> through the <span className="mono">{cli}</span> CLI — <b>no API key</b>. Your own local automation; usage draws from your plan, not per-token billing.
+        Utilise <b>votre abonnement {plan}</b> via le CLI <span className="mono">{cli}</span> ; <b>aucune clé API</b>. L'automatisation reste locale et consomme votre offre, pas une facturation au token.
       </div>
       {inner}
     </div>
@@ -525,8 +525,8 @@ export function StepCard({ step, cfg, onChange, api }: { step: typeof STEPS[0]; 
   const [forceStepKey, setForceStepKey] = useState(false);
   const usesGlobalKey = stepProv !== "ollama" && !forceStepKey && !(cfg[apiKey] as string);
   const keySourceLabel = stepProv === cfg.llm_provider
-    ? `Use global ${stepProv} API key`
-    : `Use saved ${stepProv} API key`;
+    ? `Utiliser la clé API globale ${stepProv}`
+    : `Utiliser la clé API ${stepProv} enregistrée`;
   const enable  = () => { setForceStepKey(false); onChange(provKey, cfg.llm_provider || "ollama"); };
   const disable = () => { setForceStepKey(false); onChange(provKey, ""); onChange(apiKey, ""); onChange(modelKey, ""); };
 
@@ -554,7 +554,7 @@ export function StepCard({ step, cfg, onChange, api }: { step: typeof STEPS[0]; 
       {isCustom && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7 }}>Provider</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7 }}>Fournisseur</div>
             <ProviderPills value={stepProv} onChange={v => { setForceStepKey(false); onChange(provKey, v); onChange(apiKey, ""); }} small />
           </div>
           {stepProv !== "ollama" && (
@@ -581,12 +581,12 @@ export function StepCard({ step, cfg, onChange, api }: { step: typeof STEPS[0]; 
                 provider={stepProv}
                 isStep
                 disabled={usesGlobalKey}
-                placeholder={usesGlobalKey ? "Using global key; choose any model below" : `Optional ${stepProv} key for this step`}
+                placeholder={usesGlobalKey ? "Clé globale utilisée ; choisissez le modèle ci-dessous" : `Clé ${stepProv} optionnelle pour cette étape`}
               />
             </div>
           )}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7 }}>Model</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7 }}>Modèle</div>
             <ModelChips provider={stepProv} value={cfg[modelKey] as string} onChange={v => onChange(modelKey, v)} api={api} cfg={cfg} />
           </div>
         </div>

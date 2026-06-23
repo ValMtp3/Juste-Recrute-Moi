@@ -1,3 +1,0 @@
-display_name: JustHireMe
-short_description: Work on the JustHireMe local-first job intelligence workbench.
-default_prompt: Use the JustHireMe skill to inspect the repo, preserve local-first behavior, and make focused changes to scraping, ranking, profile ingestion, generated materials, or the Tauri/React workbench.

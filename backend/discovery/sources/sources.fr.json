@@ -9,8 +9,8 @@
     "ats:teamtailor:alan"
   ],
   "notes": [
-    "France Travail is the stable source and requires FRANCE_TRAVAIL_CLIENT_ID/SECRET.",
-    "JobSpy is best effort and requires the optional python-jobspy package.",
-    "ATS slugs are examples; users can replace or extend this list without code changes."
+    "France Travail est la source stable et nécessite FRANCE_TRAVAIL_CLIENT_ID/SECRET.",
+    "JobSpy est une source best effort et nécessite le paquet optionnel python-jobspy.",
+    "Les slugs ATS sont des exemples ; les utilisateurs peuvent les remplacer ou étendre cette liste sans changement de code."
   ]
 }

@@ -202,30 +202,30 @@ export function EmbeddingAtlas({ stats }: { stats: GraphStats }) {
     <section className="card graph-embedding-atlas-card" aria-labelledby="embedding-atlas-title">
       <div className="graph-card-head graph-studio-head">
         <div>
-          <span className="eyebrow">Profile atlas</span>
-          <h3 id="embedding-atlas-title">Profile space</h3>
-          <p>Every profile graph entity is shown. Items with vectors use embedding coordinates; missing vectors get stable graph positions.</p>
+          <span className="eyebrow">Atlas profil</span>
+          <h3 id="embedding-atlas-title">Espace profil</h3>
+          <p>Toutes les entités du graphe profil sont affichées. Les éléments vectorisés utilisent leurs coordonnées d'embedding ; les autres reçoivent une position stable issue du graphe.</p>
         </div>
         <div className="graph-head-pills">
-          <span className="pill mono">{points.length} items</span>
-          <span className="pill mono">{vectorRows} vectors</span>
+          <span className="pill mono">{points.length} éléments</span>
+          <span className="pill mono">{vectorRows} vecteurs</span>
           <span className="pill mono">{mode}</span>
         </div>
       </div>
       <div className="graph-studio-toolbar">
-        <div className="graph-filter-bar" aria-label="Embedding camera">
+        <div className="graph-filter-bar" aria-label="Caméra embeddings">
           {[
-            ["orbit", "3D orbit"],
-            ["front", "2D map"],
-            ["top", "Depth map"],
+            ["orbit", "Orbite 3D"],
+            ["front", "Carte 2D"],
+            ["top", "Profondeur"],
           ].map(([id, label]) => (
             <button key={id} className={mode === id ? "active" : ""} onClick={() => setMode(id as CameraMode)}>{label}</button>
           ))}
         </div>
-        <div className="graph-zoom-controls" aria-label="Embedding zoom controls">
+        <div className="graph-zoom-controls" aria-label="Contrôles de zoom embeddings">
           <button onClick={() => setCamera(value => ({ ...value, zoom: clamp(Number((value.zoom - 0.15).toFixed(2)), 0.65, 2.2) }))}>-</button>
           <input
-            aria-label="Embedding zoom"
+            aria-label="Zoom embeddings"
             type="range"
             min="0.65"
             max="2.2"
@@ -234,38 +234,38 @@ export function EmbeddingAtlas({ stats }: { stats: GraphStats }) {
             onChange={event => setCamera(value => ({ ...value, zoom: Number(event.target.value) }))}
           />
           <button onClick={() => setCamera(value => ({ ...value, zoom: clamp(Number((value.zoom + 0.15).toFixed(2)), 0.65, 2.2) }))}>+</button>
-          <button onClick={() => setCamera({ yaw: -38, pitch: 24, zoom: 1 })}>Reset</button>
+          <button onClick={() => setCamera({ yaw: -38, pitch: 24, zoom: 1 })}>Réinitialiser</button>
           <span>{Math.round(camera.zoom * 100)}%</span>
         </div>
         {mode === "orbit" && (
-          <div className="graph-rotation-controls" aria-label="3D rotation controls">
+          <div className="graph-rotation-controls" aria-label="Contrôles de rotation 3D">
             <label>
-              <span>Yaw</span>
+              <span>Lacet</span>
               <input type="range" min="-180" max="180" step="2" value={camera.yaw} onChange={event => setCamera(value => ({ ...value, yaw: Number(event.target.value) }))} />
             </label>
             <label>
-              <span>Pitch</span>
+              <span>Inclinaison</span>
               <input type="range" min="-180" max="180" step="2" value={camera.pitch} onChange={event => setCamera(value => ({ ...value, pitch: Number(event.target.value) }))} />
             </label>
           </div>
         )}
       </div>
-      <div className="graph-studio-metrics" aria-label="Embedding summary">
+      <div className="graph-studio-metrics" aria-label="Résumé embeddings">
         <div>
           <span>{points.length}</span>
-          <small>profile items</small>
+          <small>éléments profil</small>
         </div>
         <div>
           <span>{vectorRows}</span>
-          <small>vector-backed</small>
+          <small>avec vecteur</small>
         </div>
         <div>
           <span>{Object.keys(counts).length}</span>
-          <small>entity groups</small>
+          <small>groupes</small>
         </div>
         <div>
           <span>{graphRows}</span>
-          <small>graph rows</small>
+          <small>lignes graphe</small>
         </div>
       </div>
       <div className="graph-embedding-atlas-layout">
@@ -279,7 +279,7 @@ export function EmbeddingAtlas({ stats }: { stats: GraphStats }) {
           onTouchCancel={handleEmbeddingTouchEnd}
         >
           {points.length > 0 ? (
-            <svg viewBox="0 0 920 520" className="graph-embedding-atlas-svg" role="img" aria-label="Profile graph and vector projection">
+            <svg viewBox="0 0 920 520" className="graph-embedding-atlas-svg" role="img" aria-label="Projection du graphe profil et des vecteurs">
               <defs>
                 <radialGradient id="embeddingGlow">
                   <stop offset="0%" stopColor="rgba(var(--white-rgb),0.95)" />
@@ -305,7 +305,7 @@ export function EmbeddingAtlas({ stats }: { stats: GraphStats }) {
                     transform={`translate(${px},${py})`}
                     role="button"
                     tabIndex={0}
-                    aria-label={`${point.type} ${point.hasVector ? "vector" : "profile item"} ${point.label}`}
+                    aria-label={`${point.type} ${point.hasVector ? "vecteur" : "élément profil"} ${point.label}`}
                     onClick={() => setSelectedId(active ? "" : point.id)}
                     onKeyDown={event => {
                       if (event.key === "Enter" || event.key === " ") {
@@ -321,7 +321,7 @@ export function EmbeddingAtlas({ stats }: { stats: GraphStats }) {
                       stroke={`var(--${tone}-ink)`}
                       strokeWidth={active ? 2.6 : 1.4}
                     >
-                      <title>{`${point.label} (${point.type}${point.hasVector ? ", vector-backed" : ", graph-only"})`}</title>
+                      <title>{`${point.label} (${point.type}${point.hasVector ? ", avec vecteur" : ", graphe seul"})`}</title>
                     </circle>
                     {active && (
                       <>
@@ -336,28 +336,28 @@ export function EmbeddingAtlas({ stats }: { stats: GraphStats }) {
             </svg>
           ) : (
             <div className="graph-vector-empty compact">
-              <strong>No vector rows yet</strong>
-              <span>No profile graph items are available yet. Add profile context or run graph repair.</span>
+              <strong>Aucun vecteur pour l'instant</strong>
+              <span>Aucun élément de graphe profil n'est disponible. Ajoutez du contexte profil ou lancez une réparation du graphe.</span>
             </div>
           )}
         </div>
         <aside className="graph-studio-inspector">
           <div className="graph-board-subhead">
-            <span className="eyebrow">Profile focus</span>
-            <span className="pill mono">{Object.keys(counts).length} groups</span>
+            <span className="eyebrow">Focus profil</span>
+            <span className="pill mono">{Object.keys(counts).length} groupes</span>
           </div>
-          <h4>{selected ? selected.label : "Profile atlas"}</h4>
-          <p>{selected ? `${selected.type} profile item${selected.hasVector ? " with a local vector row." : " without a vector yet, placed from the graph."}` : points.length ? "Select a point to inspect nearby visible profile evidence and entity group." : "No profile graph items are available yet."}</p>
-          <div className="graph-mini-label">Nearest visible profile items</div>
+          <h4>{selected ? selected.label : "Atlas profil"}</h4>
+          <p>{selected ? `${selected.type} du profil${selected.hasVector ? " avec vecteur local." : " sans vecteur pour l'instant, placé depuis le graphe."}` : points.length ? "Sélectionnez un point pour inspecter les preuves profil proches et leur groupe." : "Aucun élément de graphe profil n'est disponible."}</p>
+          <div className="graph-mini-label">Éléments profil proches</div>
           <div className="graph-node-pick-list compact">
             {nearest.map(({ point }) => (
               <button key={point.id} className="graph-node-pick" onClick={() => setSelectedId(point.id)}>
                 <span>{truncate(point.label, 26)}</span>
-                <small>{point.hasVector ? point.type : `${point.type} · graph`}</small>
+                <small>{point.hasVector ? point.type : `${point.type} · graphe`}</small>
               </button>
             ))}
           </div>
-          <div className="graph-mini-label">Groups</div>
+          <div className="graph-mini-label">Groupes</div>
           <div className="graph-legend stacked">
             {Object.entries(counts).map(([type, count]) => (
               <span key={type}><i className={`legend-dot ${type.toLowerCase()}`} /> {type}<b>{count}</b></span>

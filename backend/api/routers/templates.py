@@ -39,7 +39,7 @@ async def _read_capped(file: UploadFile, max_bytes: int) -> bytes:
             break
         total += len(chunk)
         if total > max_bytes:
-            raise HTTPException(status_code=413, detail="Upload too large")
+            raise HTTPException(status_code=413, detail="Fichier trop volumineux")
         chunks.append(chunk)
     return b"".join(chunks)
 
@@ -124,16 +124,16 @@ def create_router(logger: logging.Logger | None = None) -> APIRouter:
     ):
         require_rate_limit(upload_limiter)
         if file.size and file.size > MAX_UPLOAD_SIZE:
-            raise HTTPException(status_code=413, detail=f"File too large (max {MAX_UPLOAD_SIZE // 1024 // 1024} MB)")
+            raise HTTPException(status_code=413, detail=f"Fichier trop volumineux (maximum {MAX_UPLOAD_SIZE // 1024 // 1024} Mo)")
         suffix = Path(file.filename or "").suffix.lower()
         if suffix and suffix not in _ALLOWED_SUFFIXES:
-            raise HTTPException(status_code=415, detail="Upload a PDF, DOCX, TXT, or MD resume")
+            raise HTTPException(status_code=415, detail="Importez un CV PDF, DOCX, TXT ou MD")
         async with _temp_upload(file) as path:
             text = await asyncio.to_thread(_extract_text, path)
         text = (text or "").strip()
         if not text:
-            raise HTTPException(status_code=422, detail="Could not extract text from the file (scanned/image PDFs are not supported)")
-        display_name = name.strip() or Path(file.filename or "Resume template").stem
+            raise HTTPException(status_code=422, detail="Impossible d'extraire le texte du fichier ; les PDF scannés ou en image ne sont pas supportés")
+        display_name = name.strip() or Path(file.filename or "Modèle de CV").stem
         try:
             template = await asyncio.to_thread(
                 repo.resume_templates.create_template,

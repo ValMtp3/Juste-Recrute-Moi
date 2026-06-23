@@ -165,10 +165,10 @@ Skills
 React, TypeScript, FastAPI, PostgreSQL
 
 Projects
-JustHireMe
-- Built a local-first job intelligence workbench.
+Juste Recrute Moi
+- Application emploi local-first.
 - Stack: React, TypeScript, FastAPI, PostgreSQL
-- GitHub: https://github.com/alex-example/JustHireMe
+- GitHub: https://github.com/alex-example/Juste Recrute Moi
 React
 Built graph ranking and resume generation workflows.
 BranchGPT - Git-like chat interface for conversation DAGs.
@@ -184,7 +184,7 @@ CGPA 8.5
         titles = [project.title for project in profile.projects]
 
         self.assertEqual(profile.n, "Alex Example")
-        self.assertIn("JustHireMe", titles)
+        self.assertIn("Juste Recrute Moi", titles)
         self.assertIn("BranchGPT", titles)
         self.assertNotIn("React", titles)
         self.assertFalse(any(title.startswith("Built ") for title in titles))

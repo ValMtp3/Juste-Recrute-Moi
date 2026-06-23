@@ -102,7 +102,7 @@ def test_profile_service_import_profile_data_counts_and_identity(monkeypatch):
         "identity": {"email": "alex@example.test", "github_url": "https://github.com/alex-example"},
         "skills": [{"name": "Python", "category": "technical"}],
         "experience": [{"role": "Engineer", "company": "Acme", "period": "2024", "description": "Built agents"}],
-        "projects": [{"title": "JustHireMe", "stack": "Python, React", "repo": "", "impact": "Local-first job workbench"}],
+        "projects": [{"title": "Juste Recrute Moi", "stack": "Python, React", "repo": "", "impact": "Local-first job workbench"}],
         "education": [{"title": "B.Tech"}],
         "certifications": [{"title": "Cloud cert"}],
         "achievements": [{"title": "Shipped product"}],
@@ -180,7 +180,7 @@ def test_profile_service_import_profile_data_sanitizes_bad_buckets(monkeypatch):
         ],
         "projects": [
             {"title": "React"},
-            {"title": "JustHireMe", "stack": "React, FastAPI", "impact": "Local-first job workbench"},
+            {"title": "Juste Recrute Moi", "stack": "React, FastAPI", "impact": "Local-first job workbench"},
             {"title": "Built graph ranking and resume generation workflows."},
             {"title": "Punjab"},
         ],
@@ -194,7 +194,7 @@ def test_profile_service_import_profile_data_sanitizes_bad_buckets(monkeypatch):
     assert result["status"] == "ok"
     assert calls["skills"] == [("React", "general"), ("FastAPI", "general")]
     assert len(calls["projects"]) == 1
-    assert calls["projects"][0][0] == "JustHireMe"
+    assert calls["projects"][0][0] == "Juste Recrute Moi"
     assert "Built graph ranking" in calls["projects"][0][3]
     assert calls["education"] == ["Lovely Professional University, Punjab, CGPA 8.5"]
 
@@ -371,7 +371,7 @@ AI Engineering Intern | Vaani Labs | Jan 2025 - Apr 2025
 Projects
 BranchGPT - Multi-agent branching chat interface for experiments.
 Stack: Python, FastAPI, React
-JustHireMe - Local-first job search workbench with graph matching.
+Juste Recrute Moi - Local-first job search workbench with graph matching.
 Stack: TypeScript, Tauri, FastAPI, PostgreSQL
 ASCIIRealTime - Live video-to-ASCII renderer with browser processing.
 Stack: TypeScript, Canvas API, React
@@ -390,7 +390,7 @@ CGPA 8.5
 
     assert [project.title for project in parsed.projects] == [
         "BranchGPT",
-        "JustHireMe",
+        "Juste Recrute Moi",
         "ASCIIRealTime",
         "EmailDrafter",
     ]

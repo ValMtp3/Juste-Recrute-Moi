@@ -26,7 +26,7 @@ const backendDir = join(repoRoot, "backend");
 
 function tauriIdentifier() {
   const conf = JSON.parse(readFileSync(join(repoRoot, "src-tauri", "tauri.conf.json"), "utf8"));
-  return conf.identifier || "com.vasudev-siddh.justhireme";
+  return conf.identifier || "com.valentinfiess.justerecrutemoi";
 }
 
 // Mirror Tauri's app_data_dir() per-OS so the model lands where the dev sidecar looks.

@@ -1,30 +1,28 @@
-# Security Policy
+# Politique De Sécurité
 
-JustHireMe is local-first, but it can still touch sensitive data: resumes, job history, API keys, profile graphs, generated documents, and local databases.
+Juste Recrute Moi est local-first, mais manipule des données sensibles : CV, historique d'offres, clés API, graphe de profil, documents générés et bases locales.
 
-## Reporting
+## Signalement
 
-Please do not open public issues containing secrets, private resumes, local database dumps, or API keys. Open a minimal issue describing the class of problem and mark sensitive details for private follow-up.
+N'ouvrez pas d'issue publique contenant des secrets, CV privés, dumps de bases locales ou clés API. Ouvrez une issue minimale décrivant la catégorie du problème, puis indiquez que les détails sensibles doivent être transmis en privé.
 
-## API Keys
+## Clés API
 
-For v1, API keys are stored in local app settings. Treat your local app data directory as sensitive. OS keychain storage is planned.
+En v1, les clés API sont stockées dans les réglages locaux de l'application. Traitez le dossier de données local comme sensible. Le stockage dans le trousseau système est une amélioration prévue.
 
-## Safe Issues
+## Rapports Publics Acceptables
 
-Good public reports include:
+Un bon rapport public peut inclure :
 
-- source URL pattern, without private credentials
-- sanitized job snippets
-- expected vs actual score/ranking behavior
-- reproduction steps with fake keys or local-only providers
+- un motif d'URL source sans identifiants privés ;
+- des extraits d'offres anonymisés ;
+- le score attendu et le score obtenu ;
+- des étapes de reproduction avec fausses clés ou fournisseur local.
 
-## Unsafe Issues
+## À Ne Pas Publier
 
-Do not post:
-
-- real API keys
-- cookies or bearer tokens
-- complete resumes with contact details
-- local CRM/vector/graph database files
-- screenshots showing secrets
+- vraies clés API ;
+- cookies ou bearer tokens ;
+- CV complets avec coordonnées ;
+- fichiers SQLite, Kuzu ou LanceDB locaux ;
+- captures montrant des secrets.

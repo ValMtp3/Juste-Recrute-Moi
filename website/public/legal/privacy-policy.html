@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="en"><head>
+<html lang="fr"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>JustHireMe — Privacy Policy</title>
+<title>Juste Recrute Moi — Politique de confidentialite</title>
 <meta name="robots" content="index,follow"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -35,47 +35,43 @@
     color:var(--ink-3);font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
 </style></head>
 <body>
-<div class="top"><div class="in"><a class="brand" href="/">JustHireMe</a><nav><a href="terms-of-use.html">Terms of Use</a><a href="privacy-policy.html">Privacy Policy</a></nav></div></div>
-<main><h1>Privacy Policy</h1>
-<p><strong>Effective date:</strong> 2026-05-29 <strong>Applies to:</strong> the JustHireMe desktop application ("the Software") and the JustHireMe website/download pages ("the Site").</p>
-<blockquote>This Privacy Policy reflects how JustHireMe handles data today and is not a substitute for professional legal advice.</blockquote>
+<div class="top"><div class="in"><a class="brand" href="/">Juste Recrute Moi</a><nav><a href="terms-of-use.html">Conditions d'utilisation</a><a href="privacy-policy.html">Politique de confidentialite</a></nav></div></div>
+<main><h1>Politique de confidentialité</h1>
+<p><strong>Date d'effet :</strong> 2026-06-23 <strong>Périmètre :</strong> l'application desktop Juste Recrute Moi, le site public et les pages de téléchargement associées.</p>
+<blockquote>Cette politique décrit le fonctionnement actuel du projet. Elle ne remplace pas un avis juridique professionnel.</blockquote>
 <hr/>
-<h2>1. Our privacy model in one sentence</h2>
-<p>JustHireMe is <strong>local-first</strong>: the Software keeps your personal and job-search data on <strong>your own device</strong>, and the Site collects only minimal, mostly anonymized information needed to run download counters and a feedback channel.</p>
-<h2>2. Data the Software stores (on your device, not with us)</h2>
-<p>When you use the desktop Software, the following are stored <strong>locally</strong> on your machine and are <strong>not transmitted to the maintainer</strong>:</p>
-<table><thead><tr><th>Data</th><th>Where it lives</th></tr></thead><tbody><tr><td>Your profile / identity graph (resume, skills, projects, experience)</td><td>Local files + local Kùzu graph</td></tr><tr><td>Job leads and CRM history</td><td>Local SQLite database</td></tr><tr><td>Vector embeddings for matching</td><td>Local LanceDB store + local ONNX model</td></tr><tr><td>Generated resumes, cover letters, outreach drafts</td><td>Local files</td></tr><tr><td>Settings, including any API keys you enter</td><td>Local application settings</td></tr><tr><td>Activity / logs</td><td>Local</td></tr></tbody></table>
-<p>We do not have a server that receives, stores, or has access to this data. Deleting the app and its local data removes it.</p>
-<h2>3. Data sent to third parties <strong>because you chose to</strong></h2>
-<p>The Software only sends data off your device when a feature you use requires it:</p>
-<ul><li><strong>AI/LLM providers (your keys).</strong> If you configure a provider (OpenAI, Anthropic, Azure OpenAI, a custom endpoint, or a local Ollama instance), the relevant job text and profile context are sent to <strong>that provider</strong> to produce scores or documents. This is governed by <strong>that provider's</strong> privacy policy and your account with them. With a local provider (Ollama), this data stays on your machine.</li><li><strong>Job sources and APIs.</strong> When you scan sources, the Software contacts the public job boards, feeds, or APIs you configured to retrieve postings.</li><li><strong>Runtime pack + updates.</strong> On first run and during updates, the Software downloads runtime components and release metadata over HTTPS from the official release host (GitHub). These are standard file/version requests.</li></ul>
-<p>We (the maintainer) do not receive copies of any of the above.</p>
-<h2>4. Data the Site processes</h2>
-<p>The Site (marketing/download pages) processes a small amount of data to operate:</p>
-<ul><li><strong>Anonymous visit and download counts.</strong> The Site increments view/download counters. A per-visitor identifier is <strong>salted and hashed (HMAC)</strong> before storage and is used only to de-duplicate counts (so the same visitor is not counted repeatedly). We do not use it to identify you, and we do not store raw IP addresses for analytics purposes.</li><li><strong>Public GitHub data.</strong> The Site may read public repository data (such as star counts) from GitHub's API.</li><li><strong>Feedback you submit.</strong> If you use the feedback form, your message is forwarded to create a GitHub issue in the project repository. An automated step attempts to <strong>redact obvious personal data and secrets</strong> from the public issue, but you should not submit sensitive personal information, credentials, or other people's data. Anything you submit may become publicly visible in the issue tracker.</li></ul>
-<p>The Site does <strong>not</strong> use advertising trackers, does <strong>not</strong> sell data, and does <strong>not</strong> require an account.</p>
-<h2>5. Cookies and local storage</h2>
-<p>The Site uses minimal browser storage only where needed for functionality (for example, a local cache of public counts and your theme preference). It does not use third-party advertising or cross-site tracking cookies.</p>
-<h2>6. Legal bases for processing (GDPR/UK GDPR)</h2>
-<p>Where GDPR/UK GDPR applies, our limited processing relies on:</p>
-<ul><li><strong>Legitimate interests</strong> — operating download/visit counters and understanding aggregate, anonymized usage; running a public feedback channel.</li><li><strong>Consent</strong> — when you voluntarily submit feedback or enter information into a form.</li><li><strong>Contract / your request</strong> — performing an action you asked for (for example, fetching a download or release metadata).</li></ul>
-<p>You can object to legitimate-interest processing; because Site analytics are anonymized aggregates, opting out is generally a matter of not using the Site.</p>
-<h2>7. Sub-processors / service providers</h2>
-<p>The Site relies on a small set of providers to function: <strong>Vercel</strong> (static/edge hosting), <strong>Upstash Redis</strong> (view/download counters), and <strong>GitHub</strong> (release hosting and the feedback issue tracker). These providers process data on our behalf under their own terms and privacy/security programs.</p>
-<h2>8. International transfers</h2>
-<p>Service providers above may process data in regions including the United States and the EU. Where required, transfers rely on appropriate safeguards (such as Standard Contractual Clauses) offered by those providers.</p>
-<h2>9. Data retention</h2>
-<ul><li><strong>Local Software data:</strong> retained on your device until you delete it; we have no copy.</li><li><strong>Site counters:</strong> stored as aggregate counts and salted-hashed de-dup keys; retained for as long as the counters operate.</li><li><strong>Feedback:</strong> retained in the public GitHub issue tracker until removed; request removal via the contact below.</li></ul>
-<h2>10. Your rights</h2>
-<p>Depending on your location (GDPR/UK GDPR, CCPA/CPRA, and similar laws), you may have rights to access, correct, delete, port, or restrict processing of your personal data, and to object or withdraw consent. Because we hold almost no personal data about you:</p>
-<ul><li>For <strong>Software data</strong>, you exercise these rights directly on your device (edit/delete locally).</li><li>For <strong>feedback or Site data</strong> that may identify you, contact us using Section 13 and we will respond as required by applicable law (for example, within one month under GDPR/UK GDPR).</li></ul>
-<h2>11. Security</h2>
-<p>We aim to follow reasonable security practices: HTTPS for downloads and Site traffic, hashing of visitor identifiers, and redaction on the public feedback path. No method of transmission or storage is 100% secure. Protect your own device, local data, and API keys. Report vulnerabilities per <code>SECURITY.md</code>.</p>
-<h2>12. Children's privacy</h2>
-<p>JustHireMe is not directed to children under 16 and we do not knowingly collect their personal data. If you believe a child provided personal data through the feedback channel, contact us for removal.</p>
-<h2>13. Contact</h2>
-<p>Privacy questions or data-subject requests (access, correction, deletion): email pls@justhireme.ai, open an issue at https://github.com/vasu-devs/JustHireMe, or follow <code>SECURITY.md</code> for sensitive reports. For local Software data, the fastest path is to manage or delete it directly in the app on your device.</p>
-<h2>14. Changes</h2>
-<p>We may update this Policy; the "Effective date" will change and material updates will be noted in release notes or the changelog.</p></main>
-<footer><span>JustHireMe — local-first AI job intelligence</span><span><a href="/">← Back to site</a> · <a href="https://github.com/vasu-devs/JustHireMe">GitHub</a></span></footer>
+<h2>1. Le modèle de confidentialité en bref</h2>
+<p>Juste Recrute Moi est <strong>local-first</strong> : vos données de profil, vos offres, vos scores, vos documents générés et vos réglages restent sur votre appareil par défaut.</p>
+<h2>2. Données stockées localement</h2>
+<p>Quand vous utilisez l'application desktop, les données suivantes sont stockées localement et ne sont pas envoyées aux mainteneurs du projet :</p>
+<table><thead><tr><th>Donnée</th><th>Emplacement</th></tr></thead><tbody><tr><td>Profil candidat, CV, expériences, compétences, projets</td><td>Fichiers locaux et graphe Kuzu local</td></tr><tr><td>Offres et historique CRM</td><td>Base SQLite locale</td></tr><tr><td>Embeddings de matching</td><td>LanceDB local et modèle ONNX local</td></tr><tr><td>CV, lettres et messages générés</td><td>Fichiers locaux</td></tr><tr><td>Réglages et clés API saisies</td><td>Réglages locaux de l'application</td></tr><tr><td>Activité et logs</td><td>Local</td></tr></tbody></table>
+<p>Supprimer l'application et ses données locales supprime ces informations de votre machine. Les mainteneurs n'en possèdent pas de copie.</p>
+<h2>3. Données envoyées à des tiers à votre demande</h2>
+<p>L'application n'envoie des données hors de votre appareil que lorsqu'une fonctionnalité que vous activez le nécessite :</p>
+<ul><li><strong>Fournisseurs LLM.</strong> Si vous configurez OpenAI, Anthropic, Gemini, Mistral, un endpoint compatible OpenAI ou un autre fournisseur, les extraits nécessaires du profil et de l'offre peuvent être envoyés à ce fournisseur pour produire un score ou un document. Avec Ollama local, ces données restent sur votre machine.</li><li><strong>Sources d'offres.</strong> Quand vous scannez des sources, l'application contacte les API, ATS, flux ou jobboards configurés.</li><li><strong>France Travail.</strong> Si vous configurez les identifiants France Travail, l'application les utilise pour obtenir un jeton OAuth et interroger l'API d'offres.</li><li><strong>Mises à jour et runtime.</strong> L'application peut télécharger des métadonnées de version ou composants runtime depuis les canaux de release configurés.</li></ul>
+<p>Ces traitements sont régis par les politiques des services concernés.</p>
+<h2>4. Site public</h2>
+<p>Le site public peut traiter un minimum de données techniques pour fonctionner :</p>
+<ul><li>compteurs anonymisés de visites ou téléchargements ;</li><li>données publiques GitHub, par exemple les releases ;</li><li>contenu envoyé volontairement via un formulaire ou une issue.</li></ul>
+<p>Ne transmettez pas de clés API, cookies, CV privés, bases locales ou données personnelles sensibles dans les issues, formulaires ou captures publiques.</p>
+<h2>5. Cookies et stockage navigateur</h2>
+<p>Le site peut utiliser un stockage navigateur limité pour des préférences ou compteurs. Il n'a pas vocation à utiliser de traqueurs publicitaires.</p>
+<h2>6. Bases légales possibles</h2>
+<p>Selon votre juridiction, les traitements limités du site peuvent reposer sur :</p>
+<ul><li>l'intérêt légitime à exploiter un site de téléchargement et des compteurs agrégés ;</li><li>votre consentement lorsque vous soumettez volontairement un message ;</li><li>l'exécution de votre demande lorsque vous téléchargez une release ou consultez une page.</li></ul>
+<h2>7. Fournisseurs tiers</h2>
+<p>Selon le déploiement, le site et les releases peuvent s'appuyer sur GitHub, Vercel, Upstash ou des services équivalents. Les fournisseurs d'IA et d'API que vous configurez dans l'application traitent les données selon leurs propres conditions.</p>
+<h2>8. Conservation</h2>
+<ul><li><strong>Données de l'application :</strong> conservées localement jusqu'à suppression par vous.</li><li><strong>Compteurs du site :</strong> conservés sous forme agrégée ou pseudonymisée tant que les compteurs existent.</li><li><strong>Retours publics :</strong> conservés dans GitHub ou l'outil utilisé jusqu'à suppression.</li></ul>
+<h2>9. Vos droits</h2>
+<p>Pour les données locales de l'application, vous pouvez exercer directement vos droits en modifiant ou supprimant les fichiers et réglages sur votre machine. Pour un message public ou une donnée envoyée au site, ouvrez une demande de suppression ou correction dans le dépôt.</p>
+<h2>10. Sécurité</h2>
+<p>Le projet vise des pratiques raisonnables : HTTPS pour les téléchargements, stockage local par défaut, redaction des secrets dans les logs lorsque possible et consignes de sécurité dans <code>SECURITY.md</code>. Aucun système n'est parfaitement sûr ; protégez vos clés API, votre appareil et vos données locales.</p>
+<h2>11. Enfants</h2>
+<p>Juste Recrute Moi ne s'adresse pas aux enfants de moins de 16 ans et ne collecte pas sciemment leurs données.</p>
+<h2>12. Contact</h2>
+<p>Pour une question de confidentialité ou de sécurité, ouvrez une issue sur https://github.com/ValMtp3/Juste-Recrute-Moi ou suivez <code>SECURITY.md</code> pour les signalements sensibles.</p>
+<h2>13. Changements</h2>
+<p>Cette politique peut évoluer. La date d'effet sera mise à jour et les changements importants pourront être indiqués dans les notes de release ou le changelog.</p></main>
+<footer><span>Juste Recrute Moi — agregateur local-first d'offres d'emploi</span><span><a href="/">← Retour au site</a> · <a href="https://github.com/ValMtp3/Juste-Recrute-Moi">GitHub</a></span></footer>
 </body></html>

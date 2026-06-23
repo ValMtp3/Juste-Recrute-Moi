@@ -59,13 +59,13 @@ jobs:
         with:
           workspaces: "src-tauri -> target"
 
-      - name: Install frontend dependencies
+      - name: Installer les dépendances frontend
         run: npm ci
 
-      - name: Install backend dependencies
+      - name: Installer les dépendances backend
         run: cd backend && uv sync --dev
 
-      - name: Install Playwright Chromium runtime
+      - name: Installer le runtime Playwright Chromium
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -73,7 +73,7 @@ jobs:
           cd backend
           uv run python -m playwright install chromium
 
-      - name: Build frontend
+      - name: Compiler le frontend
         run: npm run build
 
       - name: Build backend sidecar
@@ -108,7 +108,7 @@ jobs:
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: JustHireMe-test-windows-installer
+          name: Juste Recrute Moi-test-windows-installer
           path: ${{ steps.find.outputs.installer }}
           retention-days: 14
           if-no-files-found: error

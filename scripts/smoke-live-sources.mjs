@@ -26,7 +26,7 @@ async function getJson(url, label) {
     const response = await fetch(url, {
       signal,
       headers: {
-        "User-Agent": "JustHireMe live-source-smoke",
+        "User-Agent": "Juste Recrute Moi live-source-smoke",
         "Accept": "application/json",
       },
     });

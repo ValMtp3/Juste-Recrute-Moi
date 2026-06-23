@@ -1,0 +1,3 @@
+display_name: Juste Recrute Moi
+short_description: Work on the Juste Recrute Moi local-first job intelligence workbench.
+default_prompt: Use the Juste Recrute Moi skill to inspect the repo, preserve local-first behavior, and make focused changes to scraping, ranking, profile ingestion, generated materials, or the Tauri/React workbench.

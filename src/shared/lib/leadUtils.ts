@@ -2,7 +2,7 @@ import type { Lead, LeadSort, SeniorityFilter } from "../../types";
 
 export const getMark = (company: string) => company ? company.charAt(0).toUpperCase() : "?";
 export const PAGE_SIZE = 80;
-export const ONBOARDING_KEY = "justhireme:onboarding:v4";
+export const ONBOARDING_KEY = "juste-recrute-moi:onboarding:v4";
 
 export const leadSignal = (lead: Lead) => Math.max(lead.signal_score || 0, lead.score || 0);
 

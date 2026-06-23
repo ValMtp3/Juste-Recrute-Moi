@@ -79,7 +79,7 @@ def _infer_company_domain(lead: dict, settings: dict) -> str:
 
 
 def _json_get(url: str, headers: dict | None = None, timeout: int = 12) -> dict:
-    req = urllib.request.Request(url, headers=headers or {"User-Agent": "JustHireMe/1.0"})
+    req = urllib.request.Request(url, headers=headers or {"User-Agent": "Juste Recrute Moi/1.0"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         raw = resp.read().decode("utf-8", errors="replace")
     return json.loads(raw or "{}")
@@ -196,7 +196,7 @@ def run(lead: dict, settings: dict | None = None, profile: dict | None = None) -
 
     domain = _infer_company_domain(lead, settings)
     if not domain:
-        return {"status": "no_domain", "contacts": [], "message": "Could not infer company domain from this job URL."}
+        return {"status": "no_domain", "contacts": [], "message": "Impossible de déduire le domaine de l'entreprise depuis l'URL de l'offre."}
 
     hunter_key = _setting(settings, "hunter_api_key") or os.environ.get("HUNTER_API_KEY", "")
     proxycurl_key = _setting(settings, "proxycurl_api_key") or os.environ.get("PROXYCURL_API_KEY", "")

@@ -84,9 +84,9 @@ class DiscoveryService:
         has_connectors = truthy(cfg.get("custom_connectors_enabled", "false")) and bool(str(cfg.get("custom_connectors", "") or "").strip())
         if not str(raw_targets or "").strip() and not has_watchlist and not has_connectors:
             if has_profile_discovery_signal(profile):
-                message = "Free-source scan skipped: no runnable source targets were derived from this profile."
+                message = "Scan des sources gratuites ignoré : aucune cible exploitable n'a pu être déduite de ce profil."
             else:
-                message = "Free-source scan skipped: add a target role, profile skills, source targets, or a company watchlist."
+                message = "Scan des sources gratuites ignoré : ajoutez un poste cible, des compétences, des cibles source ou une liste d'entreprises."
             return DiscoveryRunResult(errors=[message])
 
         result = await asyncio.to_thread(

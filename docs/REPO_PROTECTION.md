@@ -1,27 +1,26 @@
-# Repository Protection
+# Protection du depot
 
-Use this checklist for `vasu-devs/JustHireMe` now that the project has public traction.
+Cette checklist s'applique au depot `ValMtp3/Juste-Recrute-Moi` avant toute ouverture publique serieuse.
 
-## Branch Protection For `main`
+## Protection de `main`
 
-GitHub repository settings:
+Dans les reglages GitHub :
 
-1. Open `Settings -> Branches`.
-2. Add a branch protection rule for `main`.
-3. Enable:
-   - Require a pull request before merging
-   - Require approvals: 1
-   - Require review from Code Owners
-   - Dismiss stale pull request approvals when new commits are pushed
-   - Require status checks to pass before merging
-   - Require branches to be up to date before merging
-   - Require conversation resolution before merging
-   - Require signed commits if you are ready to sign all maintainer commits
-   - Include administrators
-   - Do not allow bypassing the above settings
-   - Restrict who can push to matching branches
+1. Ouvrir `Settings -> Branches`.
+2. Ajouter une regle de protection pour `main`.
+3. Activer :
+   - pull request obligatoire avant merge ;
+   - au moins une approbation ;
+   - revue Code Owners si le fichier existe ;
+   - annulation des approbations quand de nouveaux commits sont pousses ;
+   - status checks obligatoires ;
+   - branche a jour avant merge ;
+   - conversations resolues ;
+   - administrateurs inclus ;
+   - pas de contournement ;
+   - push direct limite aux mainteneurs.
 
-Required status checks:
+Status checks recommandes :
 
 - `Dependency audit`
 - `Frontend`
@@ -29,30 +28,30 @@ Required status checks:
 - `Backend`
 - `Rust check`
 
-## Merge Policy
+## Politique de merge
 
-- Prefer squash merge for community PRs.
-- Keep direct pushes to `main` for emergency release fixes only.
-- All feature work should happen on short-lived branches.
-- Security fixes can be private until disclosure is safe.
+- Preferer le squash merge pour les PR externes.
+- Garder les push directs sur `main` pour les correctifs de release urgents.
+- Faire les features sur branches courtes.
+- Traiter les correctifs de securite en prive tant que la divulgation n'est pas sure.
 
-## Release Safety
+## Securite des releases
 
-- Keep release workflow permissions minimal.
-- Use GitHub Environments for production release jobs.
-- Require maintainer approval before publishing signed desktop binaries.
-- Rotate deployment and feedback tokens after a suspected leak.
+- Garder les permissions GitHub Actions minimales.
+- Utiliser les GitHub Environments pour les jobs de publication.
+- Demander une approbation mainteneur avant publication de binaires desktop signes.
+- Rotation immediate des jetons apres suspicion de fuite.
 
-## Feedback Issues
+## Issues de feedback
 
-Website feedback issues should use these labels:
+Les retours du site doivent utiliser ces labels :
 
 - `website-feedback`
 - `feedback`
 - `review`
 
-Filtered inbox:
+Inbox filtree :
 
 ```txt
-https://github.com/vasu-devs/JustHireMe/issues?q=is%3Aissue%20label%3Awebsite-feedback
+https://github.com/ValMtp3/Juste-Recrute-Moi/issues?q=is%3Aissue%20label%3Awebsite-feedback
 ```

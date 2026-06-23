@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 
-_RELEASE_DOWNLOAD_BASE = "https://github.com/vasu-devs/JustHireMe/releases/latest/download"
+_RELEASE_DOWNLOAD_BASE = "https://github.com/ValMtp3/Juste-Recrute-Moi/releases/latest/download"
 _INSTALL_LOCK = threading.RLock()
 _PROGRESS_LOCK = threading.RLock()
 _DLL_DIRS: set[str] = set()
@@ -108,7 +108,7 @@ def _data_root() -> Path:
         root = Path.home() / "Library" / "Application Support"
     else:
         root = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-    return root / "JustHireMe"
+    return root / "Juste Recrute Moi"
 
 
 def vector_runtime_dir() -> Path:
@@ -128,19 +128,19 @@ def browser_runtime_dir() -> Path:
 def runtime_pack_asset_name() -> str:
     system = sys_platform()
     if system == "windows":
-        return "JustHireMe-runtime-pack-windows.zip"
+        return "Juste-Recrute-Moi-runtime-pack-windows.zip"
     if system == "darwin":
-        return "JustHireMe-runtime-pack-macos.zip"
-    return "JustHireMe-runtime-pack-linux.zip"
+        return "Juste-Recrute-Moi-runtime-pack-macos.zip"
+    return "Juste-Recrute-Moi-runtime-pack-linux.zip"
 
 
 def vector_runtime_asset_name() -> str:
     system = sys_platform()
     if system == "windows":
-        return "JustHireMe-vector-runtime-windows.zip"
+        return "Juste-Recrute-Moi-vector-runtime-windows.zip"
     if system == "darwin":
-        return "JustHireMe-vector-runtime-macos.zip"
-    return "JustHireMe-vector-runtime-linux.zip"
+        return "Juste-Recrute-Moi-vector-runtime-macos.zip"
+    return "Juste-Recrute-Moi-vector-runtime-linux.zip"
 
 
 def runtime_pack_url() -> str:
@@ -321,7 +321,7 @@ def _safe_extract(archive_path: Path, extract_dir: Path) -> None:
             archive.extract(member, extract_dir)
             _set_progress(
                 status="extracting",
-                message="Unpacking JustHireMe runtime pack.",
+                message="Unpacking Juste Recrute Moi runtime pack.",
                 percent=min(84, 70 + round((index / total) * 14)),
             )
 
@@ -362,7 +362,7 @@ def _download(url: str, archive_path: Path) -> None:
             _copy_file_with_progress(source, archive_path)
             return
 
-    request = urllib.request.Request(url, headers={"User-Agent": "JustHireMe-runtime-installer"})
+    request = urllib.request.Request(url, headers={"User-Agent": "Juste Recrute Moi-runtime-installer"})
     context = _https_ssl_context() if parsed.scheme == "https" else None
     with urllib.request.urlopen(request, timeout=60, context=context) as response, archive_path.open("wb") as target:
         total = int(response.headers.get("Content-Length") or 0)
@@ -392,7 +392,7 @@ def _stream_to_file(reader, writer, total: int) -> None:
     downloaded = 0
     _set_progress(
         status="downloading",
-        message="Downloading JustHireMe runtime pack.",
+        message="Downloading Juste Recrute Moi runtime pack.",
         percent=1,
         downloaded=0,
         total=total,
@@ -407,7 +407,7 @@ def _stream_to_file(reader, writer, total: int) -> None:
         percent = min(70, max(1, round((downloaded / total) * 70))) if total else min(65, _INSTALL_PROGRESS.get("percent", 1) + 1)
         _set_progress(
             status="downloading",
-            message="Downloading JustHireMe runtime pack.",
+            message="Downloading Juste Recrute Moi runtime pack.",
             percent=percent,
             downloaded=downloaded,
             total=total,
@@ -426,7 +426,7 @@ def _copy_payload(
     payload: Path,
     runtime_dir: Path,
     *,
-    message: str = "Installing JustHireMe runtime pack.",
+    message: str = "Installing Juste Recrute Moi runtime pack.",
     start_percent: int = 84,
     end_percent: int = 94,
 ) -> None:
@@ -489,7 +489,7 @@ def install_vector_runtime() -> Path:
         url = sources[0]
         _set_progress(
             status="starting",
-            message="Preparing JustHireMe runtime pack install.",
+            message="Preparing Juste Recrute Moi runtime pack install.",
             percent=0,
             downloaded=0,
             total=0,
@@ -518,14 +518,14 @@ def install_vector_runtime() -> Path:
                     extract_dir.mkdir(parents=True, exist_ok=True)
                     _set_progress(
                         status="extracting",
-                        message="Unpacking JustHireMe runtime pack.",
+                        message="Unpacking Juste Recrute Moi runtime pack.",
                         percent=70,
                     )
                     _safe_extract(archive_path, extract_dir)
                 except Exception as exc:
                     error = (
-                        "The required JustHireMe runtime pack must be installed before the app can continue. "
-                        f"Could not install it from {url}. Details: {exc}"
+                        "Le pack runtime Juste Recrute Moi est nécessaire pour continuer. "
+                        f"Impossible de l'installer depuis {url}. Détails : {exc}"
                     )
                     _set_progress(status="error", message=error, error=error)
                     raise RuntimeError(error) from exc
@@ -595,7 +595,7 @@ def install_vector_runtime() -> Path:
                         end_percent=99,
                     )
 
-            _set_progress(status="verifying", message="Verifying JustHireMe runtime pack.", percent=99)
+            _set_progress(status="verifying", message="Verifying Juste Recrute Moi runtime pack.", percent=99)
             add_vector_runtime_to_path(runtime_dir)
             if not vector_runtime_ready(runtime_dir):
                 error = "Vector runtime installation finished, but LanceDB or PyArrow could not be imported."
@@ -608,7 +608,7 @@ def install_vector_runtime() -> Path:
             _write_version_stamp()
             _set_progress(
                 status="installed",
-                message="Required JustHireMe runtime pack is ready.",
+                message="Required Juste Recrute Moi runtime pack is ready.",
                 percent=100,
                 downloaded=0,
                 total=0,

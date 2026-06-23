@@ -14,7 +14,7 @@ const Sidebar = ({ view, setView, leadCounts, online, latency, uptime, onSetting
       <div className="row gap-3" style={{ padding: "4px 8px 18px 8px" }}>
         <Icon name="logo" size={32}/>
         <div className="col" style={{ lineHeight: 1.1 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.02em" }}>JustHireMe</div>
+          <div style={{ fontSize: 15, fontWeight: 600, letterSpacing: "-0.02em" }}>Juste Recrute Moi</div>
           <div className="mono" style={{ fontSize: 9.5, color: "var(--ink-3)", letterSpacing: "0.14em", textTransform: "uppercase" }}>v0.4.2</div>
         </div>
       </div>

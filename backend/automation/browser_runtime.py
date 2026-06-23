@@ -7,7 +7,7 @@ from pathlib import Path
 from data.vector.runtime import browser_runtime_dir, browser_runtime_ready, install_vector_runtime
 
 
-_RELEASE_DOWNLOAD_BASE = "https://github.com/vasu-devs/JustHireMe/releases/latest/download"
+_RELEASE_DOWNLOAD_BASE = "https://github.com/ValMtp3/Juste-Recrute-Moi/releases/latest/download"
 
 
 def sys_platform() -> str:
@@ -17,10 +17,10 @@ def sys_platform() -> str:
 def browser_runtime_asset_name() -> str:
     system = sys_platform()
     if system == "windows":
-        return "JustHireMe-browser-runtime-windows.zip"
+        return "Juste-Recrute-Moi-browser-runtime-windows.zip"
     if system == "darwin":
-        return "JustHireMe-browser-runtime-macos.zip"
-    return "JustHireMe-browser-runtime-linux.zip"
+        return "Juste-Recrute-Moi-browser-runtime-macos.zip"
+    return "Juste-Recrute-Moi-browser-runtime-linux.zip"
 
 
 def browser_runtime_url() -> str:

@@ -75,13 +75,11 @@ def create_router(manager) -> APIRouter:
         return job_id
 
     async def _manual_or_imported_lead(body: ManualLeadBody) -> dict:
-        from gateway.lead_adapters import manual_lead_from_text
+        from gateway.lead_adapters import import_job_url, manual_lead_from_text
 
         if body.url.strip() and not body.text.strip():
             try:
-                from discovery.sources.url_import import import_url
-
-                return await import_url(body.url.strip())
+                return await import_job_url(body.url.strip())
             except Exception as exc:
                 logging.getLogger(__name__).warning("URL import failed, falling back to manual lead: %s", exc)
                 lead = manual_lead_from_text(body.text, body.url, "job")
@@ -153,7 +151,7 @@ def create_router(manager) -> APIRouter:
         job_id = _safe_job_id(job_id)
         lead = await asyncio.to_thread(repo.leads.get_lead_by_id, job_id)
         if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            raise HTTPException(status_code=404, detail="Offre introuvable")
         paths = [
             lead.get("resume_asset") or lead.get("asset") or "",
             lead.get("cover_letter_asset") or "",
@@ -168,7 +166,7 @@ def create_router(manager) -> APIRouter:
         job_id = _safe_job_id(job_id)
         lead = await asyncio.to_thread(repo.leads.get_lead_by_id, job_id)
         if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            raise HTTPException(status_code=404, detail="Offre introuvable")
         return annotate_job_lead(lead) if (lead.get("kind") or "job") == "job" else lead
 
     @router.delete("/leads/{job_id}")
@@ -177,7 +175,7 @@ def create_router(manager) -> APIRouter:
         try:
             await asyncio.to_thread(repo.leads.delete_lead, job_id)
         except LookupError as exc:
-            raise HTTPException(status_code=404, detail="lead not found") from exc
+            raise HTTPException(status_code=404, detail="Offre introuvable") from exc
         return {"ok": True}
 
     @router.put("/leads/{job_id}/status")
@@ -188,7 +186,7 @@ def create_router(manager) -> APIRouter:
             await manager.broadcast({"type": "LEAD_UPDATED", "data": {"job_id": job_id, "status": body.status}})
             return {"ok": True}
         except LookupError as exc:
-            raise HTTPException(status_code=404, detail="lead not found") from exc
+            raise HTTPException(status_code=404, detail="Offre introuvable") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -200,7 +198,7 @@ def create_router(manager) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            raise HTTPException(status_code=404, detail="Offre introuvable")
         await manager.broadcast({"type": "LEAD_UPDATED", "data": lead})
         return lead
 
@@ -214,7 +212,7 @@ def create_router(manager) -> APIRouter:
         due = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
         lead = await asyncio.to_thread(repo.leads.update_lead_followup, job_id, now, due)
         if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            raise HTTPException(status_code=404, detail="Offre introuvable")
         await manager.broadcast({"type": "LEAD_UPDATED", "data": lead})
         return lead
 
@@ -226,7 +224,7 @@ def create_router(manager) -> APIRouter:
     ):
         require_rate_limit(manual_limiter)
         if not body.text.strip() and not body.url.strip():
-            raise HTTPException(status_code=400, detail="Paste lead text or a URL")
+            raise HTTPException(status_code=400, detail="Collez le texte de l'offre ou une URL")
         raw_lead = await _manual_or_imported_lead(body)
         examples = await asyncio.to_thread(repo.feedback.get_feedback_training_examples)
         try:
@@ -237,10 +235,10 @@ def create_router(manager) -> APIRouter:
         except Exception as exc:
             logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/leads.py:create_manual_lead: %s', exc)
             meta = dict(raw_lead.get("source_meta") or {})
-            meta["feedback_learning_error"] = str(exc) or "timed out"
+            meta["feedback_learning_error"] = str(exc) or "délai d'attente dépassé"
             lead = {**raw_lead, "source_meta": meta}
         if lead.get("kind") != "job":
-            raise HTTPException(status_code=422, detail="Only job leads are accepted right now")
+            raise HTTPException(status_code=422, detail="Seules les offres d'emploi sont acceptées pour le moment")
         lead = annotate_job_lead(lead)
         await asyncio.to_thread(repo.leads.save_lead, lead)
         saved = await asyncio.to_thread(repo.leads.get_lead_by_id, lead["job_id"]) or lead
@@ -256,12 +254,12 @@ def create_router(manager) -> APIRouter:
     ):
         require_rate_limit(manual_limiter)
         if not body.text.strip() and not body.url.strip():
-            raise HTTPException(status_code=400, detail="Paste lead text or a URL")
+            raise HTTPException(status_code=400, detail="Collez le texte de l'offre ou une URL")
         from api.routers.generation import generate_one
 
         raw_lead = await _manual_or_imported_lead(body)
         if raw_lead.get("kind") != "job":
-            raise HTTPException(status_code=422, detail="Only job leads are accepted right now")
+            raise HTTPException(status_code=422, detail="Seules les offres d'emploi sont acceptées pour le moment")
         lead = annotate_job_lead(raw_lead)
         from core.generation_readiness import lead_generation_blocker
 
@@ -317,7 +315,7 @@ def create_router(manager) -> APIRouter:
         job_id = _safe_job_id(job_id)
         lead = await asyncio.to_thread(repo.leads.get_lead_by_id, job_id)
         if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            raise HTTPException(status_code=404, detail="Offre introuvable")
         is_cover = kind in {"cover", "cover_letter", "cover-letter"}
         if version is not None:
             paths = [
@@ -329,15 +327,15 @@ def create_router(manager) -> APIRouter:
                 base_dir = default_assets_dir()
             filename = f"{job_id}_cl_v{version}.pdf" if is_cover else f"{job_id}_v{version}.pdf"
             path = os.path.join(base_dir, filename)
-            missing = "Cover letter not generated yet" if is_cover else "Resume not generated yet"
+            missing = "Lettre pas encore générée" if is_cover else "CV pas encore généré"
         elif is_cover:
             path = lead.get("cover_letter_asset") or ""
             filename = f"{job_id}_cover_letter.pdf"
-            missing = "Cover letter not generated yet"
+            missing = "Lettre pas encore générée"
         else:
             path = lead.get("resume_asset") or lead.get("asset") or ""
             filename = f"{job_id}_resume.pdf"
-            missing = "Resume not generated yet"
+            missing = "CV pas encore généré"
         if not path or not os.path.exists(path):
             raise HTTPException(status_code=404, detail=missing)
         return FileResponse(path, media_type="application/pdf", filename=filename)

@@ -192,8 +192,8 @@ def friendly_graph_error(error: str) -> str:
     lower = text.lower()
     if "could not set lock" in lower or "concurrency" in lower or "lock on file" in lower:
         return (
-            "Kuzu graph is locked by another JustHireMe backend process. "
-            "Close extra JustHireMe/Tauri windows or stop stale backend Python processes, then restart the app. "
+            "Kuzu graph is locked by another Juste Recrute Moi backend process. "
+            "Close extra Juste Recrute Moi/Tauri windows or stop stale backend Python processes, then restart the app. "
             f"Raw error: {text}"
         )
     return text
@@ -556,7 +556,7 @@ def graph_snapshot(limit: int = 500) -> dict:
     for row in _query_rows("MATCH (n:Skill) RETURN n.id, n.n, n.cat"):
         add_node(f"skill:{row[0]}", row[1] or "Skill", "Skill", row[2] or "general")
     for row in _query_rows("MATCH (n:JobLead) RETURN n.job_id, n.title, n.co"):
-        add_node(f"job:{row[0]}", row[1] or "Job lead", "JobLead", row[2] or "")
+        add_node(f"job:{row[0]}", row[1] or "Offre d'emploi", "JobLead", row[2] or "")
 
     edge_queries = [
         ("MATCH (a:Candidate)-[:BUILT]->(b:Project) RETURN a.id, b.id", "BUILT", "candidate", "project"),

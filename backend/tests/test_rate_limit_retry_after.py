@@ -33,5 +33,5 @@ def test_require_rate_limit_sets_retry_after_header_and_message():
     assert "Retry-After" in exc.headers
     retry_after = int(exc.headers["Retry-After"])
     assert 1 <= retry_after <= 30
-    assert "wait" in exc.detail.lower()
+    assert "patientez" in exc.detail.lower()
     assert str(retry_after) in exc.detail

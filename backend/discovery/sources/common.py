@@ -79,7 +79,7 @@ def text_lead(item: dict, default_kind: str = "job") -> dict:
 )
 async def json_get(url: str, params: dict | None = None) -> dict | list:
     headers = {
-        "User-Agent": "JustHireMe free-source scout",
+        "User-Agent": "Juste Recrute Moi free-source scout",
         "Accept": "application/json",
     }
     async with guarded_async_client(timeout=30, headers=headers, follow_redirects=True) as cx:

@@ -20,7 +20,7 @@ export function GraphView({ stats }: { stats: GraphStats }) {
       <div className="graph-shell graph-shell-single">
         <div className="card graph-overview graph-overview-sleek">
           <div className="graph-overview-copy">
-            <span className="eyebrow">Knowledge Graph</span>
+            <span className="eyebrow">Graphe de connaissances</span>
             <h1 style={{ fontSize: 30 }}>Your profile, connected</h1>
             <p>Every project, skill, role, and credential and how they relate. Click a node to focus it; scroll to zoom, drag to move.</p>
           </div>
@@ -42,7 +42,7 @@ export function GraphView({ stats }: { stats: GraphStats }) {
                 border: `1px solid ${isLive ? "var(--green)" : "var(--bad)"}`,
               }}
             >
-              {isLive ? "live" : isLoading ? "loading" : requestError ? "request failed" : hasGraphPayload ? "degraded" : "no graph payload"}
+              {isLive ? "actif" : isLoading ? "chargement" : requestError ? "requête échouée" : hasGraphPayload ? "dégradé" : "graphe absent"}
             </span>
           </div>
         </div>
@@ -52,15 +52,15 @@ export function GraphView({ stats }: { stats: GraphStats }) {
             {requestError
               ? requestError
               : !hasGraphPayload
-                ? "The graph endpoint returned a response without nodes or edges. Open Activity for the backend error, or restart the Tauri dev app if the backend was changed while it was running."
-              : stats.error?.toLowerCase().includes("locked by another justhireme")
+                ? "Le endpoint graphe a répondu sans nœuds ni liens. Ouvrez Activité pour voir l'erreur backend, ou redémarrez l'app Tauri dev si le backend a changé pendant l'exécution."
+              : stats.error?.toLowerCase().includes("locked by another juste recrute moi")
                 ? stats.error
-                : `Graph store is unavailable: ${stats.error || "unknown error"}`}
+                : `Le stockage graphe est indisponible : ${stats.error || "erreur inconnue"}`}
           </div>
         )}
 
         {isLoading && !hasGraphPayload ? (
-          <div className="card kg-card"><div className="kg-laying" style={{ position: "static", padding: 48 }}>Loading your knowledge graph…</div></div>
+          <div className="card kg-card"><div className="kg-laying" style={{ position: "static", padding: 48 }}>Chargement du graphe de connaissances...</div></div>
         ) : (
           <GraphCanvas nodes={stats.graph?.nodes || []} edges={stats.graph?.edges || []} />
         )}

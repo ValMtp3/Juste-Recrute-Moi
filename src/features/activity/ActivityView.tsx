@@ -24,7 +24,7 @@ export function ActivityView({ logs }: { logs: LogLine[] }) {
     const body = visibleLogs
       .map(ln => `[${ln.ts}] ${ln.kind.toUpperCase()} ${ln.src}: ${ln.msg}`)
       .join("\n");
-    const text = body || "No agent logs visible.";
+    const text = body || "Aucun journal agent visible.";
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
     } else {
@@ -53,23 +53,23 @@ export function ActivityView({ logs }: { logs: LogLine[] }) {
             color: actTab === tab ? "var(--card)" : "var(--ink-3)",
             transition: "all 0.15s ease",
           }}>
-            {tab === "all" ? "All" : tab === "scout" ? "Scout" : tab === "eval" ? "Eval" : tab === "customize" ? "Customize" : "System"}
+            {tab === "all" ? "Tout" : tab === "scout" ? "Collecte" : tab === "eval" ? "Score" : tab === "customize" ? "Adaptation" : "Système"}
           </button>
         ))}
       </div>
       <div className="card" style={{ padding: "26px 28px", marginBottom: 18, background: "var(--orange-soft)" }}>
-        <span className="eyebrow">Real-time stream</span>
-        <h1 style={{ fontSize: 44 }}>What is the agent <span className="italic-serif">thinking?</span></h1>
+        <span className="eyebrow">Flux temps réel</span>
+        <h1 style={{ fontSize: 44 }}>Que fait l'agent <span className="italic-serif">maintenant ?</span></h1>
       </div>
       <div className="card" style={{ padding: 18, background: "var(--purple-soft)" }}>
         <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
-          <h3>Stream</h3>
+          <h3>Flux</h3>
           <div className="row gap-2">
             <button className="btn btn-ghost" onClick={copyThinking} style={{ fontSize: 12 }}>
-              {copied ? "Copied" : "Copy thinking"}
+              {copied ? "Copié" : "Copier le flux"}
             </button>
             <span className="pill" style={{ background: "var(--green)", color: "var(--green-ink)" }}>
-              <span className="dot pulse-soft" /> live
+              <span className="dot pulse-soft" /> direct
             </span>
           </div>
         </div>

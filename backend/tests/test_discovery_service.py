@@ -44,7 +44,7 @@ def test_discovery_service_does_not_scan_free_sources_without_profile_or_targets
     run.assert_not_called()
     assert result.leads == []
     assert result.usage == {}
-    assert result.errors == ["Free-source scan skipped: add a target role, profile skills, source targets, or a company watchlist."]
+    assert result.errors == ["Scan des sources gratuites ignoré : ajoutez un poste cible, des compétences, des cibles source ou une liste d'entreprises."]
 
 
 def test_discovery_service_skips_x_without_token():

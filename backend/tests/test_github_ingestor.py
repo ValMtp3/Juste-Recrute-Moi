@@ -91,7 +91,7 @@ def test_github_ingestor_imports_all_repos_and_enriches_top_without_token(monkey
     assert result["stats"]["llm_projects"] == llm_limit
     # React still inferred from repo topics even without manifest analysis.
     assert any(skill["n"] == "React" for skill in result["skills"])
-    assert "Add a GitHub token" in result["errors"][0]
+    assert "Ajoutez un token GitHub" in result["errors"][0]
 
 
 def test_github_ingestor_token_enriches_all_requested_repos(monkeypatch):

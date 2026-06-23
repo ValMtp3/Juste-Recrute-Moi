@@ -1,28 +1,27 @@
-# Code of Conduct
+# Code De Conduite
 
-JustHireMe is meant to be useful to job seekers and welcoming to contributors.
+Juste Recrute Moi doit rester utile aux chercheurs d'emploi et accueillant pour les contributeurs.
 
-## Our Standards
+## Comportements Attendus
 
-Expected behavior:
+- Rester respectueux et patient.
+- Donner des retours précis et actionnables.
+- Supposer la bonne intention quand c'est raisonnable.
+- Aider les nouveaux contributeurs à comprendre le code.
+- Garder les discussions centrées sur le travail.
+- Protéger la vie privée des utilisateurs.
+- Ne jamais demander de publier des secrets, CV privés, cookies, clés API ou bases locales.
 
-- Be respectful and patient.
-- Give specific, actionable feedback.
-- Assume good intent when possible.
-- Help newcomers understand the codebase.
-- Keep discussions focused on the work.
-- Protect user privacy and never ask people to share secrets or private resumes publicly.
+## Comportements Non Acceptés
 
-Unacceptable behavior:
+- Harcèlement, insultes ou attaques personnelles.
+- Publication de clés API, cookies, CV, bases privées ou données personnelles sans accord.
+- Pression sur les mainteneurs pour une urgence non rémunérée.
+- Spam, autopromotion hors sujet ou ouverture massive d'issues peu utiles.
+- Présentation de l'auto-candidature massive comme objectif central du projet.
 
-- Harassment, insults, or personal attacks.
-- Sharing API keys, cookies, resumes, private databases, or personal data without consent.
-- Pressuring maintainers or contributors for unpaid urgency.
-- Spam, self-promotion unrelated to the project, or low-effort issue flooding.
-- Promoting unsafe mass-application behavior as the core project goal.
+## Signalement
 
-## Reporting
+Si une situation paraît dangereuse ou inappropriée, ouvrez une issue minimale ou contactez un mainteneur en privé si un canal privé existe. N'incluez pas de données sensibles dans un signalement public.
 
-If something feels unsafe or inappropriate, open a minimal issue or contact a maintainer privately when private contact details are available. Do not include sensitive personal data in public reports.
-
-Maintainers may edit, hide, lock, or remove comments and issues that violate these standards.
+Les mainteneurs peuvent modifier, masquer, verrouiller ou supprimer les commentaires et issues qui ne respectent pas ces règles.

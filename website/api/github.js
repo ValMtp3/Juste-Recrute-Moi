@@ -1,4 +1,4 @@
-const REPO = "vasu-devs/JustHireMe";
+const REPO = "ValMtp3/Juste-Recrute-Moi";
 
 export default async function handler(request, response) {
   if (request.method !== "GET") {
@@ -11,13 +11,13 @@ export default async function handler(request, response) {
       fetch(`https://api.github.com/repos/${REPO}`, {
         headers: {
           accept: "application/vnd.github+json",
-          "user-agent": "justhireme-website",
+          "user-agent": "juste-recrute-moi-website",
         },
       }),
       fetch(`https://api.github.com/search/issues?q=repo:${REPO}+type:pr+state:open&per_page=1`, {
         headers: {
           accept: "application/vnd.github+json",
-          "user-agent": "justhireme-website",
+          "user-agent": "juste-recrute-moi-website",
         },
       }),
     ]);
@@ -46,7 +46,7 @@ export default async function handler(request, response) {
       forks: null,
       pullRequests: null,
       openIssues: null,
-      url: "https://github.com/vasu-devs/JustHireMe",
+      url: "https://github.com/ValMtp3/Juste-Recrute-Moi",
     });
   }
 }

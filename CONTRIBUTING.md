@@ -1,140 +1,81 @@
-# Contributing to JustHireMe
+# Contribuer À Juste Recrute Moi
 
-Thank you for helping build JustHireMe.
+Merci de contribuer à Juste Recrute Moi.
 
-JustHireMe is a local-first OSS job intelligence workbench. The goal is not to build a spammy auto-apply machine. The goal is to help users find better jobs, understand fit, and generate stronger application material while keeping their data local.
+Le projet vise un agrégateur local-first d'offres d'emploi, centré sur le marché français. L'objectif n'est pas de construire une machine d'auto-candidature massive, mais d'aider les utilisateurs à trouver de meilleures offres, comprendre leur pertinence et préparer des candidatures plus solides tout en gardant leurs données locales.
 
-## Project Scope
+## Périmètre Du Projet
 
-The core OSS scope is:
+Le cœur open source couvre :
 
-- scraping job leads from reliable sources
-- filtering low-quality leads
-- ranking candidate/job fit
-- using graph and vector data for profile-aware matching
-- generating tailored resume, cover letter, and outreach drafts
-- maintaining a local-first desktop experience
+- collecte d'offres depuis des sources fiables ;
+- normalisation des offres ;
+- filtre qualité et déduplication ;
+- ranking profil/offre ;
+- matching avec graphe et vecteurs locaux ;
+- génération de CV, lettres et messages d'approche ;
+- expérience desktop local-first.
 
-Experimental scope:
+Le laboratoire expérimental couvre :
 
-- browser automation
-- auto-apply
-- form reading/filling
+- automatisation navigateur ;
+- lecture et remplissage de formulaires ;
+- auto-candidature.
 
-Automation code can be improved, but it should not dominate the main product experience or public docs.
+Ce laboratoire peut être amélioré, mais il ne doit pas devenir la promesse principale du produit.
 
-## Code Of Conduct
+## Licence
 
-Contributors are expected to follow [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). In short:
+Juste Recrute Moi est distribué sous [AGPL-3.0-only](LICENSE). Toute contribution doit rester compatible avec cette licence. Le dépôt est un fork ; les notices upstream conservées dans le code, `NOTICE` et l'historique ne doivent pas être supprimées sans raison juridique claire.
 
-- Be respectful.
-- Assume good intent.
-- Keep feedback specific and actionable.
-- Do not shame people for beginner mistakes.
-- Do not pressure maintainers for unpaid urgency.
-- Do not post private user data, secrets, cookies, or resumes.
+## Avant De Commencer
 
-## License And CLA
+Ouvrez une issue avant de travailler si votre changement :
 
-JustHireMe is licensed under [AGPL-3.0-only](LICENSE). By contributing, you
-agree that your contribution may be distributed under AGPL-3.0-only and under
-separate commercial licenses offered by Vasudev Siddh / vasu-devs.
+- ajoute une dépendance ;
+- modifie le schéma des leads ou une API ;
+- change le comportement de ranking ;
+- touche au stockage local ;
+- modifie le packaging ou la release ;
+- touche à l'automatisation expérimentale ;
+- refond un flux UI important.
 
-Read [CLA.md](CLA.md) before submitting a pull request. Maintainers may require
-CLA assistant or another signoff workflow before merging.
+Les corrections de documentation, fixtures, tests et petits connecteurs peuvent généralement partir directement en PR.
 
-## How To Contribute
+## Installation Locale
 
-### 1. Pick An Issue
+Prérequis :
 
-Good starting points:
+- Node.js 24 recommandé ;
+- Python 3.13+ ;
+- Rust stable ;
+- uv ;
+- Git.
 
-- `good first issue`
-- `documentation`
-- `scraper`
-- `source`
-- `ranker`
-- `scoring`
-
-If you want to add a source adapter, open or claim a scraper source issue first so work is not duplicated.
-
-### 2. Discuss Bigger Changes First
-
-Open an issue before starting work if your change:
-
-- adds a new dependency
-- changes lead schema or API behavior
-- changes ranking semantics
-- affects local data storage
-- changes packaging or release behavior
-- touches experimental auto-apply
-- rewrites major UI flows
-
-Small docs, tests, parser fixes, and source adapters can usually go straight to a PR.
-
-### 3. Keep Pull Requests Focused
-
-Prefer small PRs. A good PR usually does one thing:
-
-- add one source adapter
-- fix one ranking bug
-- add one group of tests
-- improve one docs page
-- clean up one UI flow
-
-Avoid mixing unrelated refactors with feature work.
-
-## Local Development Setup
-
-### Requirements
-
-- Node.js 20+
-- Python 3.13+
-- Rust stable
-- uv
-- Git
-
-Optional:
-
-- Ollama for local model testing
-- Playwright browser dependencies for experimental automation work
-
-### Install Dependencies
+Installation :
 
 ```bash
-npm install
+npm ci
 cd backend
 uv sync --dev
 cd ..
 ```
 
-### Run The App
+Lancer l'app desktop :
 
 ```bash
 npm run tauri dev
 ```
 
-### Run Frontend Only
+Lancer le frontend seul :
 
 ```bash
 npm run dev
 ```
 
-### Run Backend Tests
+## Tests Et Vérifications
 
-Windows:
-
-```bash
-backend/.venv/Scripts/python.exe -m pytest backend/tests
-```
-
-macOS/Linux:
-
-```bash
-backend/.venv/bin/python -m pytest backend/tests
-```
-
-### Run Frontend Checks
+Frontend :
 
 ```bash
 npm run typecheck
@@ -142,237 +83,132 @@ npm test
 npm run build
 ```
 
-### Run Rust Check
+Backend :
+
+```bash
+cd backend
+UV_CACHE_DIR=../.uv-cache uv run python -m pytest tests -q
+```
+
+Rust :
 
 ```bash
 cd src-tauri
 cargo check
 ```
 
-## Pull Request Checklist
+## Checklist PR
 
-Before opening a PR:
+- [ ] La PR est ciblée.
+- [ ] Les tests pertinents ont été lancés.
+- [ ] Les changements de comportement ont des tests.
+- [ ] La documentation est mise à jour si l'utilisateur ou le contributeur est concerné.
+- [ ] Aucune clé API, cookie, base locale, CV privé ou PDF généré n'est commité.
+- [ ] Les changements d'automatisation restent opt-in et clairement marqués comme expérimentaux.
+- [ ] L'impact utilisateur est expliqué.
 
-- [ ] I ran the relevant tests/checks.
-- [ ] I added tests for behavior changes.
-- [ ] I updated docs for user-facing or contributor-facing changes.
-- [ ] I kept the PR focused.
-- [ ] I did not commit local app data, databases, generated PDFs, API keys, cookies, or resumes.
-- [ ] I made experimental automation changes opt-in and clearly labeled.
-- [ ] I explained the user impact in the PR description.
-- [ ] I understand contributions are covered by [CLA.md](CLA.md).
+## Ajouter Une Source
 
-## Testing Expectations
+Lisez [docs/source-adapters.md](docs/source-adapters.md) avant d'ajouter un connecteur.
 
-### Scraper Changes
+Sources à privilégier :
 
-Add tests for:
+- API France Travail ;
+- API ATS directes ;
+- pages carrière publiques structurées ;
+- flux RSS/API ;
+- threads communautaires fiables.
 
-- one valid lead
-- one noisy or rejected lead
-- URL normalization or dedupe behavior when relevant
-- date/freshness behavior when relevant
-- quality gate behavior when relevant
+Sources moins fiables :
 
-### Ranking Changes
+- résultats de recherche larges ;
+- HTML sans structure stable ;
+- sources nécessitant cookies ou contournements ;
+- sites qui bloquent fortement l'automatisation.
 
-Add tests for:
+À éviter :
 
-- expected score band
-- seniority mismatch
-- wrong-field or low-quality lead
-- semantic fallback if vector search is unavailable
-- edge cases that caused the bug
+- sources nécessitant des identifiants privés pour les tests de base ;
+- sources manifestement contraires aux conditions d'utilisation ;
+- marketplaces spammy ;
+- offres impossibles à vérifier.
 
-### UI Changes
+Un connecteur doit renvoyer au minimum :
 
-At minimum:
+- `title` ;
+- `company` ;
+- `url` ;
+- `platform` ;
+- `description`.
 
-- run `npm run typecheck`
-- run `npm test`
-- run `npm run build`
+Champs recommandés :
 
-If the change affects layout, manually check the relevant screen in the app.
+- `posted_date` ;
+- `location` ;
+- `tech_stack` ;
+- `signal_score` ;
+- `signal_reason` ;
+- `signal_tags` ;
+- `source_meta`.
 
-### Storage/API Changes
+## Règles De Ranking Et Qualité
 
-Add backend regression tests and explain migration behavior. Avoid breaking existing local user data.
+Préservez ces principes :
 
-## Source Adapter Contribution Guide
+- ne pas surclasser des postes trop seniors pour des profils juniors ;
+- ne pas masquer l'incertitude ;
+- ne pas inventer de faits candidat ;
+- pénaliser les annonces pauvres ou douteuses ;
+- privilégier les preuves issues des projets et expériences ;
+- rendre les raisons compréhensibles.
 
-The easiest way to contribute is adding a scraper source. Read [docs/source-adapters.md](docs/source-adapters.md) before implementing.
+## Frontend
 
-### Preferred Sources
+L'interface doit rester un outil de travail, pas une landing page marketing.
 
-Best:
+- Garder le parcours central lisible : offres, ranking, profil, génération.
+- Ne pas présenter l'auto-apply comme le produit principal.
+- Réutiliser les composants et styles existants.
+- Garder des textes courts, utiles et honnêtes.
+- Afficher les explications quand un score ou filtre influence l'utilisateur.
 
-- direct ATS APIs
-- public company career pages
-- structured RSS/API feeds
-- well-known community hiring threads
+## Backend
 
-Lower confidence:
+- Garder les scrapers déterministes quand c'est possible.
+- Éviter les appels réseau dans les tests.
+- Lazy-loader les dépendances lourdes.
+- Dégrader proprement quand une source ou un système optionnel échoue.
+- Préserver les données locales existantes.
+- Préférer de petits modules testables aux gros fichiers d'agent.
 
-- broad search results
-- scraped HTML without stable structure
-- sources that require cookies
-- sources that frequently block automation
+## Sécurité Et Données Privées
 
-Avoid:
+Ne commitez jamais :
 
-- sources requiring private credentials for basic scraping
-- sources that violate terms of service
-- spammy lead marketplaces
-- sources where every result is vague or unverifiable
+- clés API ;
+- cookies ;
+- bearer tokens ;
+- données locales d'application ;
+- bases SQLite, Kuzu ou LanceDB ;
+- PDF générés avec données personnelles ;
+- vrais CV ;
+- captures contenant des secrets.
 
-### Normalized Lead Contract
+## Messages De Commit
 
-A source adapter should return dictionaries with:
+Utilisez des messages clairs :
 
-- `title`
-- `company`
-- `url`
-- `platform`
-- `description`
-
-Recommended fields:
-
-- `posted_date`
-- `location`
-- `tech_stack`
-- `signal_score`
-- `signal_reason`
-- `signal_tags`
-- `source_meta`
-
-The quality gate can then attach:
-
-- `source_meta.lead_quality_score`
-- `source_meta.lead_quality_reason`
-- `source_meta.lead_quality_accepted`
-
-### Source Adapter Checklist
-
-- [ ] The adapter returns normalized lead fields.
-- [ ] It does not save duplicates.
-- [ ] It preserves useful source metadata.
-- [ ] It passes or uses the lead quality gate.
-- [ ] It has tests with realistic sanitized fixtures.
-- [ ] It documents how to enable/configure the source.
-- [ ] It fails gracefully when the source is unavailable.
-
-## Ranking And Quality Rules
-
-Ranking work should preserve these principles:
-
-- Do not overrate senior jobs for junior/fresher users.
-- Do not hide uncertainty.
-- Do not invent candidate facts.
-- Penalize low-quality scraped posts.
-- Prefer direct evidence from projects/experience.
-- Make reasons useful to users and contributors.
-
-If you change scoring behavior, update or add tests in `backend/tests/test_regressions.py`.
-
-## Frontend Contribution Guidelines
-
-The frontend should make the product feel like a workbench, not a marketing site.
-
-Guidelines:
-
-- Keep the core workflow obvious: leads, ranking, profile, customization.
-- Do not make auto-apply look like the main product.
-- Use existing components and styling conventions.
-- Keep text concise and honest.
-- Show explanations where ranking/filtering decisions matter.
-- Avoid adding heavy UI dependencies unless necessary.
-
-## Backend Contribution Guidelines
-
-Guidelines:
-
-- Keep scraper logic deterministic where possible.
-- Avoid network calls in tests.
-- Lazy-load heavy ML/model dependencies.
-- Fail soft when optional systems are unavailable.
-- Keep local data migrations backward-compatible.
-- Prefer small helper modules over giant agent files when adding reusable logic.
-
-## Security And Privacy Rules
-
-Never commit:
-
-- API keys
-- cookies
-- bearer tokens
-- local app data
-- SQLite databases
-- Kuzu/LanceDB data directories
-- generated PDFs with personal information
-- real resumes
-- screenshots containing secrets
-
-When opening issues:
-
-- sanitize job snippets
-- remove contact details
-- use fake keys
-- avoid uploading local database files
-
-See [SECURITY.md](SECURITY.md).
-
-## Documentation Standards
-
-Docs should be:
-
-- accurate
-- beginner-friendly
-- explicit about current limitations
-- clear about what is core vs experimental
-- easy to follow on Windows
-
-If a command is platform-specific, say so.
-
-## Commit Message Style
-
-Use clear, practical commit messages:
-
-- `Add Greenhouse source adapter`
+- `Add France Travail fixture`
 - `Fix seniority cap for junior profiles`
-- `Document Windows sidecar build`
-- `Show lead quality reason on cards`
+- `Document France source setup`
+- `Show source reliability on job cards`
 
-Avoid vague messages like:
+Évitez :
 
 - `updates`
 - `fix stuff`
 - `final changes`
 
-## Review Process
-
-Maintainers will look for:
-
-- correctness
-- test coverage
-- user impact
-- privacy impact
-- maintainability
-- whether the change fits the OSS direction
-
-PRs may be asked to split scope, add tests, or update docs. That is normal.
-
-## Release Contributions
-
-Windows release work should follow [docs/windows-release.md](docs/windows-release.md).
-
-Release-related PRs should mention:
-
-- OS tested
-- installer/bundle generated
-- smoke test result
-- sidecar behavior
-- known limitations
-
 ## Questions
 
-Open a GitHub issue if you are unsure where a change belongs. For scraper ideas, use the scraper source request template and include a public example URL.
+Ouvrez une issue si vous ne savez pas où placer un changement. Pour une idée de source, utilisez le template de demande de source et fournissez une URL publique d'exemple.

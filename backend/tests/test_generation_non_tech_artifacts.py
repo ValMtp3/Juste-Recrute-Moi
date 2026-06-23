@@ -1,6 +1,6 @@
 """All FIVE generation artifacts must work for NON-tech candidates.
 
-JustHireMe tailors application packages for any field, not just software. These
+Juste Recrute Moi tailors application packages for any field, not just software. These
 tests lock that promise for the generation layer: an ICU nurse (and a welder/chef
 variant) must get a real resume PDF, a real cover-letter PDF, and three usable
 outreach messages (founder_message, linkedin_note, cold_email) — both when the

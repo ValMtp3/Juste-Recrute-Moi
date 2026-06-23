@@ -89,15 +89,15 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
   const originalTitle = cleanLeadText(j.title);
   const descriptionText = cleanLeadText(j.description);
   const jobDescription = [
-    originalTitle && originalTitle !== display.role ? `Original listing title:\n${originalTitle}` : "",
+    originalTitle && originalTitle !== display.role ? `Titre original de l'offre :\n${originalTitle}` : "",
     descriptionText ? `Description:\n${descriptionText}` : "",
-  ].filter(Boolean).join("\n\n") || "No job description extracted yet.";
+  ].filter(Boolean).join("\n\n") || "Aucune description d'offre extraite pour l'instant.";
 
   const loadVersions = useCallback(async (signal?: AbortSignal) => {
     setVersionErr(null);
     try {
       const r = await api(`/api/v1/leads/${j.job_id}/versions`, { signal });
-      if (!r.ok) throw new Error(`Server returned ${r.status}`);
+      if (!r.ok) throw new Error(`Le serveur a renvoyé ${r.status}`);
       const items = await r.json() as VersionEntry[];
       setVersions(items);
       setSelectedVersion(prev => {
@@ -105,13 +105,13 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
         return items[0]?.version ?? null;
       });
     } catch (err) {
-      setVersionErr(err instanceof Error ? err.message : "Version history failed to load");
+      setVersionErr(err instanceof Error ? err.message : "L'historique des versions n'a pas pu être chargé");
     }
   }, [api, j.job_id]);
 
   const refreshLead = useCallback(async (signal?: AbortSignal) => {
     const r = await api(`/api/v1/leads/${initialLead.job_id}`, { signal });
-    if (!r.ok) throw new Error(`Lead refresh returned ${r.status}`);
+    if (!r.ok) throw new Error(`Le rafraîchissement de l'offre a renvoyé ${r.status}`);
     const lead = await r.json() as Lead;
     setGeneratedLead(lead);
     return lead;
@@ -132,16 +132,16 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     const previewTimer = window.setTimeout(() => {
       if (!alive) return;
       controller.abort();
-      setPdfLoadErr("PDF preview timed out. The package exists, but the embedded preview did not respond.");
+      setPdfLoadErr("L'aperçu PDF a expiré. Le dossier existe, mais l'aperçu intégré n'a pas répondu.");
       setPdfBlobUrl(null);
     }, 12000);
     setPdfLoadErr(null);
     setPdfBlobUrl(null);
     api(activeDocPath, { signal: controller.signal, timeoutMs: 12000 })
-      .then(r => { if (!r.ok) throw new Error(`Server returned ${r.status}`); return r.blob(); })
+      .then(r => { if (!r.ok) throw new Error(`Le serveur a renvoyé ${r.status}`); return r.blob(); })
       .then(blob => {
         if (!alive) return;
-        if (!blob.size) throw new Error("Generated PDF was empty");
+        if (!blob.size) throw new Error("Le PDF généré est vide");
         window.clearTimeout(previewTimer);
         const url = URL.createObjectURL(blob);
         revoke = url;
@@ -180,7 +180,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
       const query = templateId ? `?template_id=${encodeURIComponent(templateId)}` : "";
       const r = await api(`/api/v1/leads/${j.job_id}/generate${query}`, { method: "POST", signal: controller.signal, timeoutMs: GENERATION_TIMEOUT_MS });
       const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.detail || `Server returned ${r.status}`);
+       if (!r.ok) throw new Error(body.detail || `Le serveur a renvoyé ${r.status}`);
       if (body.lead) setGeneratedLead(body.lead as Lead);
       await refreshLead(controller.signal).catch(() => null);
       window.dispatchEvent(new CustomEvent("leads-refresh"));
@@ -208,8 +208,8 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     try {
       const r = await api(`/api/v1/leads/${j.job_id}/pipeline/run`, { method: "POST", signal: controller.signal, timeoutMs: 15000 });
       const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.detail || `Server returned ${r.status}`);
-      setPipelineMsg("Pipeline started. You can keep working while it finishes.");
+      if (!r.ok) throw new Error(body.detail || `Le serveur a renvoyé ${r.status}`);
+      setPipelineMsg("Pipeline lancé. Vous pouvez continuer à travailler pendant son exécution.");
       window.setTimeout(() => {
         setPipelineRunning(false);
         setPipelineMsg(null);
@@ -221,7 +221,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
         setPipelineRunning(false);
         return;
       }
-      setPipelineMsg(err instanceof Error ? err.message : "Pipeline failed to start");
+      setPipelineMsg(err instanceof Error ? err.message : "Le pipeline n'a pas pu démarrer");
       setPipelineRunning(false);
     } finally {
       if (pipelineControllerRef.current === controller) pipelineControllerRef.current = null;
@@ -241,10 +241,10 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
       });
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `Server returned ${r.status}`);
+        throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
       }
     } catch (err) {
-      setFeedbackErr(err instanceof Error ? err.message : "Feedback failed");
+      setFeedbackErr(err instanceof Error ? err.message : "Le retour n'a pas pu être enregistré");
     } finally {
       setFeedbackBusy(null);
     }
@@ -261,12 +261,12 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
       });
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `Server returned ${r.status}`);
+        throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
       }
       window.dispatchEvent(new CustomEvent("lead-updated", { detail: { job_id: j.job_id, status } }));
       window.dispatchEvent(new CustomEvent("leads-refresh"));
     } catch (err) {
-      setStatusErr(err instanceof Error ? err.message : "Status update failed");
+      setStatusErr(err instanceof Error ? err.message : "Le statut n'a pas pu être mis à jour");
     } finally {
       setStatusBusy(null);
     }
@@ -283,19 +283,19 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
       });
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `Server returned ${r.status}`);
+        throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
       }
     } catch (err) {
-      setFeedbackErr(err instanceof Error ? err.message : "Follow-up save failed");
+      setFeedbackErr(err instanceof Error ? err.message : "La relance n'a pas pu être enregistrée");
     } finally {
       setFollowupBusy(null);
     }
   };
 
   const extractedDetails = [
-    ["Tech stack", (j.tech_stack || []).join(", ")],
-    ["Location", j.location || ""],
-    ["Urgency", j.urgency || ""],
+    ["Stack technique", (j.tech_stack || []).join(", ")],
+    ["Localisation", j.location || ""],
+    ["Urgence", j.urgency || ""],
     ["Budget", j.budget || ""],
   ].filter(([, value]) => value);
 
@@ -303,7 +303,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     <div key={label} style={{ background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
         <span className="mono" style={{ fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
-        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => navigator.clipboard?.writeText(value)}>Copy</button>
+        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => navigator.clipboard?.writeText(value)}>Copier</button>
       </div>
       <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{value}</div>
     </div>
@@ -323,10 +323,10 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
               <span className="pill" style={{ background: `var(--${getTone(j.status)})`, color: `var(--${getTone(j.status)}-ink)` }}>{j.status}</span>
               <span className="pill mono" style={{ background: "var(--paper-3)", color: "var(--ink-3)" }}>{j.platform}</span>
               {j.budget && <span className="pill mono" style={{ background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" }}>{j.budget}</span>}
-              {(j.signal_score || 0) > 0 && <span className="pill mono" style={{ background: (j.signal_score || 0) >= 80 ? "var(--orange-soft)" : "var(--yellow-soft)", color: (j.signal_score || 0) >= 80 ? "var(--orange-ink)" : "var(--yellow-ink)", border: `1px solid ${(j.signal_score || 0) >= 80 ? "var(--orange)" : "var(--yellow)"}` }}>Lead signal {j.signal_score}</span>}
-              {!!j.learning_delta && <span className="pill mono" style={{ background: j.learning_delta > 0 ? "var(--green-soft)" : "var(--bad-soft)", color: j.learning_delta > 0 ? "var(--green-ink)" : "var(--bad)", border: `1px solid ${j.learning_delta > 0 ? "var(--green)" : "var(--bad)"}` }}>Learning {j.learning_delta > 0 ? "+" : ""}{j.learning_delta}</span>}
+              {(j.signal_score || 0) > 0 && <span className="pill mono" style={{ background: (j.signal_score || 0) >= 80 ? "var(--orange-soft)" : "var(--yellow-soft)", color: (j.signal_score || 0) >= 80 ? "var(--orange-ink)" : "var(--yellow-ink)", border: `1px solid ${(j.signal_score || 0) >= 80 ? "var(--orange)" : "var(--yellow)"}` }}>Signal {j.signal_score}</span>}
+              {!!j.learning_delta && <span className="pill mono" style={{ background: j.learning_delta > 0 ? "var(--green-soft)" : "var(--bad-soft)", color: j.learning_delta > 0 ? "var(--green-ink)" : "var(--bad)", border: `1px solid ${j.learning_delta > 0 ? "var(--green)" : "var(--bad)"}` }}>Apprentissage {j.learning_delta > 0 ? "+" : ""}{j.learning_delta}</span>}
               {j.feedback && <span className="pill mono" style={{ background: "var(--blue-soft)", color: "var(--blue-ink)", border: "1px solid var(--blue)" }}>{j.feedback.replace(/_/g, " ")}</span>}
-              {j.score > 0 && <span className="pill mono" style={{ background: j.score >= 85 ? "var(--green-soft)" : j.score >= 60 ? "var(--yellow-soft)" : "var(--bad-soft)", color: j.score >= 85 ? "var(--green-ink)" : j.score >= 60 ? "var(--yellow-ink)" : "var(--bad)" }}>{j.score}/100 match</span>}
+              {j.score > 0 && <span className="pill mono" style={{ background: j.score >= 85 ? "var(--green-soft)" : j.score >= 60 ? "var(--yellow-soft)" : "var(--bad-soft)", color: j.score >= 85 ? "var(--green-ink)" : j.score >= 60 ? "var(--yellow-ink)" : "var(--bad)" }}>Match {j.score}/100</span>}
             </div>
             <h2 style={{ fontSize: 26, fontWeight: 600, overflowWrap: "anywhere" }}>
               {display.role} <span style={{ color: "var(--ink-3)", fontWeight: 700 }}>||</span> {display.company}
@@ -336,11 +336,11 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
             <button
               onClick={() => openExternalUrl(j.url)}
-              title="Open original job posting"
+              title="Ouvrir l'offre originale"
               className="btn"
               style={{ fontSize: 12, borderColor: "var(--teal)", background: "var(--teal-soft)", color: "var(--teal)" }}
             >
-              <Icon name="external-link" size={12} color="var(--teal)" /> View Posting
+              <Icon name="external-link" size={12} color="var(--teal)" /> Voir l'offre
             </button>
             <button className="btn btn-icon" onClick={onClose}><Icon name="x" size={15} /></button>
           </div>
@@ -420,7 +420,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                 >
                   {versions.map(version => (
                     <option key={version.version} value={version.version}>
-                      v{version.version}{version.version === currentVersion ? " (current)" : ""}
+                      v{version.version}{version.version === currentVersion ? " (actuelle)" : ""}
                     </option>
                   ))}
                 </select>
@@ -429,7 +429,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
             {versionErr && <div style={{ color: "var(--bad)", fontSize: 12 }}>{versionErr}</div>}
             {selectedProjects.length > 0 && (
               <div className="row gap-2" style={{ flexWrap: "wrap" }}>
-                <span className="eyebrow" style={{ marginRight: 2 }}>Projects used</span>
+                <span className="eyebrow" style={{ marginRight: 2 }}>Projets utilisés</span>
                 {selectedProjects.map((p, i) => (
                   <span key={i} className="pill" style={{ background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" }}>{p}</span>
                 ))}
@@ -438,18 +438,18 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
             {hasCoverage && (
               <div style={{ background: "var(--blue-soft)", border: "1px solid var(--blue)", borderRadius: 10, padding: "10px 12px" }}>
                 <div className="row" style={{ justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 7 }}>
-                  <span className="eyebrow" style={{ color: "var(--blue-ink)" }}>Coverage</span>
-                  {coveragePct !== null && <span className="mono" style={{ fontSize: 11, fontWeight: 800, color: "var(--blue-ink)" }}>{coveragePct}% JD keywords</span>}
+                  <span className="eyebrow" style={{ color: "var(--blue-ink)" }}>Couverture</span>
+                  {coveragePct !== null && <span className="mono" style={{ fontSize: 11, fontWeight: 800, color: "var(--blue-ink)" }}>{coveragePct}% mots-clés offre</span>}
                 </div>
                 <div style={{ fontSize: 12.3, color: "var(--ink-2)", lineHeight: 1.5 }}>
                   {missingTerms.length > 0
-                    ? <>You're missing these terms from the JD: <b>{missingTerms.slice(0, 6).join(", ")}</b>. We've incorporated the supported matches where applicable.</>
-                    : <>Strong keyword coverage. We've incorporated supported JD terms where they fit the profile.</>
+                    ? <>Termes absents du profil : <b>{missingTerms.slice(0, 6).join(", ")}</b>. Les correspondances fiables ont été intégrées quand elles étaient justifiées.</>
+                    : <>Bonne couverture des mots-clés. Les termes compatibles avec le profil ont été intégrés.</>
                   }
                 </div>
                 {incorporatedTerms.length > 0 && (
                   <div className="row gap-2" style={{ flexWrap: "wrap", marginTop: 8 }}>
-                    <span className="eyebrow" style={{ marginRight: 2 }}>In resume</span>
+                    <span className="eyebrow" style={{ marginRight: 2 }}>Dans le CV</span>
                     {incorporatedTerms.slice(0, 8).map((term, i) => (
                       <span key={i} className="pill" style={{ background: "var(--paper)", color: "var(--blue-ink)", border: "1px solid var(--blue)" }}>{term}</span>
                     ))}
@@ -463,15 +463,15 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                 <iframe
                   key={pdfBlobUrl}
                   src={pdfBlobUrl}
-                  title={activeDoc === "resume" ? "Resume" : "Cover Letter"}
+                  title={activeDoc === "resume" ? "CV" : "Lettre"}
                   width="100%"
                   style={{ height: "100%", border: "none", display: "block" }}
                 />
               )}
               {generating && !pdfBlobUrl && (
                 <div style={{ height: "100%", minHeight: 420, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, color: "var(--ink-3)", fontSize: 12, padding: 24, textAlign: "center" }}>
-                  <div className="mono pulse">Tailoring resume and cover letter for {j.company}...</div>
-                  <div style={{ maxWidth: 360, lineHeight: 1.5 }}>The generator is choosing the strongest profile projects for this job description.</div>
+                  <div className="mono pulse">Adaptation du CV et de la lettre pour {j.company}...</div>
+                  <div style={{ maxWidth: 360, lineHeight: 1.5 }}>Le générateur sélectionne les projets les plus pertinents pour cette offre.</div>
                 </div>
               )}
               {!generating && activeReady && !pdfBlobUrl && (
@@ -523,7 +523,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
 
             {extractedDetails.length > 0 && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Extracted Details</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Détails extraits</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 8 }}>
                   {extractedDetails.map(([label, value]) => (
                     <div key={label} style={{ background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 9, padding: "9px 10px", minWidth: 0 }}>
@@ -535,20 +535,20 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
               </div>
             )}
 
-            <div className="eyebrow">Match Reasoning</div>
+            <div className="eyebrow">Analyse du match</div>
 
             {(j.signal_score || j.signal_reason || (j.signal_tags?.length ?? 0) > 0) && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Lead Signal</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Signal de l'offre</div>
                 <div style={{ background: "var(--orange-soft)", border: "1px solid var(--orange)", borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
                   <div className="row" style={{ justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                    <span style={{ fontSize: 12.5, color: "var(--orange-ink)", fontWeight: 700 }}>Signal score</span>
+                    <span style={{ fontSize: 12.5, color: "var(--orange-ink)", fontWeight: 700 }}>Score signal</span>
                     <span className="mono" style={{ fontSize: 13, fontWeight: 800, color: "var(--orange-ink)" }}>{j.signal_score || 0}/100</span>
                   </div>
                   {!!j.learning_delta && (
                     <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 10px" }}>
                       <div className="row" style={{ justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-                        <span className="mono" style={{ fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Feedback learning</span>
+                        <span className="mono" style={{ fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Apprentissage feedback</span>
                         <span className="mono" style={{ fontSize: 12, fontWeight: 800, color: j.learning_delta > 0 ? "var(--green-ink)" : "var(--bad)" }}>
                           {(j.base_signal_score ?? 0) || ((j.signal_score || 0) - j.learning_delta)} {j.learning_delta > 0 ? "+" : ""}{j.learning_delta}
                         </span>
@@ -570,11 +570,11 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
 
             {((j.fit_bullets?.length ?? 0) > 0 || j.proof_snippet) && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Proof Pack</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Preuves de pertinence</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {(j.fit_bullets?.length ?? 0) > 0 && (
                     <div style={{ background: "var(--green-soft)", border: "1px solid var(--green)", borderRadius: 10, padding: "10px 12px" }}>
-                      <div className="mono" style={{ fontSize: 10, color: "var(--green-ink)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Why I fit</div>
+                      <div className="mono" style={{ fontSize: 10, color: "var(--green-ink)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Pourquoi le profil colle</div>
                       <div className="col gap-1">
                         {j.fit_bullets!.map((bullet, idx) => (
                           <div key={idx} style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.45 }}>{bullet}</div>
@@ -582,41 +582,41 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                       </div>
                     </div>
                   )}
-                  {j.proof_snippet && draftBlock("Proof snippet", j.proof_snippet)}
+                  {j.proof_snippet && draftBlock("Extrait de preuve", j.proof_snippet)}
                 </div>
               </div>
             )}
 
             {(j.outreach_reply || j.outreach_dm || j.outreach_email || j.proposal_draft) && (
               <div>
-                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Outreach Messages</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Messages d'approche</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {j.outreach_reply && (
                     <div style={{ background: "var(--purple-soft)", border: "1px solid var(--purple)", borderRadius: 10, padding: "10px 12px" }}>
                       <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                        <span className="mono" style={{ fontSize: 10, color: "var(--purple-ink)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>3-Line Founder Message</span>
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => navigator.clipboard?.writeText(j.outreach_reply!)}>Copy</button>
+                        <span className="mono" style={{ fontSize: 10, color: "var(--purple-ink)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>Message court recruteur/fondateur</span>
+                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => navigator.clipboard?.writeText(j.outreach_reply!)}>Copier</button>
                       </div>
                       <div style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.65, whiteSpace: "pre-wrap", fontWeight: 500 }}>{j.outreach_reply}</div>
                     </div>
                   )}
-                  {draftBlock("LinkedIn Note", j.outreach_dm)}
-                  {draftBlock("Cold Email", j.outreach_email)}
-                  {draftBlock("Proposal", j.proposal_draft)}
+                  {draftBlock("Note LinkedIn", j.outreach_dm)}
+                  {draftBlock("Email d'approche", j.outreach_email)}
+                  {draftBlock("Proposition", j.proposal_draft)}
                 </div>
               </div>
             )}
 
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Lead Feedback</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Retour sur l'offre</div>
               <div className="row gap-2" style={{ flexWrap: "wrap" }}>
                 {[
-                  ["relevant", "Relevant"],
-                  ["not_relevant", "Not Relevant"],
-                  ["duplicate", "Duplicate"],
-                  ["low_quality", "Low Quality"],
-                  ["incorrect_category", "Incorrect Category"],
-                  ["already_contacted", "Contacted"],
+                  ["relevant", "Pertinente"],
+                  ["not_relevant", "Pas pertinente"],
+                  ["duplicate", "Doublon"],
+                  ["low_quality", "Faible qualité"],
+                  ["incorrect_category", "Mauvaise catégorie"],
+                  ["already_contacted", "Déjà contactée"],
                 ].map(([id, label]) => {
                   const active = j.feedback === id;
                   return (
@@ -625,7 +625,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                       border: `1px solid ${active ? "var(--blue)" : "var(--line)"}`,
                       background: active ? "var(--blue-soft)" : "var(--paper-3)",
                       color: active ? "var(--blue-ink)" : "var(--ink-2)",
-                    }}>{feedbackBusy === id ? "Saving..." : label}</button>
+                    }}>{feedbackBusy === id ? "Enregistrement..." : label}</button>
                   );
                 })}
               </div>
@@ -633,19 +633,19 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
             </div>
 
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Follow-up</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Relance</div>
               <div className="row gap-2" style={{ flexWrap: "wrap" }}>
                 {[2, 5, 10].map(days => (
                   <button key={days} onClick={() => scheduleFollowup(days)} disabled={followupBusy === days} style={{
                     padding: "5px 10px", borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: followupBusy === days ? "wait" : "pointer",
                     border: "1px solid var(--green)", background: "var(--green-soft)", color: "var(--green-ink)",
-                  }}>{followupBusy === days ? "Saving..." : `${days} days`}</button>
+                  }}>{followupBusy === days ? "Enregistrement..." : `${days} jours`}</button>
                 ))}
               </div>
-              {j.followup_due_at && <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 6 }}>Due {j.followup_due_at}</div>}
+              {j.followup_due_at && <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 6 }}>Échéance {j.followup_due_at}</div>}
               {(j.followup_sequence?.length ?? 0) > 0 && (
                 <div style={{ marginTop: 8, background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 10, padding: "9px 11px" }}>
-                  <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Suggested sequence</div>
+                  <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Séquence suggérée</div>
                   <div className="col gap-1">
                     {j.followup_sequence!.map((step, idx) => (
                       <div key={idx} style={{ fontSize: 12.2, color: "var(--ink-2)", lineHeight: 1.45 }}>{step}</div>

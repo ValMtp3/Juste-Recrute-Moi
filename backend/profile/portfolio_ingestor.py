@@ -48,7 +48,7 @@ async def ingest_portfolio_url(url: str) -> dict:
             timeout=_CRAWL_HARD_TIMEOUT,
         )
         if not pages:
-            fetch_error = "Browser could not access the portfolio site."
+            fetch_error = "Le navigateur n'a pas pu accéder au portfolio."
             pages = await asyncio.to_thread(_crawl_portfolio_http, start_url)
     except TimeoutError:
         _log.warning(
@@ -56,7 +56,7 @@ async def ingest_portfolio_url(url: str) -> dict:
             _CRAWL_HARD_TIMEOUT,
             start_url,
         )
-        fetch_error = "Portfolio crawl timed out."
+        fetch_error = "L'analyse du portfolio a dépassé le délai d'attente."
         pages = await asyncio.to_thread(_crawl_portfolio_http, start_url)
     except Exception as exc:
         _log.warning("portfolio browser crawl failed for %s: %s; trying HTTP fallback", start_url, exc)
@@ -67,7 +67,7 @@ async def ingest_portfolio_url(url: str) -> dict:
     if not pages and fetch_error:
         return {"error": _portfolio_fetch_failure_message(fetch_error), "status_code": 502}
     if not pages:
-        return {"error": "Could not fetch portfolio content", "status_code": 502}
+        return {"error": "Impossible de récupérer le contenu du portfolio", "status_code": 502}
 
     deterministic = _extract_deterministic(start_url, pages)
     llm_used = False
@@ -137,7 +137,7 @@ def _portfolio_fetch_failure_message(fetch_error: str) -> str:
         return (
             "This portfolio appears to require JavaScript rendering, but browser-based "
             "portfolio scanning is not available in this build. Update or rebuild "
-            "JustHireMe with the browser feature enabled, then retry."
+            "Juste Recrute Moi with the browser feature enabled, then retry."
         )
     return f"{fetch_error} HTTP fallback also could not fetch portfolio content."
 

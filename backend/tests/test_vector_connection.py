@@ -14,14 +14,14 @@ def test_vector_store_uses_jhm_app_data_dir(monkeypatch, tmp_path):
         connect=lambda path: calls.append(path) or types.SimpleNamespace()
     )
     monkeypatch.setitem(sys.modules, "lancedb", fake_lancedb)
-    monkeypatch.setenv("JHM_APP_DATA_DIR", str(tmp_path / "roaming-app-data" / "JustHireMe"))
+    monkeypatch.setenv("JHM_APP_DATA_DIR", str(tmp_path / "roaming-app-data" / "Juste Recrute Moi"))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local-app-data"))
 
     from data.vector import connection
 
     module = importlib.reload(connection)
 
-    expected_base = tmp_path / "roaming-app-data" / "JustHireMe"
+    expected_base = tmp_path / "roaming-app-data" / "Juste Recrute Moi"
     expected_vector = expected_base / "vector"
     assert Path(module.BASE_DIR) == expected_base
     assert Path(module.VECTOR_DIR) == expected_vector
@@ -44,7 +44,7 @@ def test_vector_store_falls_back_to_local_app_data(monkeypatch, tmp_path):
 
     module = importlib.reload(connection)
 
-    expected_vector = tmp_path / "local-app-data" / "JustHireMe" / "vector"
+    expected_vector = tmp_path / "local-app-data" / "Juste Recrute Moi" / "vector"
     assert Path(module.VECTOR_DIR) == expected_vector
     assert Path(calls[-1]) == expected_vector
 
@@ -154,16 +154,16 @@ def test_vector_runtime_asset_name_is_platform_specific(monkeypatch):
     from data.vector import runtime
 
     monkeypatch.setattr(runtime, "sys_platform", lambda: "windows")
-    assert runtime.vector_runtime_asset_name() == "JustHireMe-vector-runtime-windows.zip"
-    assert runtime.runtime_pack_asset_name() == "JustHireMe-runtime-pack-windows.zip"
+    assert runtime.vector_runtime_asset_name() == "Juste-Recrute-Moi-vector-runtime-windows.zip"
+    assert runtime.runtime_pack_asset_name() == "Juste-Recrute-Moi-runtime-pack-windows.zip"
 
     monkeypatch.setattr(runtime, "sys_platform", lambda: "darwin")
-    assert runtime.vector_runtime_asset_name() == "JustHireMe-vector-runtime-macos.zip"
-    assert runtime.runtime_pack_asset_name() == "JustHireMe-runtime-pack-macos.zip"
+    assert runtime.vector_runtime_asset_name() == "Juste-Recrute-Moi-vector-runtime-macos.zip"
+    assert runtime.runtime_pack_asset_name() == "Juste-Recrute-Moi-runtime-pack-macos.zip"
 
     monkeypatch.setattr(runtime, "sys_platform", lambda: "linux")
-    assert runtime.vector_runtime_asset_name() == "JustHireMe-vector-runtime-linux.zip"
-    assert runtime.runtime_pack_asset_name() == "JustHireMe-runtime-pack-linux.zip"
+    assert runtime.vector_runtime_asset_name() == "Juste-Recrute-Moi-vector-runtime-linux.zip"
+    assert runtime.runtime_pack_asset_name() == "Juste-Recrute-Moi-runtime-pack-linux.zip"
 
 
 def test_vector_runtime_roots_include_common_site_package_layouts(tmp_path, monkeypatch):
@@ -225,7 +225,7 @@ def test_runtime_status_requires_single_pack_components(monkeypatch, tmp_path):
     status = runtime.vector_runtime_status()
 
     assert status["ready"] is False
-    assert status["asset"] == "JustHireMe-runtime-pack-windows.zip"
+    assert status["asset"] == "Juste-Recrute-Moi-runtime-pack-windows.zip"
     assert status["vector"]["ready"] is True
     assert status["browser"]["ready"] is False
 

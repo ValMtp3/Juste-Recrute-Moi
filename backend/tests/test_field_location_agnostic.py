@@ -1,6 +1,6 @@
 """Field- and location-agnostic guarantees.
 
-JustHireMe must work for ANY profession in ANY region, not just software/remote.
+Juste Recrute Moi must work for ANY profession in ANY region, not just software/remote.
 These lock in the generalization: non-tech candidates score on their own merits
 (no "not a software job" floor), the discovery quality gate keeps real non-tech
 postings, and discovery queries target the user's actual location.

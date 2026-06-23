@@ -88,7 +88,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
     setResumeBlobUrl(null);
     api(resumeDocPath, { signal: controller.signal })
       .then(r => {
-        if (!r.ok) throw new Error("Resume PDF not ready");
+        if (!r.ok) throw new Error("CV PDF pas encore prêt");
         return r.blob();
       })
       .then(blob => {
@@ -96,7 +96,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
         revoke = URL.createObjectURL(blob);
         setResumeBlobUrl(revoke);
       })
-      .catch(e => alive && setResumeLoadErr(e instanceof Error ? e.message : "Resume failed to load"));
+      .catch(e => alive && setResumeLoadErr(e instanceof Error ? e.message : "Le CV n'a pas pu être chargé"));
     return () => {
       alive = false;
       controller.abort();
@@ -113,7 +113,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
     setCoverBlobUrl(null);
     api(coverDocPath, { signal: controller.signal })
       .then(r => {
-        if (!r.ok) throw new Error("Cover letter PDF not ready");
+        if (!r.ok) throw new Error("Lettre PDF pas encore prête");
         return r.blob();
       })
       .then(blob => {
@@ -121,7 +121,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
         revoke = URL.createObjectURL(blob);
         setCoverBlobUrl(revoke);
       })
-      .catch(e => alive && setCoverLoadErr(e instanceof Error ? e.message : "Cover letter failed to load"));
+      .catch(e => alive && setCoverLoadErr(e instanceof Error ? e.message : "La lettre n'a pas pu être chargée"));
     return () => {
       alive = false;
       controller.abort();
@@ -148,7 +148,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
     }, 5000);
     const guard = window.setTimeout(() => {
       if (!alive || resumeReady || coverReady) return;
-      setErr("Generation is still running in the background. Open the job from Ready shortly, or press Analyse & Generate again to retry if it does not finish.");
+      setErr("La génération continue en arrière-plan. Ouvrez bientôt l'offre depuis Prêt, ou relancez Analyser et générer si elle ne se termine pas.");
     }, 120000);
     return () => {
       alive = false;
@@ -170,7 +170,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
     const watchdogId = window.setTimeout(() => {
       if (!mountedRef.current || submitRunRef.current !== runId) return;
       setBusy(false);
-      setErr("Customize is taking too long to respond. I stopped waiting here; check Activity/Ready shortly or retry.");
+      setErr("La génération met trop longtemps à répondre. J'arrête l'attente ici ; vérifiez Activité ou Prêt dans un instant, ou réessayez.");
       controller.abort();
     }, CUSTOMIZE_WATCHDOG_MS);
     try {
@@ -185,11 +185,11 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
           timeoutMs: CUSTOMIZE_START_TIMEOUT_MS,
         }),
         CUSTOMIZE_START_TIMEOUT_MS + 1000,
-        "Customize did not accept the job quickly enough.",
+        "La génération n'a pas accepté l'offre assez vite.",
       );
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `Server returned ${r.status}`);
+        throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
       }
       const started = await r.json();
       if (submitRunRef.current !== runId) return;
@@ -198,8 +198,8 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
       window.dispatchEvent(new CustomEvent("leads-refresh"));
     } catch (e) {
       if (mountedRef.current) {
-        const message = e instanceof Error ? e.message : "Application package failed";
-        setErr(message === "Request cancelled" ? "Stopped waiting. If generation already started, it may still finish in the background." : message);
+        const message = e instanceof Error ? e.message : "La génération du dossier a échoué";
+        setErr(message === "Request cancelled" || message === "Requête annulée" ? "Attente arrêtée. Si la génération a déjà commencé, elle peut encore finir en arrière-plan." : message);
         setBusy(false);
       }
     } finally {
@@ -214,7 +214,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
     const tone = stepTone(done, active);
     return (
       <div className="pill mono" style={{ background: `var(--${tone}-soft)`, color: `var(--${tone}-ink)`, border: `1px solid var(--${tone})`, fontSize: 10 }}>
-        {done ? "Done" : active ? "Working" : "Waiting"} - {label}
+        {done ? "Terminé" : active ? "En cours" : "En attente"} - {label}
       </div>
     );
   };
@@ -224,16 +224,16 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
       <div style={{ maxWidth: 1180, margin: "0 auto", display: "grid", gridTemplateColumns: liveLead ? "420px minmax(0, 1fr)" : "minmax(0, 880px)", gap: 18, alignItems: "start", justifyContent: "center" }}>
         <section className="card" style={{ padding: 22, display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
-            <div className="eyebrow">Customize for this job</div>
-            <h2 style={{ fontSize: 24, fontWeight: 700, marginTop: 5, marginBottom: 6 }}>Paste the job description.</h2>
-            <div style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.55 }}>Include the posting URL if you have it; generation needs the actual role requirements to stay factual.</div>
+            <div className="eyebrow">Adapter cette offre</div>
+            <h2 style={{ fontSize: 24, fontWeight: 700, marginTop: 5, marginBottom: 6 }}>Collez la description de l'offre.</h2>
+            <div style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.55 }}>Ajoutez l'URL si vous l'avez ; la génération a besoin des vraies exigences du poste pour rester factuelle.</div>
           </div>
           <textarea
             ref={inputRef}
             className="field-input"
             value={input}
             onChange={e => setInput(e.target.value)}
-            placeholder="Paste the full job description, optionally with the posting URL"
+            placeholder="Collez la description complète, avec l'URL de l'offre si possible"
             rows={liveLead ? 8 : 12}
             style={{ fontSize: 14, lineHeight: 1.55, resize: "vertical" }}
           />
@@ -276,7 +276,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
               <div className="card" style={{ padding: 16, borderColor: "var(--blue)", background: "var(--blue-soft)" }}>
                 <div className="row" style={{ justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 8 }}>
                   <span className="eyebrow" style={{ color: "var(--blue-ink)" }}>Couverture</span>
-                  {coveragePct !== null && <span className="mono" style={{ fontSize: 11, fontWeight: 800, color: "var(--blue-ink)" }}>{coveragePct}% JD keywords</span>}
+                  {coveragePct !== null && <span className="mono" style={{ fontSize: 11, fontWeight: 800, color: "var(--blue-ink)" }}>{coveragePct}% mots-clés offre</span>}
                 </div>
                 <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55 }}>
                   {missingTerms.length
@@ -321,7 +321,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
               {primaryContact && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginTop: 12 }}>
                   <div style={{ background: "var(--paper)", border: "1px solid var(--line)", borderRadius: 8, padding: 12 }}>
-                    <div className="eyebrow">Contact direct</div>
+                  <div className="eyebrow">Contact direct</div>
                     <div className="col gap-2" style={{ marginTop: 8, fontSize: 12.5, color: "var(--ink-2)" }}>
                       {primaryContact.email && (
                         <button className="btn btn-ghost" style={{ justifyContent: "space-between" }} onClick={() => copyText(primaryContact.email || "")}>
@@ -391,15 +391,15 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
             {(liveLead.outreach_reply || liveLead.outreach_dm || liveLead.outreach_email || (liveLead.fit_bullets?.length ?? 0) > 0) && (
               <div className="card" style={{ padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
                 {[
-                  ["3-line pitch", liveLead.outreach_reply],
-                  ["Cold email", liveLead.outreach_email],
-                  ["LinkedIn note", liveLead.outreach_dm],
-                  ["Fit bullets", (liveLead.fit_bullets || []).join("\n")],
+                  ["Pitch court", liveLead.outreach_reply],
+                  ["Email d'approche", liveLead.outreach_email],
+                  ["Note LinkedIn", liveLead.outreach_dm],
+                  ["Arguments clés", (liveLead.fit_bullets || []).join("\n")],
                 ].filter(([, value]) => Boolean(value)).map(([label, value]) => (
                   <div key={label} style={{ background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 8, padding: "10px 12px" }}>
                     <div className="row" style={{ justifyContent: "space-between", gap: 8, marginBottom: 7 }}>
                       <span className="eyebrow">{label}</span>
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => copyText(String(value))}>Copy</button>
+                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => copyText(String(value))}>Copier</button>
                     </div>
                     <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{value}</div>
                   </div>
@@ -408,9 +408,9 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
             )}
 
             <div className="card" style={{ padding: 16, display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Ready package: use the generated documents and outreach drafts wherever you apply.</div>
+              <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>Dossier prêt : utilisez les documents générés et les brouillons d'approche pour candidater.</div>
               <button className="btn" onClick={() => liveLead && openDrawer(liveLead)} disabled={!liveLead} style={{ minWidth: 170, justifyContent: "center" }}>
-                <Icon name="file" size={14} /> Review Package
+                <Icon name="file" size={14} /> Relire le dossier
               </button>
             </div>
           </section>

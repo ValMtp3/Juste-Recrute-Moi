@@ -1,4 +1,4 @@
-"""Subscription-CLI LLM provider: power JustHireMe from the user's EXISTING
+"""Subscription-CLI LLM provider: power Juste Recrute Moi from the user's EXISTING
 Claude / ChatGPT subscriptions instead of a pay-per-token API key.
 
 It shells out to the locally-installed CLI the user has already logged into:
@@ -27,7 +27,7 @@ import subprocess
 import tempfile
 
 # Codex's own default model (chosen by the user's `codex` config / ChatGPT plan)
-# is the only reliable choice for subscription auth. JustHireMe's hardcoded
+# is the only reliable choice for subscription auth. Juste Recrute Moi's hardcoded
 # "gpt-5-codex" default is REJECTED for ChatGPT accounts ("model is not supported
 # when using Codex with a ChatGPT account"), so we must not forward it.
 _CODEX_REJECTED_MODELS = {"", "gpt-5-codex"}
@@ -36,7 +36,7 @@ _CODEX_REJECTED_MODELS = {"", "gpt-5-codex"}
 _SCRUB = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY")
 _DEFAULT_TIMEOUT = 120
 
-# JustHireMe's codex calls are mechanical, latency-bound extraction/scoring, not
+# Juste Recrute Moi's codex calls are mechanical, latency-bound extraction/scoring, not
 # interactive coding — so pin a low reasoning effort regardless of the user's
 # global ~/.codex setting. At "xhigh" a 140-job feed takes ~169s and blows the
 # 120s timeout (and burns ~16K tokens on a 4KB input); "low" keeps it fast enough
@@ -233,7 +233,7 @@ def _codex_run_once(exe_path: str, prompt: str, *, model, timeout: int) -> str:
             )
         return message
     except subprocess.TimeoutExpired as exc:
-        raise CliTimeout(f"codex_cli timed out after {timeout}s") from exc
+        raise CliTimeout(f"codex_cli n'a pas répondu après {timeout} s") from exc
     except FileNotFoundError as exc:
         raise CliNotInstalled("codex CLI vanished from PATH") from exc
     finally:
@@ -281,7 +281,7 @@ def _gemini_exec(exe_path: str, system: str, user: str, *, model, timeout: int) 
             encoding="utf-8", errors="replace", env=_child_env(), timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise CliTimeout(f"gemini_cli timed out after {timeout}s") from exc
+        raise CliTimeout(f"gemini_cli n'a pas répondu après {timeout} s") from exc
     except FileNotFoundError as exc:
         raise CliNotInstalled("gemini CLI vanished from PATH") from exc
     out = (r.stdout or "").strip()
@@ -317,7 +317,7 @@ def _copilot_exec(exe_path: str, system: str, user: str, *, model, timeout: int)
             encoding="utf-8", errors="replace", env=_child_env(), timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise CliTimeout(f"copilot_cli timed out after {timeout}s") from exc
+        raise CliTimeout(f"copilot_cli n'a pas répondu après {timeout} s") from exc
     except FileNotFoundError as exc:
         raise CliNotInstalled("copilot CLI vanished from PATH") from exc
     out = (r.stdout or "").strip()
@@ -333,7 +333,7 @@ def complete_text(provider: str, system: str, user: str, *, model=None, timeout:
     exe_path = shutil.which(_exe(provider))
     if not exe_path:
         raise CliNotInstalled(
-            f"{_exe(provider)} CLI not found on PATH — install it and log in to use the {provider} provider"
+            f"CLI {_exe(provider)} introuvable dans le PATH. Installez-le puis connectez-vous pour utiliser le fournisseur {provider}."
         )
 
     if provider == "codex_cli":
@@ -354,7 +354,7 @@ def complete_text(provider: str, system: str, user: str, *, model=None, timeout:
             encoding="utf-8", errors="replace", env=_child_env(), timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise CliTimeout(f"{provider} timed out after {timeout}s") from exc
+        raise CliTimeout(f"{provider} n'a pas répondu après {timeout} s") from exc
     except FileNotFoundError as exc:
         raise CliNotInstalled(f"{_exe(provider)} CLI vanished from PATH") from exc
 
@@ -521,7 +521,7 @@ def login(provider: str) -> dict:
     exe = _exe(provider)
     path = shutil.which(exe)
     if not path:
-        raise CliNotInstalled(f"{exe} CLI not found — install it first")
+        raise CliNotInstalled(f"CLI {exe} introuvable. Installez-le d'abord.")
     if provider == "claude_cli":
         argv = [path, "auth", "login"]
     elif provider == "codex_cli":
@@ -546,15 +546,15 @@ def install_hint(provider: str) -> dict:
     if provider == "claude_cli":
         return {"name": "Claude Code", "cmd": "npm install -g @anthropic-ai/claude-code",
                 "url": "https://docs.claude.com/en/docs/claude-code/setup",
-                "after": "then click Sign in (runs: claude auth login)"}
+                "after": "cliquez ensuite sur Se connecter ; cela lance `claude auth login`."}
     if provider == "gemini_cli":
         return {"name": "Gemini CLI", "cmd": "npm install -g @google/gemini-cli",
                 "url": "https://github.com/google-gemini/gemini-cli",
-                "after": "then click Sign in and authorize your Google account"}
+                "after": "cliquez ensuite sur Se connecter, puis autorisez votre compte Google."}
     if provider == "copilot_cli":
         return {"name": "GitHub Copilot CLI", "cmd": "npm install -g @github/copilot",
                 "url": "https://docs.github.com/copilot/concepts/agents/about-copilot-cli",
-                "after": "then sign in with your GitHub Copilot account"}
+                "after": "connectez-vous ensuite avec votre compte GitHub Copilot."}
     return {"name": "Codex CLI", "cmd": "npm install -g @openai/codex",
             "url": "https://developers.openai.com/codex/cli",
-            "after": "then click Sign in (runs: codex login)"}
+            "after": "cliquez ensuite sur Se connecter ; cela lance `codex login`."}

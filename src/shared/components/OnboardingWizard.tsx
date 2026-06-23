@@ -10,7 +10,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
   const [role, setRole] = useState("");
   const [location, setLocation] = useState("");
   const [remotePref, setRemotePref] = useState("any");
-  const [market, setMarket] = useState("remote");
+  const [market, setMarket] = useState("france");
   const [provider, setProvider] = useState("ollama");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -19,7 +19,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const steps = ["Resume", "AI Setup", "Workspace Tour", "First Job"];
+  const steps = ["CV", "Réglage IA", "Tour de l'espace", "Première offre"];
   const keyField: Record<string, string> = {
     openai: "openai_api_key",
     anthropic: "anthropic_key",
@@ -72,37 +72,37 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
     huggingface: ["openai/gpt-oss-120b", "meta-llama/Llama-3.1-8B-Instruct"],
   };
   const providerNotes: Record<string, string> = {
-    ollama: "Runs locally through your own Ollama server. Best for privacy; install models separately.",
-    gemini: "Good default for fast, affordable tailoring. Uses Google's OpenAI-compatible Gemini endpoint.",
-    groq: "Great for fast scouting, parsing, and drafts. Uses Groq's OpenAI-compatible endpoint.",
-    openai: "Strong general default for generation and scoring if you already use OpenAI.",
-    anthropic: "Strong writing and reasoning option for polished resumes and cover letters.",
-    deepseek: "Useful when you want lower-cost reasoning-style evaluation.",
-    nvidia: "Advanced NIM route for users with NVIDIA API access.",
-    xai: "Grok models through xAI's OpenAI-compatible endpoint.",
-    kimi: "Moonshot/Kimi models through the OpenAI-compatible Kimi API.",
-    mistral: "Mistral's hosted models; good European provider option.",
-    openrouter: "One key for many providers and models, useful if you want maximum choice.",
-    together: "Open-source model hosting for Llama, DeepSeek, Kimi, Qwen, and more.",
-    fireworks: "Fast open-source model hosting with OpenAI-compatible access.",
-    cerebras: "Very fast inference route for supported models.",
-    perplexity: "Search-grounded models, useful for research-style answers.",
-    huggingface: "Hugging Face router for supported hosted inference providers.",
+    ollama: "Tourne en local via votre serveur Ollama. Idéal pour la confidentialité ; installez les modèles séparément.",
+    gemini: "Bon choix rapide et abordable pour adapter les candidatures. Utilise l'endpoint Gemini compatible OpenAI.",
+    groq: "Très rapide pour collecter, parser et produire des brouillons. Utilise l'endpoint Groq compatible OpenAI.",
+    openai: "Bon choix général pour génération et scoring si vous utilisez déjà OpenAI.",
+    anthropic: "Bon choix rédactionnel pour des CV et lettres plus soignés.",
+    deepseek: "Utile pour de l'évaluation raisonnée à coût plus bas.",
+    nvidia: "Route NIM avancée pour les utilisateurs avec accès API NVIDIA.",
+    xai: "Modèles Grok via l'endpoint xAI compatible OpenAI.",
+    kimi: "Modèles Moonshot/Kimi via l'API Kimi compatible OpenAI.",
+    mistral: "Modèles hébergés Mistral, option européenne intéressante.",
+    openrouter: "Une clé pour plusieurs fournisseurs et modèles, pratique pour garder le choix.",
+    together: "Hébergement de modèles open source : Llama, DeepSeek, Kimi, Qwen, etc.",
+    fireworks: "Hébergement rapide de modèles open source avec accès compatible OpenAI.",
+    cerebras: "Inférence très rapide pour les modèles supportés.",
+    perplexity: "Modèles ancrés recherche, utiles pour les réponses avec contexte externe.",
+    huggingface: "Routeur Hugging Face vers les fournisseurs d'inférence supportés.",
   };
   const tourPages = [
-    { name: "Customize", detail: "Paste a real job URL or job text, analyze fit, generate a tailored resume, cover letter, and outreach drafts from one screen." },
-    { name: "Dashboard", detail: "See the working snapshot: saved leads, pipeline counts, recent activity, source coverage, and what the agent has been doing." },
-    { name: "Job Pipeline", detail: "Scan sources, review discovered jobs, sort by fit and signal, open details, mark applied, and remove weak leads." },
-    { name: "Knowledge", detail: "Inspect the local profile graph built from your resume, projects, GitHub, portfolio, and manual context." },
-    { name: "Activity", detail: "Read the event trail for scans, scoring, generation, scraping, imports, and failures when you need to debug or audit decisions." },
-    { name: "Profile", detail: "Edit your candidate identity, experience, skills, education, links, and application defaults used in generated packages." },
-    { name: "Add Context", detail: "Import projects, portfolio pages, GitHub data, notes, achievements, or extra resume material into the local knowledge stores." },
-    { name: "Setup Guide", detail: "Reopen this wizard any time from the sidebar if you want to re-check keys, sources, pages, or the first package flow." },
+    { name: "Adapter", detail: "Collez une URL ou une description d'offre, analysez l'adéquation et générez CV, lettre et messages depuis un seul écran." },
+    { name: "Tableau de bord", detail: "Suivez les offres enregistrées, le pipeline, l'activité récente, la couverture des sources et le travail de l'agent." },
+    { name: "Pipeline d'offres", detail: "Scannez les sources, relisez les offres trouvées, triez par score et signal, ouvrez les détails et retirez les pistes faibles." },
+    { name: "Graphe", detail: "Inspectez le graphe local construit depuis votre CV, vos projets, GitHub, portfolio et contexte manuel." },
+    { name: "Activité", detail: "Consultez les événements de scan, scoring, génération, scraping, import et erreurs pour auditer les décisions." },
+    { name: "Profil", detail: "Modifiez identité, expériences, compétences, formations, liens et valeurs par défaut utilisées dans les dossiers générés." },
+    { name: "Ajouter du contexte", detail: "Importez projets, pages portfolio, données GitHub, notes, réussites ou compléments de CV dans la base locale." },
+    { name: "Guide de démarrage", detail: "Rouvrez cet assistant depuis la barre latérale pour revérifier clés, sources, pages ou premier dossier." },
   ];
 
   const saveResume = async () => {
     if (!file && !rawResume.trim()) {
-      setErr("Upload a resume file or paste resume text.");
+      setErr("Importez un fichier CV ou collez le texte du CV.");
       return;
     }
     setBusy(true);
@@ -114,13 +114,13 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
       const r = await api(`/api/v1/ingest`, { method: "POST", body: fd });
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `Resume import returned ${r.status}`);
+        throw new Error(detail || `L'import du CV a renvoyé ${r.status}`);
       }
       window.dispatchEvent(new CustomEvent("profile-refresh"));
       window.dispatchEvent(new CustomEvent("graph-refresh"));
       setStep(1);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Resume import failed";
+      const message = e instanceof Error ? e.message : "L'import du CV a échoué";
       setErr(message === "Failed to fetch" ? "Backend local injoignable. Relance Juste Recrute Moi puis réessaie." : message);
     } finally {
       setBusy(false);
@@ -141,8 +141,8 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
       payload.onboarding_target_role = trimmedRole;
       payload.desired_position = trimmedRole;
     }
-    // Optional: an explicit location overrides whatever the CV auto-detected.
-    // Left blank, discovery uses the location parsed from the résumé.
+    // Une localisation explicite remplace celle détectée dans le CV.
+    // Si le champ reste vide, la recherche reprend la localisation du profil.
     if (location.trim()) payload.job_location = location.trim();
     if (provider === "ollama") payload.ollama_url = ollamaUrl;
     const field = keyField[provider];
@@ -155,10 +155,10 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!r.ok) throw new Error(`Preferences returned ${r.status}`);
+      if (!r.ok) throw new Error(`Les préférences ont renvoyé ${r.status}`);
       setStep(2);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Preferences failed to save");
+      setErr(e instanceof Error ? e.message : "Les préférences n'ont pas pu être enregistrées");
     } finally {
       setBusy(false);
     }
@@ -201,24 +201,24 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div>
-            <div className="eyebrow">First Run</div>
-            <h2 style={{ fontSize: 30, fontWeight: 800, marginTop: 6 }}>Get to your first package</h2>
+            <div className="eyebrow">Premier lancement</div>
+            <h2 style={{ fontSize: 30, fontWeight: 800, marginTop: 6 }}>Préparer votre premier dossier</h2>
             <p style={{ color: "var(--ink-2)", fontSize: 13.5, lineHeight: 1.55, marginTop: 8 }}>
-              Import your resume, connect AI, learn the workspace, then open the one-shot customization page for a real posting.
+              Importez votre CV, connectez l'IA, découvrez l'espace de travail, puis adaptez une vraie offre.
             </p>
           </div>
           {progress}
           <div style={{ background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 8, padding: 14, color: "var(--ink-2)", fontSize: 13, lineHeight: 1.55 }}>
             <b style={{ color: "var(--ink)" }}>{steps[step]}</b>
             <div style={{ marginTop: 4 }}>
-              {step === 0 && "Your profile graph starts with resume data."}
-              {step === 1 && "These defaults shape scoring, generation, source selection, and generated application packages."}
-              {step === 2 && "Every page is part of the same local-first workflow: find jobs, understand fit, tailor, apply, and learn from outcomes."}
-              {step === 3 && "Paste a real posting now or open Customize empty and add one there."}
+              {step === 0 && "Le graphe profil démarre avec les données du CV."}
+              {step === 1 && "Ces réglages influencent le scoring, la génération, les sources et les dossiers créés."}
+              {step === 2 && "Chaque page participe au même flux local-first : trouver, comprendre, adapter, candidater et apprendre des résultats."}
+              {step === 3 && "Collez une vraie offre maintenant ou ouvrez Adapter vide pour l'ajouter plus tard."}
             </div>
           </div>
           <button className="btn btn-ghost" onClick={() => onFinish("")} style={{ alignSelf: "flex-start" }}>
-            Skip setup
+            Ignorer la configuration
           </button>
         </div>
 
@@ -232,8 +232,8 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
                 <div className="row gap-3">
                   <Icon name="upload" size={20} />
                   <div>
-                    <div style={{ fontWeight: 800 }}>{file ? file.name : "Upload resume"}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>PDF, DOCX, TXT, or Markdown</div>
+                    <div style={{ fontWeight: 800 }}>{file ? file.name : "Importer un CV"}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>PDF, DOCX, TXT ou Markdown</div>
                   </div>
                 </div>
               </label>
@@ -241,12 +241,12 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
                 className="field-input"
                 value={rawResume}
                 onChange={e => setRawResume(e.target.value)}
-                placeholder="Or paste resume text"
+                placeholder="Ou collez le texte du CV"
                 rows={8}
                 style={{ lineHeight: 1.55, resize: "vertical" }}
               />
               <button className="btn btn-accent" onClick={saveResume} disabled={busy} style={{ justifyContent: "center", padding: "12px 16px" }}>
-                <Icon name="arrow-right" size={14} color="#fff" /> {busy ? "Importing..." : "Continue"}
+                <Icon name="arrow-right" size={14} color="#fff" /> {busy ? "Import..." : "Continuer"}
               </button>
             </div>
           )}
@@ -254,36 +254,35 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
           {step === 1 && (
             <div className="col gap-4">
               <div>
-                <label className="eyebrow">Target role</label>
-                <input className="field-input" value={role} onChange={e => setRole(e.target.value)} placeholder="e.g. Registered Nurse, Electrician, Backend Engineer, Chef" style={{ marginTop: 7 }} />
+                <label className="eyebrow">Poste recherché</label>
+                <input className="field-input" value={role} onChange={e => setRole(e.target.value)} placeholder="ex. développeur backend, chef de projet, commercial, infirmier" style={{ marginTop: 7 }} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <label className="eyebrow">Location <span style={{ opacity: 0.6, textTransform: "none", fontWeight: 400 }}>(optional — auto-detected from your résumé)</span></label>
-                  <input className="field-input" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Berlin, Toronto, Lagos, Mumbai" style={{ marginTop: 7 }} />
+                  <label className="eyebrow">Localisation <span style={{ opacity: 0.6, textTransform: "none", fontWeight: 400 }}>(facultatif ; sinon déduite du CV)</span></label>
+                  <input className="field-input" value={location} onChange={e => setLocation(e.target.value)} placeholder="ex. Montpellier, Paris, Lyon, France" style={{ marginTop: 7 }} />
                 </div>
                 <div>
-                  <label className="eyebrow">Work type</label>
+                  <label className="eyebrow">Mode de travail</label>
                   <select className="field-input" value={remotePref} onChange={e => setRemotePref(e.target.value)} style={{ marginTop: 7 }}>
-                    <option value="any">Any</option>
-                    <option value="remote">Remote</option>
-                    <option value="hybrid">Hybrid</option>
-                    <option value="onsite">Onsite</option>
+                    <option value="any">Indifférent</option>
+                    <option value="remote">Télétravail</option>
+                    <option value="hybrid">Hybride</option>
+                    <option value="onsite">Sur site</option>
                   </select>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
-                  <label className="eyebrow">Market</label>
+                  <label className="eyebrow">Marché</label>
                   <select className="field-input" value={market} onChange={e => setMarket(e.target.value)} style={{ marginTop: 7 }}>
-                    <option value="remote">Remote first</option>
-                    <option value="india">India</option>
-                    <option value="us">United States</option>
-                    <option value="global">Global</option>
+                    <option value="france">France</option>
+                    <option value="global">International</option>
+                    <option value="india">Inde</option>
                   </select>
                 </div>
                 <div>
-                  <label className="eyebrow">LLM Provider</label>
+                  <label className="eyebrow">Fournisseur IA</label>
                   <select className="field-input" value={provider} onChange={e => { const next = e.target.value; setProvider(next); setApiKey(""); setModel(modelHints[next]?.[0] || ""); }} style={{ marginTop: 7 }}>
                     <option value="ollama">Ollama</option>
                     <option value="gemini">Gemini</option>
@@ -305,7 +304,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
                 </div>
               </div>
               <div style={{ background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 8, padding: 12, fontSize: 12.5, lineHeight: 1.5, color: "var(--ink-2)" }}>
-                <b style={{ color: "var(--ink)" }}>{provider === "ollama" ? "Local mode" : provider.toUpperCase()}</b>
+                <b style={{ color: "var(--ink)" }}>{provider === "ollama" ? "Mode local" : provider.toUpperCase()}</b>
                 <div style={{ marginTop: 4 }}>{providerNotes[provider]}</div>
               </div>
               {provider === "ollama" ? (
@@ -316,11 +315,11 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
               ) : (
                 <div style={{ display: "grid", gap: 12 }}>
                   <div>
-                    <label className="eyebrow">API key</label>
-                    <input className="field-input" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Optional for now" style={{ marginTop: 7 }} />
+                    <label className="eyebrow">Clé API</label>
+                    <input className="field-input" type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Facultatif pour l'instant" style={{ marginTop: 7 }} />
                   </div>
                   <div>
-                    <label className="eyebrow">Default model</label>
+                    <label className="eyebrow">Modèle par défaut</label>
                     <select className="field-input" value={model} onChange={e => setModel(e.target.value)} style={{ marginTop: 7 }}>
                       {(modelHints[provider] || []).map(m => <option key={m} value={m}>{m}</option>)}
                     </select>
@@ -328,9 +327,9 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
                 </div>
               )}
               <div className="row gap-2" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                <button className="btn" onClick={onOpenSettings}><Icon name="settings" size={13} /> Advanced settings</button>
+                <button className="btn" onClick={onOpenSettings}><Icon name="settings" size={13} /> Réglages avancés</button>
                 <button className="btn btn-accent" onClick={savePreferences} disabled={busy} style={{ minWidth: 170, justifyContent: "center" }}>
-                  <Icon name="arrow-right" size={14} color="#fff" /> {busy ? "Saving..." : "Continue"}
+                  <Icon name="arrow-right" size={14} color="#fff" /> {busy ? "Enregistrement..." : "Continuer"}
                 </button>
               </div>
             </div>
@@ -347,7 +346,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
                 ))}
               </div>
               <button className="btn btn-accent" onClick={() => setStep(3)} style={{ justifyContent: "center", padding: "12px 16px" }}>
-                <Icon name="arrow-right" size={14} color="#fff" /> Continue
+                  <Icon name="arrow-right" size={14} color="#fff" /> Continuer
               </button>
             </div>
           )}
@@ -355,15 +354,15 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
           {step === 3 && (
             <div className="col gap-4">
               <div>
-                <label className="eyebrow">Job URL or description</label>
+                <label className="eyebrow">URL ou description de l'offre</label>
                 <textarea className="field-input" value={jobDraft} onChange={e => setJobDraft(e.target.value)} rows={12} style={{ marginTop: 7, lineHeight: 1.55, resize: "vertical" }} />
               </div>
               <div className="row gap-2" style={{ flexWrap: "wrap" }}>
                 <button className="btn btn-accent" onClick={() => onFinish(jobDraft)} disabled={!jobDraft.trim()} style={{ justifyContent: "center", padding: "12px 16px", flex: "1 1 220px" }}>
-                  <Icon name="spark" size={14} color="#fff" /> Try it on this job
+                  <Icon name="spark" size={14} color="#fff" /> Tester sur cette offre
                 </button>
                 <button className="btn" onClick={() => onFinish("")} style={{ justifyContent: "center", flex: "1 1 220px" }}>
-                  Open Customize
+                  Ouvrir Adapter
                 </button>
               </div>
             </div>

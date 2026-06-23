@@ -24,11 +24,11 @@ export function ResumeTemplatesPanel({ api }: { api: ApiFetch }) {
     try {
       const res = await api("/api/v1/templates");
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || "Could not load templates");
+      if (!res.ok) throw new Error(body.detail || "Les modèles n'ont pas pu être chargés");
       setTemplates(body.templates || []);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load templates");
+      setError(err instanceof Error ? err.message : "Les modèles n'ont pas pu être chargés");
     } finally {
       setLoading(false);
     }
@@ -45,10 +45,10 @@ export function ResumeTemplatesPanel({ api }: { api: ApiFetch }) {
       form.append("make_default", templates.length === 0 ? "true" : "false");
       const res = await api("/api/v1/templates/upload", { method: "POST", body: form, timeoutMs: 60000 });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || `Upload failed (${res.status})`);
+      if (!res.ok) throw new Error(body.detail || `Import échoué (${res.status})`);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(err instanceof Error ? err.message : "L'import a échoué");
     } finally {
       setLoading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -77,7 +77,7 @@ export function ResumeTemplatesPanel({ api }: { api: ApiFetch }) {
 
   return (
     <div>
-      <SectionLabel label="Resume Templates" sub="upload your own resumes (PDF/DOCX) as reusable style guides — the generator mimics the one you pick per job" />
+      <SectionLabel label="Modèles de CV" sub="importez vos propres CV (PDF/DOCX) comme guides de style réutilisables — le générateur imite celui choisi pour chaque offre" />
 
       <input
         ref={fileRef}
@@ -89,9 +89,9 @@ export function ResumeTemplatesPanel({ api }: { api: ApiFetch }) {
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
         <button className="btn btn-accent" disabled={loading} onClick={() => fileRef.current?.click()} style={{ padding: "8px 18px", fontSize: 13, borderRadius: 10 }}>
-          {loading ? "Working…" : "Upload resume template"}
+          {loading ? "Traitement..." : "Importer un modèle de CV"}
         </button>
-        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{templates.length} saved</span>
+        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{templates.length} enregistrés</span>
       </div>
 
       {error && <div style={{ color: "var(--bad)", fontSize: 12, fontWeight: 700, marginBottom: 10 }}>{error}</div>}

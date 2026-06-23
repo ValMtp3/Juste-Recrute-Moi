@@ -1,5 +1,5 @@
-// Generates on-brand standalone HTML legal pages in website/public/legal/
-// from the canonical markdown in docs/legal/. Run from repo root:
+// Genere les pages legales HTML autonomes dans website/public/legal/
+// depuis les Markdown canoniques de docs/legal/. A lancer depuis la racine :
 //   node website/scripts/build-legal.mjs
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -11,8 +11,8 @@ const outDir = join(repoRoot, "website", "public", "legal");
 mkdirSync(outDir, { recursive: true });
 
 const PAGES = [
-  { md: "terms-of-use.md", out: "terms-of-use.html", title: "Terms of Use" },
-  { md: "privacy-policy.md", out: "privacy-policy.html", title: "Privacy Policy" },
+  { md: "terms-of-use.md", out: "terms-of-use.html", title: "Conditions d'utilisation" },
+  { md: "privacy-policy.md", out: "privacy-policy.html", title: "Politique de confidentialite" },
 ];
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -88,9 +88,9 @@ function mdToHtml(md) {
 const navLinks = PAGES.map((p) => `<a href="${p.out}">${p.title}</a>`).join("");
 
 const template = (title, body) => `<!doctype html>
-<html lang="en"><head>
+<html lang="fr"><head>
 <meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>JustHireMe — ${esc(title)}</title>
+<title>Juste Recrute Moi — ${esc(title)}</title>
 <meta name="robots" content="index,follow"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -124,9 +124,9 @@ const template = (title, body) => `<!doctype html>
     color:var(--ink-3);font-size:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
 </style></head>
 <body>
-<div class="top"><div class="in"><a class="brand" href="/">JustHireMe</a><nav>${navLinks}</nav></div></div>
+<div class="top"><div class="in"><a class="brand" href="/">Juste Recrute Moi</a><nav>${navLinks}</nav></div></div>
 <main>${body}</main>
-<footer><span>JustHireMe — local-first AI job intelligence</span><span><a href="/">← Back to site</a> · <a href="https://github.com/vasu-devs/JustHireMe">GitHub</a></span></footer>
+<footer><span>Juste Recrute Moi — agregateur local-first d'offres d'emploi</span><span><a href="/">← Retour au site</a> · <a href="https://github.com/ValMtp3/Juste-Recrute-Moi">GitHub</a></span></footer>
 </body></html>`;
 
 for (const p of PAGES) {
@@ -135,6 +135,6 @@ for (const p of PAGES) {
   console.log("wrote", join("website/public/legal", p.out));
 }
 // index
-const indexBody = `<h1>Legal &amp; Privacy</h1><p>JustHireMe is local-first — your profile, leads, and generated documents stay on your device. These policies cover both the app and this site.</p><ul>${PAGES.map((p) => `<li><a href="${p.out}">${p.title}</a></li>`).join("")}</ul>`;
-writeFileSync(join(outDir, "index.html"), template("Legal & Privacy", indexBody), "utf8");
+const indexBody = `<h1>Mentions legales et confidentialite</h1><p>Juste Recrute Moi est local-first : votre profil, vos offres et vos documents generes restent sur votre appareil par defaut. Ces textes couvrent l'application et le site.</p><ul>${PAGES.map((p) => `<li><a href="${p.out}">${p.title}</a></li>`).join("")}</ul>`;
+writeFileSync(join(outDir, "index.html"), template("Mentions legales et confidentialite", indexBody), "utf8");
 console.log("wrote website/public/legal/index.html");

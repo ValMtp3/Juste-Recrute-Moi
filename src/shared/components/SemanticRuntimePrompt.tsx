@@ -59,19 +59,22 @@ function runtimeNeedsRestart(payload: RuntimePayload | null) {
 
 function isBackendConnectivityError(message: string) {
   const normalized = message.toLowerCase();
-  return normalized.includes("local backend timed out") || normalized.includes("local backend is unreachable") || normalized.includes("failed to fetch");
+  return normalized.includes("local backend timed out") ||
+    normalized.includes("local backend is unreachable") ||
+    normalized.includes("backend local") ||
+    normalized.includes("failed to fetch");
 }
 
 function bannerMessage(state: PromptState, payload: RuntimePayload | null, error: string) {
   if (state === "waiting") {
     return error
-      ? `${error} Retrying automatically.`
-      : "Waiting for local backend to start.";
+      ? `${error} Nouvelle tentative automatique.`
+      : "Attente du démarrage du backend local.";
   }
   if (state === "installing") {
     const progress = payload?.progress;
-    if (!progress) return "Installing runtime pack…";
-    const message = progress.message || "Installing runtime pack…";
+    if (!progress) return "Installation du pack runtime...";
+    const message = progress.message || "Installation du pack runtime...";
     const percent = Number.isFinite(progress.percent) ? Math.min(100, Math.max(0, Math.round(progress.percent || 0))) : null;
     if (percent !== null && percent > 0) return `${message} ${percent}%`;
     return message;

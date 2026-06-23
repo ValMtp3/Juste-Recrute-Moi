@@ -1,6 +1,6 @@
 import { json, send } from "./_counter.js";
 
-const DEFAULT_REPO = "vasu-devs/JustHireMe";
+const DEFAULT_REPO = "ValMtp3/Juste-Recrute-Moi";
 const VALID_KINDS = new Set(["feedback", "review"]);
 const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE_RE = /(?<!\w)(?:\+?\d[\d\s().-]{7,}\d)(?!\w)/g;
@@ -30,9 +30,9 @@ function issueTitle(kind, rating) {
 function buildBody({ kind, nameProvided, emailProvided, rating, message, path }) {
   const lines = [
     `Kind: ${kind}`,
-    nameProvided ? "Name: provided, redacted from public issue" : null,
+    nameProvided ? "Nom: provided, redacted from public issue" : null,
     emailProvided ? "Email: provided, redacted from public issue" : null,
-    kind === "review" && rating ? `Rating: ${rating}/5` : null,
+    kind === "review" && rating ? `Note: ${rating}/5` : null,
     path ? `Page: ${path}` : null,
     "",
     message,
@@ -50,7 +50,7 @@ async function addIssueLabels(repo, issueNumber, token, kind) {
       accept: "application/vnd.github+json",
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
-      "user-agent": "justhireme-website",
+      "user-agent": "juste-recrute-moi-website",
     },
     body: JSON.stringify({ labels }),
   });
@@ -76,7 +76,7 @@ async function createGitHubIssue(payload) {
       accept: "application/vnd.github+json",
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
-      "user-agent": "justhireme-website",
+      "user-agent": "juste-recrute-moi-website",
     },
     body: JSON.stringify({
       title: issueTitle(payload.kind, payload.rating),
@@ -85,7 +85,7 @@ async function createGitHubIssue(payload) {
   });
 
   if (!response.ok) {
-    throw new Error(`GitHub issue creation failed with ${response.status}`);
+    throw new Error(`Issue GitHub creation failed with ${response.status}`);
   }
 
   const issue = await response.json();
@@ -110,7 +110,7 @@ export default async function handler(request, response) {
     const rating = Math.max(1, Math.min(5, Number.parseInt(body.rating || "0", 10) || 0));
 
     if (message.length < 8) {
-      return send(response, json({ error: "Please add a little more detail." }, 400));
+      return send(response, json({ error: "Ajoutez un peu plus de détails." }, 400));
     }
 
     const payload = {
@@ -138,10 +138,10 @@ export default async function handler(request, response) {
       configured: true,
     }));
   } catch (error) {
-    if (error.message?.startsWith("GitHub issue creation failed")) {
-      return send(response, json({ error: "Feedback delivery is unavailable right now." }, 500));
+    if (error.message?.startsWith("Issue GitHub creation failed")) {
+      return send(response, json({ error: "Retours delivery is unavailable right now." }, 500));
     }
 
-    return send(response, json({ error: "Feedback delivery is unavailable right now." }, 500));
+    return send(response, json({ error: "Retours delivery is unavailable right now." }, 500));
   }
 }

@@ -31,7 +31,7 @@ describe("createApiFetch", () => {
 
   it("formats backend unreachable errors", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("Failed to fetch")));
-    await expect(createApiFetch(4567, "secret")("/x")).rejects.toThrow("Local backend is unreachable");
+    await expect(createApiFetch(4567, "secret")("/x")).rejects.toThrow("backend local est inaccessible");
   });
 
   it("formats timeout errors", async () => {
@@ -42,7 +42,7 @@ describe("createApiFetch", () => {
     })));
     const request = createApiFetch(4567, "secret")("/x", { timeoutMs: 50 });
     vi.advanceTimersByTime(60);
-    await expect(request).rejects.toThrow("timed out");
+    await expect(request).rejects.toThrow("n'a pas répondu");
   });
 
   it("converts caller aborts to AbortError", async () => {
@@ -58,7 +58,7 @@ describe("createApiFetch", () => {
 
 describe("isAbortLikeError", () => {
   it("recognizes DOM aborts", () => {
-    expect(isAbortLikeError(new DOMException("Request cancelled", "AbortError"))).toBe(true);
+    expect(isAbortLikeError(new DOMException("Requête annulée", "AbortError"))).toBe(true);
   });
 
   it("recognizes textual abort errors", () => {

@@ -15,14 +15,14 @@ def test_portfolio_ingestor_extracts_real_site_structure_without_llm(monkeypatch
             Full-stack engineer building AI products, local-first automation, and data workflows.
             I build production React, TypeScript, Python, FastAPI, PostgreSQL, Docker, LLM and RAG systems.
             Featured Projects
-            JustHireMe
+            Juste Recrute Moi
             Local-first AI job intelligence workbench with resume generation and graph ranking.
             BranchGPT
             Developer workflow agent with Next.js, React, OpenAI and PostgreSQL.
             Contact alex@example.test
             """,
             links=[
-                {"href": "https://github.com/alex-example/justhireme", "text": "GitHub"},
+                {"href": "https://github.com/alex-example/juste-recrute-moi", "text": "GitHub"},
                 {"href": "https://linkedin.com/in/alex-example", "text": "LinkedIn"},
             ],
         ),
@@ -31,8 +31,8 @@ def test_portfolio_ingestor_extracts_real_site_structure_without_llm(monkeypatch
             title="Projects",
             text="""
             Selected Work
-            JustHireMe
-            Built a local-first desktop workbench using Tauri, React, FastAPI, Kuzu and LanceDB.
+            Juste Recrute Moi
+            Application desktop local-first avec Tauri, React, FastAPI, Kuzu et LanceDB.
             BranchGPT
             Ships AI-assisted repository workflows with Next.js, TypeScript and OpenAI.
             """,
@@ -57,7 +57,7 @@ def test_portfolio_ingestor_extracts_real_site_structure_without_llm(monkeypatch
     assert result["identity"]["linkedin_url"] == "https://linkedin.com/in/alex-example"
     assert any(skill["name"] == "FastAPI" for skill in result["skills"])
     assert any(skill["name"] == "RAG" for skill in result["skills"])
-    assert any(project["title"] == "JustHireMe" for project in result["projects"])
+    assert any(project["title"] == "Juste Recrute Moi" for project in result["projects"])
     assert result["stats"]["pages_scanned"] == 2
     assert result["stats"]["llm_used"] is False
 
@@ -178,7 +178,7 @@ def test_portfolio_ingestor_keeps_real_homepage_products(monkeypatch):
             Vasu Devs
             AI Engineer building agentic products.
             Featured Projects
-            JustHireMe
+            Juste Recrute Moi
             Agentic AI desktop app for transparent, privacy-first job search built with Tauri, React, FastAPI, KuzuDB and LanceDB.
             Internal Finance & P&L Platform
             Built a financial planning system with Python, PostgreSQL, dashboards, automations and audit-ready workflows.
@@ -204,7 +204,7 @@ def test_portfolio_ingestor_keeps_real_homepage_products(monkeypatch):
 
     titles = [project["title"] for project in result["projects"]]
     skills = [skill["name"] for skill in result["skills"]]
-    assert "JustHireMe" in titles
+    assert "Juste Recrute Moi" in titles
     assert "Internal Finance & P&L Platform" in titles
     assert "Runtime Error" not in titles
     assert "KuzuDB" in skills
@@ -223,7 +223,7 @@ def test_portfolio_ingestor_rejects_cta_and_section_labels(monkeypatch):
             Open →
             Show all 45 projects
             Available for remote projects worldwideBook a free call
-            JustHireMe
+            Juste Recrute Moi
             Built an agentic AI desktop app for transparent job search with Tauri, React, FastAPI and LanceDB.
             04 / Technical Expertise
             Frontend
@@ -249,7 +249,7 @@ def test_portfolio_ingestor_rejects_cta_and_section_labels(monkeypatch):
     result = asyncio.run(portfolio.ingest_portfolio_url("https://example.com/work"))
 
     titles = [project["title"] for project in result["projects"]]
-    assert "JustHireMe" in titles
+    assert "Juste Recrute Moi" in titles
     assert "Open →" not in titles
     assert "02 / Works" not in titles
     assert "Show all 45 projects" not in titles
@@ -269,7 +269,7 @@ def test_portfolio_ingestor_keeps_real_products_from_dense_portfolio(monkeypatch
             DEVS
             Vasu-DevS ExperienceSkillsServicesContact
             01 / Experience
-            JustHireMe
+            Juste Recrute Moi
             Agentic AI desktop app for transparent, privacy-first job search
             380.6K
             Launch views
@@ -311,7 +311,7 @@ def test_portfolio_ingestor_keeps_real_products_from_dense_portfolio(monkeypatch
 
     titles = [project["title"] for project in result["projects"]]
     skills = [skill["name"] for skill in result["skills"]]
-    assert "JustHireMe" in titles
+    assert "Juste Recrute Moi" in titles
     assert "BranchGPT" in titles
     assert "Vaani" in titles
     assert "VASU" not in titles
@@ -385,9 +385,9 @@ def test_portfolio_ingestor_normalizes_preview_buckets(monkeypatch):
             Full-stack engineer building React and FastAPI products.
             Featured Projects
             React
-            JustHireMe
-            Built a local-first job workbench with React, FastAPI and PostgreSQL.
-            Built graph ranking and resume generation workflows.
+            Juste Recrute Moi
+            Application emploi local-first avec React, FastAPI et PostgreSQL.
+            Scoring graphe et generation de CV.
             Education
             Lovely Professional University
             Punjab
@@ -409,7 +409,7 @@ def test_portfolio_ingestor_normalizes_preview_buckets(monkeypatch):
     result = asyncio.run(portfolio.ingest_portfolio_url("https://example.com"))
 
     titles = [project["title"] for project in result["projects"]]
-    assert "JustHireMe" in titles
+    assert "Juste Recrute Moi" in titles
     assert "React" not in titles
     assert not any(title.startswith("Built ") for title in titles)
     assert [item["title"] for item in result["education"]] == ["Lovely Professional University, Punjab, CGPA 8.5"]

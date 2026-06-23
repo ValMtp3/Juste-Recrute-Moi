@@ -66,11 +66,11 @@ def test_core_config_parses_targets_and_safe_ints():
 
 
 def test_core_errors_and_event_bus_dispatch_are_stable():
-    from core.errors import ConfigurationError, DiscoveryError, JustHireMeError, LeadNotFoundError
+    from core.errors import ConfigurationError, DiscoveryError, JusteRecruteMoiError, LeadNotFoundError
     from core.events import InProcessEventBus, SCAN_STARTED
 
-    assert issubclass(LeadNotFoundError, JustHireMeError)
-    assert issubclass(ConfigurationError, JustHireMeError)
+    assert issubclass(LeadNotFoundError, JusteRecruteMoiError)
+    assert issubclass(ConfigurationError, JusteRecruteMoiError)
     assert str(DiscoveryError("source offline")) == "source offline"
 
     events: list[tuple[str, dict[str, int]]] = []

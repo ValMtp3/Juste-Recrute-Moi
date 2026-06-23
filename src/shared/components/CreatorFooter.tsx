@@ -6,7 +6,7 @@ export function CreatorFooter({ compact = false }: { compact?: boolean }) {
       target="_blank"
       rel="noreferrer"
     >
-      cree par Valentin Fiess 🦞
+      Cree par Valentin Fiess 🦞
     </a>
   );
 }

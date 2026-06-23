@@ -1,4 +1,4 @@
-"""Minimal MCP stdio server for JustHireMe's local job intelligence tools.
+"""Minimal MCP stdio server for Juste Recrute Moi's local job intelligence tools.
 
 This deliberately avoids an SDK dependency so the repo can expose useful MCP
 tools with the existing backend environment. It implements the JSON-RPC methods
@@ -98,12 +98,12 @@ TOOLS: dict[str, Callable[[Json], Json]] = {
 TOOL_DEFINITIONS: list[Json] = [
     {
         "name": "score_job_fit",
-        "description": "Score a job posting against a candidate profile using JustHireMe's explainable fit rubric.",
+        "description": "Note une offre par rapport au profil candidat avec la grille explicable de Juste Recrute Moi.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "posting": {"type": "string", "description": "Raw job posting text."},
-                "candidate": {"type": "object", "description": "Candidate profile JSON using JustHireMe profile fields."},
+                "posting": {"type": "string", "description": "Texte brut de l'offre."},
+                "candidate": {"type": "object", "description": "Profil candidat JSON utilisant les champs Juste Recrute Moi."},
             },
             "required": ["posting", "candidate"],
             "additionalProperties": False,
@@ -111,11 +111,11 @@ TOOL_DEFINITIONS: list[Json] = [
     },
     {
         "name": "evaluate_lead_quality",
-        "description": "Run the deterministic lead quality gate before saving or ranking a scraped job lead.",
+        "description": "Lance le filtre qualité déterministe avant d'enregistrer ou classer une offre scrapée.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "lead": {"type": "object", "description": "Lead object with title, company, url, description, location, posted_date, and source_meta."},
+                "lead": {"type": "object", "description": "Objet offre avec title, company, url, description, location, posted_date et source_meta."},
                 "min_quality": {"type": "integer", "minimum": 0, "maximum": 100, "default": 60},
                 "target_level": {"type": "string", "default": "beginner"},
                 "max_age_days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 7},
@@ -148,7 +148,7 @@ def _handle(request: Json) -> Json | None:
             result = {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "justhireme", "version": APP_VERSION},
+                "serverInfo": {"name": "juste-recrute-moi", "version": APP_VERSION},
             }
         elif method == "notifications/initialized":
             return None

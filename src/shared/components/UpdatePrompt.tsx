@@ -15,7 +15,7 @@ type UpdateInstallStatus = {
 
 const DISMISSED_UPDATE_KEY = "jhm.dismissedUpdate";
 const PENDING_RESTART_KEY = "jhm.pendingUpdateRestart";
-const RELEASES_URL = "https://github.com/vasu-devs/JustHireMe/releases/latest";
+const RELEASES_URL = "https://github.com/ValMtp3/Juste-Recrute-Moi/releases/latest";
 const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 const UPDATE_DOWNLOAD_HEADERS = {
   Accept: "application/octet-stream",

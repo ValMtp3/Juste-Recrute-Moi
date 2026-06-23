@@ -200,7 +200,7 @@ _ENV_NAMES: dict[str, str] = {
     "custom":    "OPENAI_COMPAT_API_KEY",
 }
 
-# Default model per provider (used when no step/global model is set)
+    # Modèle par défaut par fournisseur quand aucun modèle global ou d'étape n'est défini.
 _DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-sonnet-4-6",
     "gemini":    "gemini-2.5-flash",

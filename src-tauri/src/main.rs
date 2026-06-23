@@ -5,5 +5,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    justhireme_lib::run()
+    juste_recrute_moi_lib::run()
 }

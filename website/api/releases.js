@@ -1,4 +1,4 @@
-const REPO = "vasu-devs/JustHireMe";
+const REPO = "ValMtp3/Juste-Recrute-Moi";
 const RELEASES_URL = `https://github.com/${REPO}/releases`;
 const TAGS_URL = `https://github.com/${REPO}/tags`;
 
@@ -34,7 +34,7 @@ function classifyAsset(asset) {
   return [null, null];
 }
 
-function assetRank(platform, asset) {
+function assetClasser(platform, asset) {
   const name = asset.name.toLowerCase();
   const ranks = {
     windows: [
@@ -61,7 +61,7 @@ async function fetchJson(url) {
   const res = await fetch(url, {
     headers: {
       accept: "application/vnd.github+json",
-      "user-agent": "justhireme-website",
+      "user-agent": "juste-recrute-moi-website",
     },
   });
   if (!res.ok) {
@@ -79,7 +79,7 @@ function releasePayload(release) {
     const [platform, payload] = classifyAsset(asset);
     if (
       platform &&
-      (!assets[platform] || assetRank(platform, payload) < assetRank(platform, assets[platform]))
+      (!assets[platform] || assetClasser(platform, payload) < assetClasser(platform, assets[platform]))
     ) {
       assets[platform] = payload;
     }

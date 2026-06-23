@@ -44,9 +44,9 @@ def test_resume_fallback_prioritizes_jd_keywords_and_evidence():
             {"n": "RAG", "cat": "technical"},
         ],
         "projects": [{
-            "title": "JustHireMe",
+            "title": "Juste Recrute Moi",
             "stack": ["React", "FastAPI", "PostgreSQL", "LangGraph"],
-            "impact": "Built a local-first AI job intelligence workbench with graph ranking and resume generation.",
+            "impact": "Agrégateur local-first d'offres d'emploi avec scoring graphe et génération de CV.",
         }],
         "exp": [],
     }
@@ -63,7 +63,7 @@ def test_resume_fallback_prioritizes_jd_keywords_and_evidence():
     assert "**Frameworks & Libraries:** FastAPI, React, LangGraph" in resume
     assert "**Databases & Data Tools:** PostgreSQL" in resume
     assert "**Tools & Platforms:** Docker" in resume
-    assert "JustHireMe" in resume
+    assert "Juste Recrute Moi" in resume
     assert "RAG" in resume
 
 

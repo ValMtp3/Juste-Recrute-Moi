@@ -46,8 +46,8 @@ const files = [
   {
     name: "src-tauri/Cargo.lock",
     path: join(repoRoot, "src-tauri", "Cargo.lock"),
-    read: (path) => tomlPackageLockVersion(path, "justhireme"),
-    write: (path, version) => writeTomlPackageLockVersion(path, "justhireme", version),
+    read: (path) => tomlPackageLockVersion(path, "juste-recrute-moi"),
+    write: (path, version) => writeTomlPackageLockVersion(path, "juste-recrute-moi", version),
   },
   {
     name: "backend/pyproject.toml",

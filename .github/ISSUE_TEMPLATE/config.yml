@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: Source adapter docs
-    url: https://github.com/vasu-devs/JustHireMe/blob/main/docs/source-adapters.md
-    about: Read this before requesting or contributing a new scraper source.
-  - name: Security policy
-    url: https://github.com/vasu-devs/JustHireMe/blob/main/SECURITY.md
-    about: Please do not disclose secrets or private user data in public issues.
+    url: https://github.com/ValMtp3/Juste-Recrute-Moi/blob/main/docs/source-adapters.md
+    about: À lire avant de demander ou proposer une nouvelle source de scraping.
+  - name: Politique de sécurité
+    url: https://github.com/ValMtp3/Juste-Recrute-Moi/blob/main/SECURITY.md
+    about: Ne publiez pas de secrets ni de données utilisateur privées dans les issues publiques.

@@ -1,37 +1,17 @@
-# Commercial Licensing
+# Licence Commerciale
 
-JustHireMe is available under a dual-license model.
+Le dépôt public Juste Recrute Moi est distribué sous GNU Affero General Public License v3.0 only (AGPL-3.0-only).
 
-## Community License
+## Licence Communautaire
 
-The public repository is licensed under the GNU Affero General Public License
-v3.0 only. You may self-host, study, modify, and redistribute JustHireMe under
-the AGPL-3.0 terms.
+Vous pouvez étudier, modifier, auto-héberger et redistribuer Juste Recrute Moi selon les conditions de l'AGPL-3.0.
 
-If you modify JustHireMe and make that modified version available to users over
-a network, the AGPL requires you to offer those users the corresponding source
-code for the modified version.
+Si vous modifiez l'application et la rendez disponible à des utilisateurs via un réseau, l'AGPL impose de leur fournir le code source correspondant de cette version modifiée.
 
-## Commercial License
+## Usage Hors AGPL
 
-A separate commercial license is available from Vasudev Siddh / vasu-devs for
-organizations that want rights outside the AGPL terms, including:
+Aucune exception commerciale ou licence propriétaire n'est accordée par ce fichier. Toute exception à l'AGPL nécessiterait un accord écrit séparé avec les titulaires de droits concernés.
 
-- private forks or proprietary modifications
-- embedding JustHireMe in a closed-source product
-- white-labeling or reselling JustHireMe
-- running a modified hosted service without AGPL source disclosure obligations
-- managed enterprise deployments with private changes, support, or custom terms
+Ce dépôt étant un fork, certaines notices upstream peuvent mentionner des chemins commerciaux historiques. Elles ne constituent pas une licence commerciale accordée pour ce fork.
 
-The commercial license is a separately negotiated written agreement. No
-commercial exception or proprietary license is granted unless it is explicitly
-agreed in writing by Vasudev Siddh / vasu-devs.
-
-For licensing inquiries, contact:
-
-- Email: siddhvasudev1402@gmail.com
-- Portfolio: https://vasudev.live
-- X/Twitter: https://twitter.com/vasu_devs
-
-This file is a plain-language summary. The AGPL-3.0 license text in
-[LICENSE](LICENSE) controls use under the community license.
+Le texte complet [LICENSE](LICENSE) fait foi pour l'usage sous licence communautaire.

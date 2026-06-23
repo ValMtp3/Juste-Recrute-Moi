@@ -370,7 +370,7 @@ def _fallback_package(profile: dict, lead: dict, template: str = "") -> _DocPack
             proj_block += f"- {bullet}\n"
         project_lines.append(proj_block)
     if not project_lines:
-        project_lines.append("### Role-Matched Project Evidence\n- Add projects to the Identity Graph for stronger tailoring.")
+        project_lines.append("### Preuves projet adaptées au rôle\n- Ajoutez des projets au graphe d'identité pour une adaptation plus forte.")
 
     exp_lines = []
     for e in profile.get("exp", [])[:2]:

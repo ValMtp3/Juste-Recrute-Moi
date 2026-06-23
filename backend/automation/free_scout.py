@@ -116,14 +116,14 @@ def _source_error_detail(exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code
         if status == 403:
-            return "HTTP 403 blocked by source"
+            return "HTTP 403 bloqué par la source"
         if status == 429:
-            return "HTTP 429 rate limited by source"
+            return "HTTP 429 limité par la source"
         return f"HTTP {status}"
     if isinstance(exc, httpx.TimeoutException):
-        return "request timed out"
+        return "délai de requête dépassé"
     if isinstance(exc, httpx.ConnectError):
-        return "connection failed"
+        return "connexion échouée"
     return str(exc).strip() or type(exc).__name__
 
 
@@ -209,7 +209,7 @@ def _text_lead(item: dict, default_kind: str = "job") -> dict:
 )
 async def _json_get(url: str, params: dict | None = None) -> dict | list:
     headers = {
-        "User-Agent": "JustHireMe free-source scout",
+        "User-Agent": "Juste Recrute Moi free-source scout",
         "Accept": "application/json",
     }
     async with httpx.AsyncClient(timeout=30, headers=headers, follow_redirects=True) as cx:
@@ -311,7 +311,7 @@ def run(
         parsed = _parse_json_setting(raw_custom_connectors, [], errors)
         custom_connectors = parsed if isinstance(parsed, list) else []
         if parsed and not isinstance(parsed, list):
-            errors.append("custom connectors must be a JSON array")
+            errors.append("les connecteurs personnalisés doivent être un tableau JSON")
     try:
         cap = max(1, min(int(max_requests or 20), 80))
     except Exception as log_exc:
@@ -334,7 +334,7 @@ def run(
         "by_source": {},
     }
     if not all_targets and not custom_connectors:
-        errors.append("No free-source targets configured. Add profile context, source targets, a company watchlist, or custom connectors.")
+        errors.append("Aucune cible de source gratuite configurée. Ajoutez du contexte profil, des cibles source, une liste d'entreprises ou des connecteurs personnalisés.")
         _publish_state(errors, usage)
         _ERROR_SINK.reset(error_token)
         return []
@@ -363,7 +363,7 @@ def run(
             item = attach_quality_metadata(item, quality)
             if not quality.get("accepted"):
                 usage["filtered"] += 1
-                errors.append(f"filtered {item.get('platform', 'free')}:{item.get('url', '')} - {quality.get('reason', 'quality gate')}")
+                errors.append(f"filtré {item.get('platform', 'free')}:{item.get('url', '')} - {quality.get('reason', 'filtre qualité')}")
                 continue
             if (item.get("signal_score") or 0) < min_score:
                 usage["filtered"] += 1
@@ -411,7 +411,7 @@ def run(
     remaining = max(0, cap - usage["executed"])
     for connector in custom_connectors[:remaining]:
         if not isinstance(connector, dict):
-            errors.append("custom connector skipped: each connector must be an object")
+            errors.append("connecteur personnalisé ignoré : chaque connecteur doit être un objet")
             continue
         try:
             batch = asyncio.run(_scrape_custom_connector(connector, raw_custom_headers))
@@ -435,7 +435,7 @@ def run(
             item = attach_quality_metadata(item, quality)
             if not quality.get("accepted"):
                 usage["filtered"] += 1
-                errors.append(f"filtered {item.get('platform', 'connector')}:{item.get('url', '')} - {quality.get('reason', 'quality gate')}")
+                errors.append(f"filtré {item.get('platform', 'connector')}:{item.get('url', '')} - {quality.get('reason', 'filtre qualité')}")
                 continue
             if (item.get("signal_score") or 0) < min_score:
                 usage["filtered"] += 1

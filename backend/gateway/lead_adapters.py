@@ -9,3 +9,7 @@ def classify_job_seniority(lead: dict) -> str:
 
 def manual_lead_from_text(text: str, url: str, kind: str = "job") -> dict:
     return import_module("discovery.lead_intel").manual_lead_from_text(text, url, kind)
+
+
+async def import_job_url(url: str) -> dict:
+    return await import_module("discovery.sources.url_import").import_url(url)

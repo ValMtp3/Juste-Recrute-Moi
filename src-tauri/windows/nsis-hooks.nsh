@@ -1,6 +1,6 @@
 !macro NSIS_HOOK_PREINSTALL
-  DetailPrint "Stopping running JustHireMe processes before upgrade..."
-  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM justhireme.exe /T /F'
+  DetailPrint "Stopping running Juste Recrute Moi processes before upgrade..."
+  nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM juste-recrute-moi.exe /T /F'
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM jhm-sidecar-next.exe /T /F'
   nsExec::ExecToLog '"$SYSDIR\taskkill.exe" /IM backend.exe /T /F'
   Sleep 2000
@@ -33,7 +33,7 @@
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
-  DetailPrint "Repairing JustHireMe Windows install metadata..."
+  DetailPrint "Repairing Juste Recrute Moi Windows install metadata..."
   SetShellVarContext current
 
   WriteRegStr SHCTX "${UNINSTKEY}" "DisplayName" "${PRODUCTNAME}"
@@ -62,5 +62,5 @@
     DetailPrint "Skipping shortcut repair because $INSTDIR\${MAINBINARYNAME}.exe does not exist."
 
   jhm_postinstall_done:
-  DetailPrint "JustHireMe Windows install metadata repaired."
+  DetailPrint "Juste Recrute Moi Windows install metadata repaired."
 !macroend

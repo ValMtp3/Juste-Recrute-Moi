@@ -11,7 +11,7 @@ from discovery.sources.net import guarded_async_client
 
 
 async def fetch_html(url: str) -> str:
-    async with guarded_async_client(timeout=25, follow_redirects=True, headers={"User-Agent": "JustHireMe URL importer"}) as cx:
+    async with guarded_async_client(timeout=25, follow_redirects=True, headers={"User-Agent": "Juste Recrute Moi URL importer"}) as cx:
         response = await cx.get(url)
         response.raise_for_status()
         return response.text
@@ -120,8 +120,8 @@ def _fallback_offer(url: str, html: str) -> JobOffer:
     host = urlparse(url).netloc.replace("www.", "")
     return JobOffer(
         source="url_import",
-        title=clean_text(title)[:220] or "Imported job offer",
-        company=host.split(".")[0].title() if host else "Imported",
+        title=clean_text(title)[:220] or "Offre importée",
+        company=host.split(".")[0].title() if host else "Import manuel",
         description=clean_text(description)[:1600],
         apply_url=url,
         original_url=url,

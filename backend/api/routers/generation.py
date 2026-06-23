@@ -56,7 +56,7 @@ async def generate_one(
     lead = await asyncio.to_thread(repo.leads.get_lead_by_id, job_id)
     if not lead:
         await manager.broadcast({"type": "agent", "event": "gen_error", "msg": f"Lead {job_id} not found"})
-        raise HTTPException(status_code=404, detail="Lead not found")
+        raise HTTPException(status_code=404, detail="Offre introuvable")
     blocked_reason = lead_generation_blocker(lead)
     if blocked_reason:
         try:
@@ -76,12 +76,12 @@ async def generate_one(
         if template_id:
             # The user explicitly picked this template; silently generating
             # with a different layout would misrepresent the output.
-            raise HTTPException(status_code=422, detail=f"Resume template {template_id!r} could not be loaded") from None
+            raise HTTPException(status_code=422, detail=f"Le modèle de CV {template_id!r} n'a pas pu être chargé") from None
         template = await asyncio.to_thread(repo.settings.get_setting, "resume_template", "")
     await manager.broadcast({
         "type": "agent",
         "event": "gen_start",
-        "msg": f"Generating for {lead.get('title','?')} @ {lead.get('company','?')}",
+            "msg": f"Génération pour {lead.get('title','?')} chez {lead.get('company','?')}",
     })
 
     try:
@@ -154,7 +154,7 @@ async def generate_one(
         await manager.broadcast({
             "type": "agent",
             "event": "gen_done",
-            "msg": f"Resume and cover letter ready: {lead.get('title','?')}",
+            "msg": f"CV et lettre prêts : {lead.get('title','?')}",
         })
         try:
             await asyncio.to_thread(job_store.update, job.job_id, status="succeeded", progress=100, result={"lead": enriched_lead})
@@ -221,7 +221,7 @@ def create_router(*, manager) -> APIRouter:
         require_rate_limit(generate_limiter)
         lead = await asyncio.to_thread(repo.leads.get_lead_by_id, job_id)
         if not lead:
-            raise HTTPException(status_code=404, detail="Lead not found")
+            raise HTTPException(status_code=404, detail="Offre introuvable")
         tailoring_lead = {**lead, "status": "tailoring"}
         try:
             await asyncio.to_thread(repo.leads.update_lead_status, job_id, "tailoring")
@@ -250,7 +250,7 @@ def create_router(*, manager) -> APIRouter:
         require_rate_limit(generate_limiter)
         lead = await asyncio.to_thread(repo.leads.get_lead_by_id, job_id)
         if not lead:
-            raise HTTPException(status_code=404, detail="lead not found")
+            raise HTTPException(status_code=404, detail="Offre introuvable")
         job = job_store.create("pipeline_run", {"job_id": job_id})
 
         async def _run():

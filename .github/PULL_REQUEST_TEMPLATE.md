@@ -1,40 +1,40 @@
-## Summary
+## Résumé
 
-Describe what changed and why.
+Décrivez ce qui change et pourquoi.
 
-## Type of Change
+## Type de Changement
 
-- [ ] Scraper/source adapter
+- [ ] Scraper / adaptateur de source
 - [ ] Ranking/scoring
-- [ ] Vector/profile intelligence
-- [ ] Customizer/document generation
+- [ ] Intelligence profil/vectorielle
+- [ ] Personnalisation / génération de documents
 - [ ] Frontend/UI
-- [ ] Backend/API/storage
-- [ ] Docs/OSS hygiene
+- [ ] Backend/API/stockage
+- [ ] Docs / hygiène open source
 - [ ] CI/release
-- [ ] Experimental automation
+- [ ] Automatisation expérimentale
 
-## Testing
+## Tests
 
-Commands run:
+Commandes lancées :
 
 - [ ] `npm run typecheck`
 - [ ] `npm test`
 - [ ] `npm run build`
 - [ ] `backend/.venv/Scripts/python.exe -m pytest backend/tests`
 - [ ] `cd src-tauri && cargo check`
-- [ ] Other:
+- [ ] Autre :
 
-## Privacy And Safety
+## Confidentialité Et Sécurité
 
-- [ ] No API keys, cookies, bearer tokens, resumes, local databases, or generated private documents are included.
-- [ ] User-facing behavior is clear about what is core vs experimental.
-- [ ] Ranking/filtering changes include explanations or tests where relevant.
+- [ ] Aucune clé API, cookie, bearer token, CV, base locale ou document privé généré n'est inclus.
+- [ ] L'interface distingue clairement ce qui est stable de ce qui est expérimental.
+- [ ] Les changements de ranking/filtrage incluent des explications ou des tests quand c'est utile.
 
 ## Licensing
 
-- [ ] I have read `CLA.md` and understand this contribution may be distributed under AGPL-3.0-only and separate commercial licenses.
+- [ ] J'ai lu `CLA.md` et je comprends que cette contribution peut être distribuée sous AGPL-3.0-only et sous licences commerciales séparées.
 
-## Notes For Reviewers
+## Notes Pour La Revue
 
-Mention any tradeoffs, follow-up work, or areas that deserve extra scrutiny.
+Mentionnez les compromis, suites prévues ou zones à relire avec attention.

@@ -39,11 +39,11 @@ export function FormReader({
       });
       if (!r.ok) {
         const detail = await r.json().then((d: any) => d.detail).catch(() => "");
-        throw new Error(detail || `Server returned ${r.status}`);
+        throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
       }
       setResult(await r.json());
     } catch (err) {
-      if (mountedRef.current) setError(err instanceof Error ? err.message : "Form read failed");
+      if (mountedRef.current) setError(err instanceof Error ? err.message : "La lecture du formulaire a échoué");
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
       if (mountedRef.current) setLoading(false);
@@ -124,7 +124,7 @@ export function FormReader({
             whiteSpace: "nowrap",
           }}
         >
-          {loading ? "Reading form..." : "Read form"}
+          {loading ? "Lecture du formulaire..." : "Lire le formulaire"}
         </button>
       </div>
 
@@ -247,20 +247,20 @@ export function FormReader({
                       flexShrink: 0,
                     }}
                   >
-                    {copied === field.type ? "Copied!" : "Copy"}
+                    {copied === field.type ? "Copié !" : "Copier"}
                   </button>
                 </div>
               ))}
 
               {missingFields.length > 0 && (
                 <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>
-                  Not found on page: {missingFields.map(f => f.label).join(", ")}
+                  Introuvable sur la page : {missingFields.map(f => f.label).join(", ")}
                 </div>
               )}
 
               {result.unmatched_labels.length > 0 && (
                 <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>
-                  Fields we couldn't match: {result.unmatched_labels.join(", ")}
+                  Champs non reconnus : {result.unmatched_labels.join(", ")}
                 </div>
               )}
             </div>
@@ -281,7 +281,7 @@ export function FormReader({
                 alignSelf: "flex-start",
               }}
             >
-              {copied === "__all__" ? "Copied all!" : "Copy all answers"}
+              {copied === "__all__" ? "Tout est copié !" : "Copier toutes les réponses"}
             </button>
           )}
         </>

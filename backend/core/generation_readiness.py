@@ -7,7 +7,7 @@ _URL_RE = re.compile(r"https?://\S+|www\.\S+", re.I)
 
 # A truthful tailored resume needs real role context to work from, not just a
 # bare title or URL. We gate on the *substance* of the non-URL text (its length
-# and word count) rather than a keyword whitelist. JustHireMe tailors resumes
+# and word count) rather than a keyword whitelist. Juste Recrute Moi tailors resumes
 # for every field — finance, healthcare, education, trades, the arts — so an
 # earlier software/tech keyword requirement wrongly blocked legitimate non-tech
 # descriptions (e.g. a "Financial Aid Advisor" posting). See issue #92.

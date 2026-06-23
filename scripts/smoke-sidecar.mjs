@@ -28,15 +28,15 @@ function bytes(path) {
 }
 
 function vectorRuntimeAssetName() {
-  if (process.platform === "win32") return "JustHireMe-vector-runtime-windows.zip";
-  if (process.platform === "darwin") return "JustHireMe-vector-runtime-macos.zip";
-  return "JustHireMe-vector-runtime-linux.zip";
+  if (process.platform === "win32") return "Juste-Recrute-Moi-vector-runtime-windows.zip";
+  if (process.platform === "darwin") return "Juste-Recrute-Moi-vector-runtime-macos.zip";
+  return "Juste-Recrute-Moi-vector-runtime-linux.zip";
 }
 
 function runtimePackAssetName() {
-  if (process.platform === "win32") return "JustHireMe-runtime-pack-windows.zip";
-  if (process.platform === "darwin") return "JustHireMe-runtime-pack-macos.zip";
-  return "JustHireMe-runtime-pack-linux.zip";
+  if (process.platform === "win32") return "Juste-Recrute-Moi-runtime-pack-windows.zip";
+  if (process.platform === "darwin") return "Juste-Recrute-Moi-runtime-pack-macos.zip";
+  return "Juste-Recrute-Moi-runtime-pack-linux.zip";
 }
 
 function localRuntimePackArchive() {

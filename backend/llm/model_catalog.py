@@ -28,7 +28,7 @@ _SNAPSHOT_PATH = Path(__file__).with_name("models_snapshot.json")
 _MODELS_DEV_URL = "https://models.dev/api.json"
 _CACHE_TTL_SECONDS = 24 * 3600
 
-# JustHireMe provider id -> models.dev provider key. Providers absent here
+# Juste Recrute Moi provider id -> models.dev provider key. Providers absent here
 # (sambanova, custom, ollama, the subscription CLIs) simply have no catalog and
 # fall back to the live /v1/models call and/or free-form entry.
 _PROVIDER_MAP: dict[str, str] = {
@@ -106,7 +106,7 @@ def _fetch_live() -> dict[str, list[dict]] | None:
     try:
         import httpx
 
-        response = httpx.get(_MODELS_DEV_URL, timeout=10.0, headers={"User-Agent": "JustHireMe model catalog"})
+        response = httpx.get(_MODELS_DEV_URL, timeout=10.0, headers={"User-Agent": "Juste Recrute Moi model catalog"})
         response.raise_for_status()
         data = _normalize(response.json())
     except Exception as exc:

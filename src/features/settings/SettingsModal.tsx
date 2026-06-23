@@ -12,7 +12,7 @@ import { useTheme, type ThemePref } from "../../shared/lib/theme";
 import { settingsApi } from "../../api/settings";
 import type { ApiFetch } from "../../types";
 
-const LEGAL_BASE = "https://github.com/vasu-devs/JustHireMe/blob/main/docs/legal";
+const LEGAL_BASE = "https://github.com/ValMtp3/Juste-Recrute-Moi/blob/main/docs/legal";
 const LEGAL_LINKS: { label: string; href: string }[] = [
   { label: "Conditions d'utilisation", href: `${LEGAL_BASE}/terms-of-use.md` },
   { label: "Politique de confidentialité", href: `${LEGAL_BASE}/privacy-policy.md` },

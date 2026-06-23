@@ -1,12 +1,12 @@
-# JustHireMe Website
+# Site Juste Recrute Moi
 
-Vercel project root: `website/`
+Racine du projet Vercel : `website/`.
 
-## View Counter
+## Compteur de vues
 
-The live unique-view counter is implemented in `api/views.js`.
+Le compteur de vues uniques est implemente dans `api/views.js`.
 
-For persistent counting on Vercel, add these environment variables:
+Pour conserver le compteur sur Vercel, ajoutez ces variables d'environnement :
 
 ```txt
 UPSTASH_REDIS_REST_URL=...
@@ -15,11 +15,11 @@ VIEW_COUNT_BASELINE=0
 DOWNLOAD_COUNT_BASELINE=0
 ```
 
-Each browser gets a local visitor id and the API counts it once with Redis `SET NX`. Counter reads are cached by the API and CDN, and the frontend keeps a six-hour browser cache for visible counters. This keeps the public page from burning through Upstash read commands.
+Chaque navigateur recoit un identifiant visiteur local. L'API le compte une seule fois avec Redis `SET NX`. Les lectures sont mises en cache cote API/CDN, puis cote navigateur pendant six heures, afin d'eviter de consommer inutilement des commandes Upstash.
 
-The browser also stores a persistent `justhireme.views.counted` flag, so returning visitors do not keep spending Redis write commands after opening a new tab or browser session. Server-side count reads are cached for 30 minutes by default and CDN responses are cacheable for six hours by default.
+Le navigateur conserve aussi le flag `juste-recrute-moi.views.counted`. Un visiteur qui revient dans un nouvel onglet ou une nouvelle session ne declenche donc pas de nouvelle ecriture Redis.
 
-Useful safety knobs:
+Variables de securite utiles :
 
 ```txt
 COUNTER_WRITES_ENABLED=false
@@ -29,48 +29,50 @@ COUNTER_VISITOR_TTL_DAYS=400
 COUNTER_HASH_SALT=...
 ```
 
-Set `COUNTER_WRITES_ENABLED=false` as an emergency brake if the Upstash command count starts rising too fast. The page will keep showing the configured baseline or cached count while new writes are paused.
+Passez `COUNTER_WRITES_ENABLED=false` en urgence si le nombre de commandes Upstash augmente trop vite. La page continue alors d'afficher la baseline configuree ou les valeurs en cache.
 
-Visitor ids are hashed before they are used in Redis keys. Set `COUNTER_HASH_SALT` to a stable secret to preserve deduplication across deployments without storing raw browser ids server-side.
+Les identifiants visiteurs sont hashes avant d'etre utilises dans les cles Redis. Definissez `COUNTER_HASH_SALT` avec un secret stable pour conserver la deduplication entre deploiements sans stocker les identifiants bruts cote serveur.
 
-## Download Counter
+## Compteur de telechargements
 
-The download counter is implemented in `api/downloads.js`. It uses the same visitor id and Redis `SET NX` pattern so one browser is counted once per platform when a real installer asset is clicked. It tracks total downloads plus individual Windows, macOS, and Linux counts. Set `DOWNLOAD_COUNT_BASELINE=0` for a fresh public launch.
+Le compteur de telechargements est implemente dans `api/downloads.js`. Il utilise le meme identifiant visiteur et le meme modele Redis `SET NX`, afin qu'un navigateur ne soit compte qu'une fois par plateforme lorsqu'un vrai artefact d'installation est clique.
 
-When moving to a new Upstash database, set `VIEW_COUNT_BASELINE` and `DOWNLOAD_COUNT_BASELINE` to the totals you want to preserve before deploying. You can also seed Redis directly with:
+Il suit le total global et les compteurs Windows, macOS et Linux. Pour un lancement public neuf, laissez `DOWNLOAD_COUNT_BASELINE=0`.
+
+En cas de migration vers une nouvelle base Upstash, renseignez `VIEW_COUNT_BASELINE` et `DOWNLOAD_COUNT_BASELINE`, ou semez Redis directement :
 
 ```txt
-SET justhireme:views:total <view-total>
-SET justhireme:downloads:total <download-total>
-SET justhireme:downloads:windows <windows-total>
-SET justhireme:downloads:mac <mac-total>
-SET justhireme:downloads:linux <linux-total>
+SET juste-recrute-moi:views:total <total-vues>
+SET juste-recrute-moi:downloads:total <total-telechargements>
+SET juste-recrute-moi:downloads:windows <total-windows>
+SET juste-recrute-moi:downloads:mac <total-mac>
+SET juste-recrute-moi:downloads:linux <total-linux>
 ```
 
-## Release Downloads
+## Boutons de telechargement
 
-The platform download buttons are powered by `api/releases.js`, which reads the latest GitHub release from `vasu-devs/JustHireMe` and maps release assets to:
+Les boutons de telechargement utilisent `api/releases.js`, qui lit la derniere release GitHub de `ValMtp3/Juste-Recrute-Moi` et associe les artefacts aux plateformes :
 
-- Windows: `.exe`, `.msi`, `.msix`, or asset names containing `windows`, `win32`, `win64`
-- macOS: `.dmg`, `.pkg`, or asset names containing `mac`, `darwin`, `apple`
-- Linux: `.AppImage`, `.deb`, `.rpm`, or asset names containing `linux`
+- Windows : `.exe`, `.msi`, `.msix`, ou nom contenant `windows`, `win32`, `win64` ;
+- macOS : `.dmg`, `.pkg`, ou nom contenant `mac`, `darwin`, `apple` ;
+- Linux : `.AppImage`, `.deb`, `.rpm`, ou nom contenant `linux`.
 
-If an asset is missing, that platform button stays disabled and says `Available soon`.
+Si aucun artefact n'est disponible pour une plateforme, le bouton reste desactive et indique `Bientot disponible`.
 
-## Feedback And Reviews
+## Retours et avis
 
-The feedback and review forms post to `api/feedback.js`.
+Les formulaires de retour et d'avis envoient leurs donnees a `api/feedback.js`.
 
-To create GitHub issues from submissions, add:
+Pour creer des issues GitHub depuis les soumissions, ajoutez :
 
 ```txt
 GITHUB_FEEDBACK_TOKEN=...
-GITHUB_FEEDBACK_REPO=vasu-devs/JustHireMe
+GITHUB_FEEDBACK_REPO=ValMtp3/Juste-Recrute-Moi
 ```
 
-The token needs permission to create issues on the target repository. `GITHUB_FEEDBACK_REPO` is optional and defaults to `vasu-devs/JustHireMe`.
+Le token doit pouvoir creer des issues dans le depot cible. `GITHUB_FEEDBACK_REPO` est optionnel et vaut `ValMtp3/Juste-Recrute-Moi` par defaut.
 
-Create these labels in the repository for a cleaner feedback inbox:
+Labels recommandes :
 
 ```txt
 website-feedback
@@ -78,11 +80,11 @@ feedback
 review
 ```
 
-Then use filtered issue pages:
+Pages filtrees utiles :
 
-- Feedback inbox: `https://github.com/vasu-devs/JustHireMe/issues?q=is%3Aissue%20label%3Awebsite-feedback`
-- Reviews only: `https://github.com/vasu-devs/JustHireMe/issues?q=is%3Aissue%20label%3Areview`
+- retours : `https://github.com/ValMtp3/Juste-Recrute-Moi/issues?q=is%3Aissue%20label%3Awebsite-feedback`
+- avis : `https://github.com/ValMtp3/Juste-Recrute-Moi/issues?q=is%3Aissue%20label%3Areview`
 
-Feedback and review submissions are delivered through GitHub issues only. If GitHub issue delivery is not configured, the endpoint returns `202` and the page tells the visitor that delivery setup is still needed.
+Les retours et avis passent uniquement par des issues GitHub. Si la livraison GitHub n'est pas configuree, l'endpoint renvoie `202` et la page indique que la configuration de livraison reste a terminer.
 
-Because GitHub issues are public, the API redacts the separate name/email fields and scrubs email addresses, phone numbers, bearer tokens, and common API-key formats from the message before creating an issue. Ask users not to paste private resumes, account credentials, or secrets into the public feedback form.
+Comme les issues GitHub sont publiques, l'API retire les champs nom/email separes et masque les emails, numeros de telephone, bearer tokens et formats courants de cles API dans le message. Demandez aux utilisateurs de ne jamais coller de CV prive, identifiant de compte ou secret dans le formulaire public.

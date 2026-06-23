@@ -1,98 +1,90 @@
-# Privacy Policy
+# Politique de confidentialité
 
-**Effective date:** 2026-05-29
-**Applies to:** the JustHireMe desktop application ("the Software") and the JustHireMe website/download pages ("the Site").
+**Date d'effet :** 2026-06-23
+**Périmètre :** l'application desktop Juste Recrute Moi, le site public et les pages de téléchargement associées.
 
-> This Privacy Policy reflects how JustHireMe handles data today and is not a substitute for professional legal advice.
+> Cette politique décrit le fonctionnement actuel du projet. Elle ne remplace pas un avis juridique professionnel.
 
 ---
 
-## 1. Our privacy model in one sentence
+## 1. Le modèle de confidentialité en bref
 
-JustHireMe is **local-first**: the Software keeps your personal and job-search data on **your own device**, and the Site collects only minimal, mostly anonymized information needed to run download counters and a feedback channel.
+Juste Recrute Moi est **local-first** : vos données de profil, vos offres, vos scores, vos documents générés et vos réglages restent sur votre appareil par défaut.
 
-## 2. Data the Software stores (on your device, not with us)
+## 2. Données stockées localement
 
-When you use the desktop Software, the following are stored **locally** on your machine and are **not transmitted to the maintainer**:
+Quand vous utilisez l'application desktop, les données suivantes sont stockées localement et ne sont pas envoyées aux mainteneurs du projet :
 
-| Data | Where it lives |
+| Donnée | Emplacement |
 | --- | --- |
-| Your profile / identity graph (resume, skills, projects, experience) | Local files + local Kùzu graph |
-| Job leads and CRM history | Local SQLite database |
-| Vector embeddings for matching | Local LanceDB store + local ONNX model |
-| Generated resumes, cover letters, outreach drafts | Local files |
-| Settings, including any API keys you enter | Local application settings |
-| Activity / logs | Local |
+| Profil candidat, CV, expériences, compétences, projets | Fichiers locaux et graphe Kuzu local |
+| Offres et historique CRM | Base SQLite locale |
+| Embeddings de matching | LanceDB local et modèle ONNX local |
+| CV, lettres et messages générés | Fichiers locaux |
+| Réglages et clés API saisies | Réglages locaux de l'application |
+| Activité et logs | Local |
 
-We do not have a server that receives, stores, or has access to this data. Deleting the app and its local data removes it.
+Supprimer l'application et ses données locales supprime ces informations de votre machine. Les mainteneurs n'en possèdent pas de copie.
 
-## 3. Data sent to third parties **because you chose to**
+## 3. Données envoyées à des tiers à votre demande
 
-The Software only sends data off your device when a feature you use requires it:
+L'application n'envoie des données hors de votre appareil que lorsqu'une fonctionnalité que vous activez le nécessite :
 
-- **AI/LLM providers (your keys).** If you configure a provider (OpenAI, Anthropic, Azure OpenAI, a custom endpoint, or a local Ollama instance), the relevant job text and profile context are sent to **that provider** to produce scores or documents. This is governed by **that provider's** privacy policy and your account with them. With a local provider (Ollama), this data stays on your machine.
-- **Job sources and APIs.** When you scan sources, the Software contacts the public job boards, feeds, or APIs you configured to retrieve postings.
-- **Runtime pack + updates.** On first run and during updates, the Software downloads runtime components and release metadata over HTTPS from the official release host (GitHub). These are standard file/version requests.
+- **Fournisseurs LLM.** Si vous configurez OpenAI, Anthropic, Gemini, Mistral, un endpoint compatible OpenAI ou un autre fournisseur, les extraits nécessaires du profil et de l'offre peuvent être envoyés à ce fournisseur pour produire un score ou un document. Avec Ollama local, ces données restent sur votre machine.
+- **Sources d'offres.** Quand vous scannez des sources, l'application contacte les API, ATS, flux ou jobboards configurés.
+- **France Travail.** Si vous configurez les identifiants France Travail, l'application les utilise pour obtenir un jeton OAuth et interroger l'API d'offres.
+- **Mises à jour et runtime.** L'application peut télécharger des métadonnées de version ou composants runtime depuis les canaux de release configurés.
 
-We (the maintainer) do not receive copies of any of the above.
+Ces traitements sont régis par les politiques des services concernés.
 
-## 4. Data the Site processes
+## 4. Site public
 
-The Site (marketing/download pages) processes a small amount of data to operate:
+Le site public peut traiter un minimum de données techniques pour fonctionner :
 
-- **Anonymous visit and download counts.** The Site increments view/download counters. A per-visitor identifier is **salted and hashed (HMAC)** before storage and is used only to de-duplicate counts (so the same visitor is not counted repeatedly). We do not use it to identify you, and we do not store raw IP addresses for analytics purposes.
-- **Public GitHub data.** The Site may read public repository data (such as star counts) from GitHub's API.
-- **Feedback you submit.** If you use the feedback form, your message is forwarded to create a GitHub issue in the project repository. An automated step attempts to **redact obvious personal data and secrets** from the public issue, but you should not submit sensitive personal information, credentials, or other people's data. Anything you submit may become publicly visible in the issue tracker.
+- compteurs anonymisés de visites ou téléchargements ;
+- données publiques GitHub, par exemple les releases ;
+- contenu envoyé volontairement via un formulaire ou une issue.
 
-The Site does **not** use advertising trackers, does **not** sell data, and does **not** require an account.
+Ne transmettez pas de clés API, cookies, CV privés, bases locales ou données personnelles sensibles dans les issues, formulaires ou captures publiques.
 
-## 5. Cookies and local storage
+## 5. Cookies et stockage navigateur
 
-The Site uses minimal browser storage only where needed for functionality (for example, a local cache of public counts and your theme preference). It does not use third-party advertising or cross-site tracking cookies.
+Le site peut utiliser un stockage navigateur limité pour des préférences ou compteurs. Il n'a pas vocation à utiliser de traqueurs publicitaires.
 
-## 6. Legal bases for processing (GDPR/UK GDPR)
+## 6. Bases légales possibles
 
-Where GDPR/UK GDPR applies, our limited processing relies on:
+Selon votre juridiction, les traitements limités du site peuvent reposer sur :
 
-- **Legitimate interests** — operating download/visit counters and understanding aggregate, anonymized usage; running a public feedback channel.
-- **Consent** — when you voluntarily submit feedback or enter information into a form.
-- **Contract / your request** — performing an action you asked for (for example, fetching a download or release metadata).
+- l'intérêt légitime à exploiter un site de téléchargement et des compteurs agrégés ;
+- votre consentement lorsque vous soumettez volontairement un message ;
+- l'exécution de votre demande lorsque vous téléchargez une release ou consultez une page.
 
-You can object to legitimate-interest processing; because Site analytics are anonymized aggregates, opting out is generally a matter of not using the Site.
+## 7. Fournisseurs tiers
 
-## 7. Sub-processors / service providers
+Selon le déploiement, le site et les releases peuvent s'appuyer sur GitHub, Vercel, Upstash ou des services équivalents. Les fournisseurs d'IA et d'API que vous configurez dans l'application traitent les données selon leurs propres conditions.
 
-The Site relies on a small set of providers to function: **Vercel** (static/edge hosting), **Upstash Redis** (view/download counters), and **GitHub** (release hosting and the feedback issue tracker). These providers process data on our behalf under their own terms and privacy/security programs.
+## 8. Conservation
 
-## 8. International transfers
+- **Données de l'application :** conservées localement jusqu'à suppression par vous.
+- **Compteurs du site :** conservés sous forme agrégée ou pseudonymisée tant que les compteurs existent.
+- **Retours publics :** conservés dans GitHub ou l'outil utilisé jusqu'à suppression.
 
-Service providers above may process data in regions including the United States and the EU. Where required, transfers rely on appropriate safeguards (such as Standard Contractual Clauses) offered by those providers.
+## 9. Vos droits
 
-## 9. Data retention
+Pour les données locales de l'application, vous pouvez exercer directement vos droits en modifiant ou supprimant les fichiers et réglages sur votre machine. Pour un message public ou une donnée envoyée au site, ouvrez une demande de suppression ou correction dans le dépôt.
 
-- **Local Software data:** retained on your device until you delete it; we have no copy.
-- **Site counters:** stored as aggregate counts and salted-hashed de-dup keys; retained for as long as the counters operate.
-- **Feedback:** retained in the public GitHub issue tracker until removed; request removal via the contact below.
+## 10. Sécurité
 
-## 10. Your rights
+Le projet vise des pratiques raisonnables : HTTPS pour les téléchargements, stockage local par défaut, redaction des secrets dans les logs lorsque possible et consignes de sécurité dans `SECURITY.md`. Aucun système n'est parfaitement sûr ; protégez vos clés API, votre appareil et vos données locales.
 
-Depending on your location (GDPR/UK GDPR, CCPA/CPRA, and similar laws), you may have rights to access, correct, delete, port, or restrict processing of your personal data, and to object or withdraw consent. Because we hold almost no personal data about you:
+## 11. Enfants
 
-- For **Software data**, you exercise these rights directly on your device (edit/delete locally).
-- For **feedback or Site data** that may identify you, contact us using Section 13 and we will respond as required by applicable law (for example, within one month under GDPR/UK GDPR).
+Juste Recrute Moi ne s'adresse pas aux enfants de moins de 16 ans et ne collecte pas sciemment leurs données.
 
-## 11. Security
+## 12. Contact
 
-We aim to follow reasonable security practices: HTTPS for downloads and Site traffic, hashing of visitor identifiers, and redaction on the public feedback path. No method of transmission or storage is 100% secure. Protect your own device, local data, and API keys. Report vulnerabilities per `SECURITY.md`.
+Pour une question de confidentialité ou de sécurité, ouvrez une issue sur https://github.com/ValMtp3/Juste-Recrute-Moi ou suivez `SECURITY.md` pour les signalements sensibles.
 
-## 12. Children's privacy
+## 13. Changements
 
-JustHireMe is not directed to children under 16 and we do not knowingly collect their personal data. If you believe a child provided personal data through the feedback channel, contact us for removal.
-
-## 13. Contact
-
-Privacy questions or data-subject requests (access, correction, deletion): email pls@justhireme.ai, open an issue at https://github.com/vasu-devs/JustHireMe, or follow `SECURITY.md` for sensitive reports. For local Software data, the fastest path is to manage or delete it directly in the app on your device.
-
-## 14. Changes
-
-We may update this Policy; the "Effective date" will change and material updates will be noted in release notes or the changelog.
+Cette politique peut évoluer. La date d'effet sera mise à jour et les changements importants pourront être indiqués dans les notes de release ou le changelog.

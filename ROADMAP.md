@@ -1,30 +1,31 @@
-# Roadmap
+# Feuille De Route
 
-## v0.1 OSS Readiness
+## v0.1 - MVP Agrégateur France
 
-- Reframe the app as scraper, ranker, vector matching, and customizer.
-- Add contributor docs (project is licensed AGPL-3.0-only; see LICENSE).
-- Add source adapter contract and scraper contribution issues.
-- Add lead quality gate before saving low-value leads.
-- Improve Windows-first release instructions.
+- Stabiliser France Travail comme source prioritaire.
+- Garder JobSpy pour Indeed / Google Jobs en best effort.
+- Renforcer les connecteurs ATS directs : Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Teamtailor.
+- Finaliser l'import URL JSON-LD / HTML.
+- Afficher clairement la fiabilité des sources dans l'UI.
+- Documenter l'installation et la configuration France Travail.
 
-## v0.2 Source Ecosystem
+## v0.2 - Sources Françaises
 
-- Add more ATS adapters.
-- Add parser fixtures for source regression tests.
-- Add source quality dashboards and "why shown / why filtered" explanations.
-- Add contributor-friendly source plugin boundaries.
+- Ajouter davantage de fixtures réalistes par source.
+- Améliorer les stratégies WTTJ, HelloWork, LinkedIn et Indeed sans en faire des fondations fragiles.
+- Ajouter des explications "pourquoi affichée / pourquoi filtrée".
+- Clarifier les réglages de sources dans l'app.
 
-## v0.3 Ranking And Evaluation
+## v0.3 - Matching Et Évaluation
 
-- Add a small evaluation dataset for lead quality.
-- Improve feedback learning.
-- Make semantic matching state visible in the UI.
-- Add ranker benchmarks.
+- Construire un petit jeu d'évaluation de qualité des offres.
+- Améliorer l'apprentissage à partir des retours utilisateur.
+- Rendre l'état du matching sémantique plus visible.
+- Ajouter des benchmarks de ranking.
 
-## Future
+## Plus Tard
 
-- OS keychain storage for API keys.
-- Cross-platform installers.
-- Optional automation plugin separation.
-- Hosted source catalog, while keeping user data local.
+- Stockage des clés API dans le trousseau système.
+- Releases desktop vérifiées pour Windows, macOS et Linux.
+- Séparation éventuelle de l'automatisation navigateur en plugin optionnel.
+- Catalogue de sources hébergé, tout en gardant les données utilisateur locales.

@@ -51,14 +51,14 @@ describe("graph profile fallback", () => {
     graph: {
       nodes: [
         { id: "candidate:vasu", label: "VASU", type: "Candidate", subtitle: "AI engineer" },
-        { id: "project:justhireme", label: "JustHireMe", type: "Project", subtitle: "Python, React" },
+        { id: "project:juste-recrute-moi", label: "Juste Recrute Moi", type: "Project", subtitle: "Python, React" },
         { id: "skill:python", label: "Python", type: "Skill", subtitle: "general" },
         { id: "skill:react", label: "React", type: "Skill", subtitle: "general" },
       ],
       edges: [
-        { source: "candidate:vasu", target: "project:justhireme", type: "BUILT" },
+        { source: "candidate:vasu", target: "project:juste-recrute-moi", type: "BUILT" },
         { source: "candidate:vasu", target: "skill:python", type: "HAS_SKILL" },
-        { source: "project:justhireme", target: "skill:react", type: "PROJ_UTILIZES" },
+        { source: "project:juste-recrute-moi", target: "skill:react", type: "PROJ_UTILIZES" },
       ],
     },
   };
@@ -67,7 +67,7 @@ describe("graph profile fallback", () => {
     const profile = profileFromGraphStats(stats);
 
     expect(profile?.n).toBe("VASU");
-    expect(profile?.projects.map((project) => fieldText(project, "title"))).toEqual(["JustHireMe"]);
+    expect(profile?.projects.map((project) => fieldText(project, "title"))).toEqual(["Juste Recrute Moi"]);
     expect(profile?.skills.map((skill) => fieldText(skill, "n")).sort()).toEqual(["Python", "React"]);
   });
 

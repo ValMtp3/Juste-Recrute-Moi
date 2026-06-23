@@ -1,35 +1,35 @@
 # Support
 
-Thanks for checking out JustHireMe.
+Merci d'utiliser ou de tester Juste Recrute Moi.
 
-This project is in alpha, so the best support channel depends on what you are trying to do.
+Le projet est encore en phase MVP. Le bon canal dépend du sujet.
 
-## Good GitHub Issues
+## Bonnes Issues GitHub
 
-Please open an issue for:
+Ouvrez une issue pour :
 
-- reproducible bugs in scraper, ranking, vector matching, customizer, backend API, or desktop packaging behavior
-- source adapter requests with a public example URL
-- documentation gaps that blocked setup
-- Windows release or install smoke-test results
-- small, focused feature requests that fit the roadmap
+- un bug reproductible dans la collecte, le ranking, le matching vectoriel, la génération, l'API backend ou le packaging desktop ;
+- une demande de connecteur avec une URL publique d'exemple ;
+- une lacune de documentation qui bloque l'installation ;
+- un retour de smoke test Windows/macOS/Linux ;
+- une petite demande fonctionnelle cohérente avec la feuille de route.
 
-Before posting, remove API keys, cookies, bearer tokens, resumes, local databases, generated private documents, and screenshots that expose personal data.
+Avant publication, retirez clés API, cookies, bearer tokens, CV, bases locales, documents générés privés et captures contenant des données personnelles.
 
-## Better As Discussions Or Comments
+## Discussions Ou Commentaires
 
-Use an existing issue, discussion, or social thread for:
+Utilisez plutôt une discussion ou une issue existante pour :
 
-- broad product ideas
-- "does this support my exact workflow?" questions
-- brainstorming new sources
-- early design feedback
-- non-reproducible setup notes
+- idées produit larges ;
+- questions de compatibilité avec un workflow précis ;
+- brainstorming de nouvelles sources ;
+- retours de design précoces ;
+- notes d'installation non reproductibles.
 
-## Security And Private Data
+## Sécurité Et Données Privées
 
-Do not open public issues containing secrets or private user data. See [SECURITY.md](SECURITY.md) for the security policy and safe-reporting guidance.
+Ne publiez pas de secrets ou données privées dans une issue publique. Voir [SECURITY.md](SECURITY.md).
 
-## Maintainer Expectations
+## Attentes
 
-This is a source-available, non-commercial project with limited maintainer time. Clear reproduction steps, sanitized examples, and small PRs make it much easier to respond quickly.
+Le temps mainteneur est limité. Des étapes de reproduction claires, des exemples anonymisés et des PR petites facilitent fortement le traitement.

@@ -30,13 +30,13 @@ def test_profile_for_discovery_empty_when_unset():
 
 def test_user_prompt_includes_preferences_when_present():
     p = ev._user_prompt("Senior Python role", {"n": "A", "s": "eng"}, {"score": 50}, "remote fintech, no on-call")
-    assert "What the candidate is looking for" in p
+    assert "Ce que le candidat recherche" in p
     assert "no on-call" in p
 
 
 def test_user_prompt_omits_section_when_empty():
     p = ev._user_prompt("role", {"n": "A"}, {"score": 1}, "")
-    assert "What the candidate is looking for" not in p
+    assert "Ce que le candidat recherche" not in p
 
 
 def test_score_threads_preferences_from_settings(monkeypatch):

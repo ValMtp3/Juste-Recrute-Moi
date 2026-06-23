@@ -1,2 +1,2 @@
-"""Shared kernel for JustHireMe backend modules."""
+"""Shared kernel for Juste Recrute Moi backend modules."""
 

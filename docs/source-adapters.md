@@ -1,50 +1,48 @@
-# Source Adapter Contract
+# Contrat Des Connecteurs De Sources
 
-Source adapters turn external job sources into normalized lead dictionaries. A good adapter is boring, deterministic, and easy to test.
+Un connecteur transforme une source externe d'offres d'emploi en dictionnaires de leads normalisés. Un bon connecteur doit être prévisible, déterministe et simple à tester.
 
-## Normalized Lead Fields
+## Champs Normalisés
 
-Required:
+Champs requis :
 
-- `title`: role title
-- `company`: company or source owner
-- `url`: canonical apply/source URL
-- `platform`: stable source id, such as `greenhouse`, `lever`, `hn_hiring`
-- `description`: useful job text for ranking/customization
+- `title` : intitulé du poste ;
+- `company` : entreprise ou propriétaire de la source ;
+- `url` : URL canonique de l'offre ou de candidature ;
+- `platform` : identifiant stable de source, par exemple `france_travail`, `greenhouse`, `lever` ;
+- `description` : texte utile pour le scoring et la génération.
 
-Recommended:
+Champs recommandés :
 
-- `posted_date`: visible source date when available
-- `location`: remote/location text
-- `tech_stack`: list of detected technologies
-- `signal_score`: source-level quality score
-- `signal_reason`: short explanation of source signal
-- `signal_tags`: source tags
-- `source_meta`: source-specific metadata
+- `posted_date` : date visible de publication si disponible ;
+- `location` : lieu, remote ou hybride ;
+- `tech_stack` : technologies détectées ;
+- `signal_score` : score de qualité source ;
+- `signal_reason` : explication courte du signal ;
+- `signal_tags` : tags source ;
+- `source_meta` : métadonnées propres à la source.
 
-## Quality Gate
+## Filtre Qualité
 
-Before saving, leads should pass `agents.quality_gate.evaluate_lead_quality`.
+Avant sauvegarde, les offres doivent passer par la quality gate. Elle rejette ou dégrade notamment :
 
-The gate rejects or down-ranks:
+- les offres sans URL ;
+- les lignes trop pauvres ;
+- les offres obsolètes ;
+- les offres trop senior pour un flux orienté débutant ;
+- les annonces spammy, non rémunérées ou peu fiables ;
+- les offres sans entreprise ou contexte clair.
 
-- missing URLs
-- thin scraped rows
-- stale jobs
-- senior-only jobs in beginner-focused feeds
-- spam, unpaid, or low-trust postings
-- missing company/context signals
+Les leads sauvegardés doivent conserver `source_meta.lead_quality_score` et `source_meta.lead_quality_reason` pour expliquer pourquoi l'offre a été affichée.
 
-Saved leads should keep `source_meta.lead_quality_score` and `source_meta.lead_quality_reason` so users and contributors can understand why the lead was shown.
+## Ajouter Une Source
 
-## New Source Checklist
+- [ ] Le connecteur renvoie les champs normalisés.
+- [ ] Les URLs sont canonisées et déduplicables.
+- [ ] Les dates sont parsées ou conservées proprement.
+- [ ] Les tests de base ne nécessitent pas d'identifiants privés.
+- [ ] Au moins une fixture valide passe.
+- [ ] Au moins une fixture bruitée est filtrée.
+- [ ] La documentation explique comment activer la source.
 
-- [ ] Adapter returns normalized fields.
-- [ ] URLs are canonical and dedupable.
-- [ ] Dates are parsed or passed through.
-- [ ] No credentials are required for basic tests.
-- [ ] At least one good fixture passes.
-- [ ] At least one noisy fixture is filtered.
-- [ ] README or settings docs explain how to enable the source.
-
-Prefer direct ATS/company APIs over broad search result scraping. Use broad search only as a fallback.
+Privilégiez les API ATS ou pages carrière directes. Utilisez les recherches larges seulement comme solution de secours.

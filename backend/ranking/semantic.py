@@ -330,8 +330,8 @@ def _local_profile_rows(candidate_data: dict | None) -> list[dict]:
         rows.append({
             "kind": "profile",
             "id": "profile:local",
-            "label": "Profile summary",
-            "text": f"Candidate profile\n{summary}",
+            "label": "Résumé du profil",
+            "text": f"Profil candidat\n{summary}",
         })
 
     for skill in data.get("skills", []) or []:

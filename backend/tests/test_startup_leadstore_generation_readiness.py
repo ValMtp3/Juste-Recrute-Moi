@@ -22,10 +22,10 @@ def test_startup_validation_reports_actionable_configuration_warnings(monkeypatc
         "job_boards": "example",
     }))
 
-    assert "X scanning is enabled but x_bearer_token is missing." in warnings
-    assert "Custom connectors are enabled but custom_connectors is empty." in warnings
-    assert "LLM provider 'openai' is selected but no API key is configured." in warnings
-    assert "Job target may be invalid or too broad: example" in warnings
+    assert "Le scan X est activé mais x_bearer_token est manquant." in warnings
+    assert "Les connecteurs personnalisés sont activés mais custom_connectors est vide." in warnings
+    assert "Le fournisseur IA 'openai' est sélectionné mais aucune clé API n'est configurée." in warnings
+    assert "Cible d'offres possiblement invalide ou trop large : example" in warnings
 
 
 def test_startup_validation_warns_when_free_sources_have_no_targets():
@@ -38,7 +38,7 @@ def test_startup_validation_warns_when_free_sources_have_no_targets():
     }))
 
     assert warnings == [
-        "Free-source scanning is enabled but no free source targets or job boards are configured.",
+        "Le scan des sources gratuites est activé mais aucune cible source ou jobboard n'est configuré.",
     ]
 
 
@@ -53,7 +53,7 @@ def test_startup_validation_logs_every_warning(monkeypatch):
     warnings = log_startup_warnings(_repo_with_settings({"x_enabled": "true"}), logger)
 
     assert logged == warnings
-    assert logged == ["X scanning is enabled but x_bearer_token is missing."]
+    assert logged == ["Le scan X est activé mais x_bearer_token est manquant."]
 
 
 def test_save_lead_compat_maps_legacy_arguments_to_repository_payload(monkeypatch):

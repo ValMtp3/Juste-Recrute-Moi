@@ -1,7 +1,7 @@
 import { cacheableJson, cleanId, countersWritable, createMemoryCache, envInt, json, redis, redisConfigured, redisScript, send, visitorKey } from "./_counter.js";
 
-const TOTAL_KEY = "justhireme:views:total";
-const UNIQUE_PREFIX = "justhireme:views:visitor:";
+const TOTAL_KEY = "juste-recrute-moi:views:total";
+const UNIQUE_PREFIX = "juste-recrute-moi:views:visitor:";
 const COUNT_CACHE = createMemoryCache(envInt("COUNTER_SERVER_CACHE_SECONDS", 30 * 60) * 1000);
 const VISITOR_TTL_SECONDS = envInt("COUNTER_VISITOR_TTL_DAYS", 400) * 24 * 60 * 60;
 const COUNT_VIEW_SCRIPT = `

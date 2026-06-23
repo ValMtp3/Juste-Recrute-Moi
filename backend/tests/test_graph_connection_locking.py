@@ -119,7 +119,7 @@ def test_friendly_graph_error_explains_lock_contention(raw):
     # message must give remediation (close extra windows / stop stale backends) and
     # still preserve the raw error for debugging.
     msg = gc.friendly_graph_error(raw)
-    assert "locked by another JustHireMe backend process" in msg
+    assert "locked by another Juste Recrute Moi backend process" in msg
     assert "restart the app" in msg
     assert raw in msg  # raw error preserved
 

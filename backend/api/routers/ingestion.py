@@ -129,7 +129,7 @@ async def _read_capped(file: UploadFile, max_bytes: int) -> bytes:
             break
         total += len(chunk)
         if total > max_bytes:
-            raise HTTPException(status_code=413, detail="Upload too large")
+            raise HTTPException(status_code=413, detail="Fichier trop volumineux")
         chunks.append(chunk)
     return b"".join(chunks)
 
@@ -172,7 +172,7 @@ def create_router(manager, logger) -> APIRouter:
     ):
         require_rate_limit(ingest_limiter)
         if file and file.filename and file.size and file.size > MAX_UPLOAD_SIZE:
-            raise HTTPException(status_code=413, detail=f"File too large (max {MAX_UPLOAD_SIZE // 1024 // 1024} MB)")
+            raise HTTPException(status_code=413, detail=f"Fichier trop volumineux (maximum {MAX_UPLOAD_SIZE // 1024 // 1024} Mo)")
         try:
             async with _temp_upload(file) as pdf_path:
                 profile = await get_profile_service().ingest_resume(raw, pdf_path)
@@ -187,7 +187,7 @@ def create_router(manager, logger) -> APIRouter:
                 await manager.broadcast({
                     "type": "agent",
                     "event": "ingested",
-                    "msg": f"Profile ingested: {profile_name} - {skill_count} skills",
+                    "msg": f"Profil importé : {profile_name} - {skill_count} compétences",
                 })
                 return profile_payload
         except Exception as exc:
@@ -197,13 +197,13 @@ def create_router(manager, logger) -> APIRouter:
     async def ingest_linkedin(file: UploadFile = File(...)):
         require_rate_limit(ingest_limiter)
         if not (file.filename or "").endswith(".zip"):
-            raise HTTPException(400, "expected a .zip file from LinkedIn data export")
+            raise HTTPException(400, "Un export LinkedIn au format .zip est attendu")
         raw = await _read_capped(file, 50 * 1024 * 1024)
         try:
             return await get_profile_service().ingest_linkedin(raw)
         except Exception as exc:
             logger.error("linkedin parse failed: %s", exc)
-            raise HTTPException(422, "Could not parse the LinkedIn export.") from exc
+            raise HTTPException(422, "L'export LinkedIn n'a pas pu être analysé.") from exc
 
     @router.post("/ingest/github")
     async def ingest_github_endpoint(body: GithubIngestBody):
@@ -216,7 +216,7 @@ def create_router(manager, logger) -> APIRouter:
             )
         except Exception as exc:
             logger.error("github ingest failed: %s", exc)
-            raise HTTPException(502, "Could not ingest the GitHub profile.") from exc
+            raise HTTPException(502, "Le profil GitHub n'a pas pu être importé.") from exc
         if "error" in result:
             status_code = int(result.get("status_code") or (404 if result.get("error_kind") == "not_found" else 502))
             raise HTTPException(status_code, result["error"])

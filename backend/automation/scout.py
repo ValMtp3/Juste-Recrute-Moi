@@ -85,14 +85,14 @@ def _source_error_detail(exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code
         if status == 403:
-            return "HTTP 403 blocked by source"
+            return "HTTP 403 bloqué par la source"
         if status == 429:
-            return "HTTP 429 rate limited by source"
+            return "HTTP 429 limité par la source"
         return f"HTTP {status}"
     if isinstance(exc, httpx.TimeoutException):
-        return "request timed out"
+        return "délai de requête dépassé"
     if isinstance(exc, httpx.ConnectError):
-        return "connection failed"
+        return "connexion échouée"
     return str(exc).strip() or type(exc).__name__
 
 
@@ -617,7 +617,7 @@ def run(
         item = attach_quality_metadata(item, quality)
         if not quality.get("accepted"):
             usage["filtered"] += 1
-            errors.append(f"filtered {plat}:{u} - {quality.get('reason', 'quality gate')}")
+            errors.append(f"filtré {plat}:{u} - {quality.get('reason', 'filtre qualité')}")
             continue
         source_meta = item["source_meta"]
         save_lead(jid, t, co, u, plat, desc, source_meta=source_meta)

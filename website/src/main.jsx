@@ -5,43 +5,49 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-const repoUrl = "https://github.com/vasu-devs/JustHireMe";
-const coffeeUrl = "https://buymeacoffee.com/vasu.devs";
+const repoUrl = "https://github.com/ValMtp3/Juste-Recrute-Moi";
+const coffeeUrl = "https://www.valentin-fiess.fr/";
 const releaseNotice = {
-  title: "Release assets are publishing.",
-  copy: "The newest build is being prepared by GitHub Actions. Download buttons unlock when direct installer assets are available.",
+  title: "Les fichiers de release sont en cours de publication.",
+  copy: "Le dernier build est prepare par GitHub Actions. Les boutons seront actifs quand les installateurs seront disponibles.",
 };
 
-const navItems = ["Workflow", "Why local", "Features", "Feedback", "Release"];
+const navItems = [
+  "Parcours",
+  "Pourquoi local",
+  "Fonctions",
+  "Retours",
+  "Release",
+];
 
 const pipeline = [
-  { status: "Leads", count: 128, tone: "blue" },
-  { status: "Ranked", count: 42, tone: "yellow" },
-  { status: "Drafts", count: 16, tone: "purple" },
+  { status: "Offres", count: 128, tone: "blue" },
+  { status: "Classees", count: 42, tone: "yellow" },
+  { status: "Brouillons", count: 16, tone: "purple" },
 ];
 
 const features = [
   {
-    title: "Find",
-    copy: "Collect better job leads from multiple sources.",
+    title: "Trouver",
+    copy: "Collecter de meilleures offres depuis plusieurs sources.",
     tone: "blue",
     icon: "layers",
   },
   {
-    title: "Filter",
-    copy: "Remove stale, thin, and low-signal roles.",
+    title: "Filtrer",
+    copy: "Ecarter les offres obsoletes, pauvres ou peu fiables.",
     tone: "yellow",
     icon: "filter",
   },
   {
-    title: "Rank",
-    copy: "Explain why a role is worth your time.",
+    title: "Classer",
+    copy: "Expliquer pourquoi une offre merite votre attention.",
     tone: "purple",
     icon: "graph",
   },
   {
-    title: "Tailor",
-    copy: "Draft resumes, cover letters, and outreach.",
+    title: "Adapter",
+    copy: "Preparer CV, lettres et messages adaptes.",
     tone: "green",
     icon: "file",
   },
@@ -49,82 +55,87 @@ const features = [
 
 const story = [
   {
-    title: "Noise out",
-    copy: "Bad roles never make it into the system.",
+    title: "Bruit retire",
+    copy: "Les mauvaises offres ne polluent pas le pipeline.",
     tone: "yellow",
   },
   {
-    title: "Signal in",
-    copy: "Every match is scored with visible reasons.",
+    title: "Signal utile",
+    copy: "Chaque match est note avec des raisons visibles.",
     tone: "blue",
   },
   {
-    title: "Draft ready",
-    copy: "Application material is prepared for review.",
+    title: "Dossier pret",
+    copy: "Les documents sont prepares pour relecture.",
     tone: "green",
   },
 ];
 
 const intelligence = [
   {
-    title: "Scrape",
-    copy: "Adapters normalize jobs from ATS boards, feeds, communities, and configured sources.",
+    title: "Collecter",
+    copy: "Les connecteurs normalisent les offres issues des ATS, flux, communautes et sources configurees.",
     icon: "globe",
     tone: "blue",
   },
   {
-    title: "Embed",
-    copy: "Job descriptions and profile evidence become searchable semantic vectors.",
+    title: "Indexer",
+    copy: "Les descriptions d offres et les preuves du profil deviennent des vecteurs semantiques recherchables.",
     icon: "pulse",
     tone: "purple",
   },
   {
-    title: "Connect",
-    copy: "SQLite, LanceDB, and graph context work together locally.",
+    title: "Relier",
+    copy: "SQLite, LanceDB et le graphe de profil travaillent ensemble en local.",
     icon: "graph",
     tone: "green",
   },
   {
-    title: "Rank",
-    copy: "Rules, quality gates, semantic match, and profile signals produce explainable fit.",
+    title: "Classer",
+    copy: "Les regles, filtres qualite, signaux profil et matching semantique produisent une pertinence explicable.",
     icon: "filter",
     tone: "yellow",
   },
 ];
 
 const principles = [
-  "Local-first data",
-  "Explainable scoring",
-  "Human review",
-  "Source-available",
+  "Donnees locales par defaut",
+  "Scoring explicable",
+  "Relecture humaine",
+  "Code source disponible",
 ];
 
 const systemSignals = [
-  ["JD vectors", "purple"],
-  ["Profile graph", "green"],
-  ["Quality gate", "yellow"],
-  ["CRM memory", "blue"],
+  ["Vecteurs offres", "purple"],
+  ["Graphe profil", "green"],
+  ["Filtre qualite", "yellow"],
+  ["Memoire CRM", "blue"],
 ];
 
 const platformOptions = [
-  { id: "windows", label: "Windows", hint: "Installer", tone: "blue" },
+  { id: "windows", label: "Windows", hint: "Installateur", tone: "blue" },
   { id: "mac", label: "macOS", hint: "DMG / PKG", tone: "purple" },
-  { id: "linux", label: "Linux", hint: "AppImage / package", tone: "green" },
+  { id: "linux", label: "Linux", hint: "AppImage / paquet", tone: "green" },
 ];
 const BROWSER_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-const VIEW_COUNTED_KEY = "justhireme.views.counted";
-const DOWNLOAD_COUNTED_PREFIX = "justhireme.downloads.counted.";
+const VIEW_COUNTED_KEY = "juste-recrute-moi.views.counted";
+const DOWNLOAD_COUNTED_PREFIX = "juste-recrute-moi.downloads.counted.";
 
 function formatCount(value) {
-  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value || 0);
+  return new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value || 0);
 }
 
 function getVisitorId() {
-  const key = "justhireme.visitorId";
+  const key = "juste-recrute-moi.visitorId";
   const existing = localStorage.getItem(key);
   if (existing) return existing;
 
-  const next = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const next = crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   localStorage.setItem(key, next);
   return next;
 }
@@ -185,8 +196,10 @@ function useViewCounter() {
     const syncViews = async () => {
       const countedLocally = hasLocalFlag(VIEW_COUNTED_KEY);
       const payload = countedLocally
-        ? await cachedFetchJson("justhireme.views", "/api/views", { method: "GET" })
-        : await cachedFetchJson("justhireme.views", "/api/views", {
+        ? await cachedFetchJson("juste-recrute-moi.views", "/api/views", {
+            method: "GET",
+          })
+        : await cachedFetchJson("juste-recrute-moi.views", "/api/views", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ visitorId: getVisitorId() }),
@@ -194,7 +207,11 @@ function useViewCounter() {
       if (!cancelled && typeof payload.total === "number") {
         setViews(payload.total);
         setConfigured(Boolean(payload.configured));
-        if (payload.configured && payload.writable !== false && !payload.error) {
+        if (
+          payload.configured &&
+          payload.writable !== false &&
+          !payload.error
+        ) {
           setLocalFlag(VIEW_COUNTED_KEY);
         }
       }
@@ -211,49 +228,65 @@ function useViewCounter() {
 }
 
 function useDownloadCounter() {
-  const [downloads, setDownloads] = React.useState({ total: 0, windows: 0, mac: 0, linux: 0 });
+  const [downloads, setDownloads] = React.useState({
+    total: 0,
+    windows: 0,
+    mac: 0,
+    linux: 0,
+  });
   const [configured, setConfigured] = React.useState(false);
 
-  const syncDownloads = React.useCallback(async (method = "GET", platform = null) => {
-    const cacheKey = platform ? null : "justhireme.downloads";
-    const options = {
-      method,
-      headers: { "content-type": "application/json" },
-      body: method === "POST" ? JSON.stringify({ visitorId: getVisitorId(), platform }) : undefined,
-    };
-    const payload = cacheKey
-      ? await cachedFetchJson(cacheKey, "/api/downloads", options)
-      : await fetch("/api/downloads", options).then((response) => response.json());
+  const syncDownloads = React.useCallback(
+    async (method = "GET", platform = null) => {
+      const cacheKey = platform ? null : "juste-recrute-moi.downloads";
+      const options = {
+        method,
+        headers: { "content-type": "application/json" },
+        body:
+          method === "POST"
+            ? JSON.stringify({ visitorId: getVisitorId(), platform })
+            : undefined,
+      };
+      const payload = cacheKey
+        ? await cachedFetchJson(cacheKey, "/api/downloads", options)
+        : await fetch("/api/downloads", options).then((response) =>
+            response.json(),
+          );
 
-    if (typeof payload.total === "number") {
-      setDownloads({
-        total: payload.total,
-        windows: payload.windows || 0,
-        mac: payload.mac || 0,
-        linux: payload.linux || 0,
-      });
-      setConfigured(Boolean(payload.configured));
-      writeBrowserCache("justhireme.downloads", payload);
-    }
-    return payload;
-  }, []);
+      if (typeof payload.total === "number") {
+        setDownloads({
+          total: payload.total,
+          windows: payload.windows || 0,
+          mac: payload.mac || 0,
+          linux: payload.linux || 0,
+        });
+        setConfigured(Boolean(payload.configured));
+        writeBrowserCache("juste-recrute-moi.downloads", payload);
+      }
+      return payload;
+    },
+    [],
+  );
 
   React.useEffect(() => {
     syncDownloads("GET").catch(() => {});
   }, [syncDownloads]);
 
-  const trackDownload = React.useCallback(async (platform) => {
-    const countedKey = `${DOWNLOAD_COUNTED_PREFIX}${platform}`;
-    if (hasLocalFlag(countedKey)) {
-      return syncDownloads("GET");
-    }
+  const trackDownload = React.useCallback(
+    async (platform) => {
+      const countedKey = `${DOWNLOAD_COUNTED_PREFIX}${platform}`;
+      if (hasLocalFlag(countedKey)) {
+        return syncDownloads("GET");
+      }
 
-    const payload = await syncDownloads("POST", platform);
-    if (payload.configured && payload.writable !== false && !payload.error) {
-      setLocalFlag(countedKey);
-    }
-    return payload;
-  }, [syncDownloads]);
+      const payload = await syncDownloads("POST", platform);
+      if (payload.configured && payload.writable !== false && !payload.error) {
+        setLocalFlag(countedKey);
+      }
+      return payload;
+    },
+    [syncDownloads],
+  );
 
   return { downloads, configured, trackDownload };
 }
@@ -270,13 +303,17 @@ function getFirstAvailableDownload(assets) {
 
 function PlatformDownload({ platform, asset, releaseTag, onDownload }) {
   const available = Boolean(asset?.url);
-  const title = available ? `Download ${asset.name}` : `${platform.label} installer is still publishing`;
+  const title = available
+    ? `Télécharger ${asset.name}`
+    : `${platform.label} installateur en cours de publication`;
   const content = (
     <>
       <Icon name={available ? "download" : "pulse"} />
       <span>
         <strong>{platform.label}</strong>
-        <small>{available ? (releaseTag || "Latest release") : "Publishing"}</small>
+        <small>
+          {available ? releaseTag || "Derniere release" : "Publication"}
+        </small>
       </span>
     </>
   );
@@ -308,7 +345,8 @@ function PlatformDownload({ platform, asset, releaseTag, onDownload }) {
 }
 
 function getPreferredPlatformId() {
-  const platform = `${navigator.platform || ""} ${navigator.userAgent || ""}`.toLowerCase();
+  const platform =
+    `${navigator.platform || ""} ${navigator.userAgent || ""}`.toLowerCase();
   if (platform.includes("win")) return "windows";
   if (platform.includes("mac")) return "mac";
   if (platform.includes("linux") || platform.includes("x11")) return "linux";
@@ -316,16 +354,31 @@ function getPreferredPlatformId() {
 }
 
 function ReleaseNoticeBanner({ compact = false, release }) {
-  const latestText = release?.tag ? `Latest tag: ${release.tag}` : "Latest release assets";
+  const latestText = release?.tag
+    ? `Dernier tag : ${release.tag}`
+    : "Fichiers de la derniere release";
 
   return (
-    <div className={`release-notice ${compact ? "compact" : ""}`} role="status" aria-live="polite">
-      <span className="release-notice-icon"><Icon name="pulse" /></span>
+    <div
+      className={`release-notice ${compact ? "compact" : ""}`}
+      role="status"
+      aria-live="polite"
+    >
+      <span className="release-notice-icon">
+        <Icon name="pulse" />
+      </span>
       <div>
         <strong>{release?.available ? latestText : releaseNotice.title}</strong>
-        <p>{release?.available ? "Pick an available platform below. Missing installers stay disabled until direct download assets publish." : releaseNotice.copy}</p>
+        <p>
+          {release?.available
+            ? "Choisissez une plateforme disponible ci-dessous. Les installateurs manquants restent desactives jusqu a publication des fichiers directs."
+            : releaseNotice.copy}
+        </p>
       </div>
-      <a className="button primary" href={release?.url || `${repoUrl}/releases`}>
+      <a
+        className="button primary"
+        href={release?.url || `${repoUrl}/releases`}
+      >
         <Icon name="external" />
         Releases
       </a>
@@ -334,17 +387,26 @@ function ReleaseNoticeBanner({ compact = false, release }) {
 }
 
 function useGitHubStars() {
-  const [github, setGithub] = React.useState({ stars: null, pullRequests: null });
+  const [github, setGithub] = React.useState({
+    etoiles: null,
+    pullRequests: null,
+  });
 
   React.useEffect(() => {
     let cancelled = false;
 
     const loadStars = async () => {
-      const payload = await cachedFetchJson("justhireme.github", "/api/github");
+      const payload = await cachedFetchJson(
+        "juste-recrute-moi.github",
+        "/api/github",
+      );
       if (!cancelled) {
         setGithub({
-          stars: typeof payload.stars === "number" ? payload.stars : null,
-          pullRequests: typeof payload.pullRequests === "number" ? payload.pullRequests : null,
+          etoiles: typeof payload.etoiles === "number" ? payload.etoiles : null,
+          pullRequests:
+            typeof payload.pullRequests === "number"
+              ? payload.pullRequests
+              : null,
         });
       }
     };
@@ -373,7 +435,7 @@ function useLatestRelease() {
 
     const loadRelease = async () => {
       try {
-        localStorage.removeItem("justhireme.release");
+        localStorage.removeItem("juste-recrute-moi.release");
       } catch {
         // Storage can be unavailable in hardened browser modes.
       }
@@ -403,11 +465,11 @@ function useLatestRelease() {
   return release;
 }
 
-function useFeedbackForm(kind) {
+function useRetoursForm(kind) {
   const [state, setState] = React.useState({
     name: "",
     email: "",
-    rating: kind === "review" ? "5" : "",
+    rating: kind === "a verifier" ? "5" : "",
     message: "",
     website: "",
   });
@@ -419,103 +481,148 @@ function useFeedbackForm(kind) {
     setState((current) => ({ ...current, [name]: value }));
   }, []);
 
-  const submit = React.useCallback(async (event) => {
-    event.preventDefault();
-    setSubmitting(true);
-    setStatus({ type: "idle", message: "" });
+  const submit = React.useCallback(
+    async (event) => {
+      event.preventDefault();
+      setSubmitting(true);
+      setStatus({ type: "idle", message: "" });
 
-    try {
-      const response = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ...state,
-          kind,
-          path: window.location.pathname,
-          userAgent: navigator.userAgent,
-        }),
-      });
-      const payload = await response.json();
-
-      if (!response.ok) {
-        throw new Error(payload.error || "Could not send yet");
-      }
-
-      if (payload.delivered) {
-        setStatus({ type: "success", message: "Sent. Thank you for making JustHireMe sharper." });
-        setState({ name: "", email: "", rating: kind === "review" ? "5" : "", message: "", website: "" });
-      } else {
-        setStatus({
-          type: "warning",
-          message: "Form works, but delivery needs GitHub or email environment variables on the deployment.",
+      try {
+        const response = await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ...state,
+            kind,
+            path: window.location.pathname,
+            userAgent: navigator.userAgent,
+          }),
         });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Envoi impossible pour le moment");
+        }
+
+        if (payload.delivered) {
+          setStatus({
+            type: "success",
+            message: "Envoye. Merci pour votre aide.",
+          });
+          setState({
+            name: "",
+            email: "",
+            rating: kind === "a verifier" ? "5" : "",
+            message: "",
+            website: "",
+          });
+        } else {
+          setStatus({
+            type: "warning",
+            message:
+              "Le formulaire fonctionne, mais la livraison demande les variables GitHub ou email sur le deploiement.",
+          });
+        }
+      } catch (error) {
+        setStatus({
+          type: "error",
+          message: error.message || "Envoi impossible pour le moment.",
+        });
+      } finally {
+        setSubmitting(false);
       }
-    } catch (error) {
-      setStatus({ type: "error", message: error.message || "Could not send yet." });
-    } finally {
-      setSubmitting(false);
-    }
-  }, [kind, state]);
+    },
+    [kind, state],
+  );
 
   return { state, status, submitting, update, submit };
 }
 
-function FeedbackCard({ kind, title, copy, tone }) {
-  const { state, status, submitting, update, submit } = useFeedbackForm(kind);
-  const isReview = kind === "review";
+function RetoursCard({ kind, title, copy, tone }) {
+  const { state, status, submitting, update, submit } = useRetoursForm(kind);
+  const isAvis = kind === "a verifier";
 
   return (
     <form className={`feedback-card tone-${tone}`} onSubmit={submit}>
       <div className="feedback-card-head">
-        <span className="feature-icon"><Icon name={isReview ? "star" : "message"} /></span>
+        <span className="feature-icon">
+          <Icon name={isAvis ? "star" : "message"} />
+        </span>
         <div>
           <h3>{title}</h3>
           <p>{copy}</p>
         </div>
       </div>
       <label>
-        <span>Name</span>
-        <input name="name" value={state.name} onChange={update} placeholder="Your name" autoComplete="name" />
+        <span>Nom</span>
+        <input
+          name="name"
+          value={state.name}
+          onChange={update}
+          placeholder="Votre nom"
+          autoComplete="name"
+        />
       </label>
       <label>
         <span>Email</span>
-        <input name="email" value={state.email} onChange={update} placeholder="you@example.com" type="email" autoComplete="email" />
+        <input
+          name="email"
+          value={state.email}
+          onChange={update}
+          placeholder="you@example.com"
+          type="email"
+          autoComplete="email"
+        />
       </label>
-      {isReview && (
+      {isAvis && (
         <label>
-          <span>Rating</span>
+          <span>Note</span>
           <select name="rating" value={state.rating} onChange={update}>
-            <option value="5">5 - Loved it</option>
-            <option value="4">4 - Useful</option>
-            <option value="3">3 - Promising</option>
-            <option value="2">2 - Needs work</option>
-            <option value="1">1 - Not there yet</option>
+            <option value="5">5 - Excellent</option>
+            <option value="4">4 - Utile</option>
+            <option value="3">3 - Prometteur</option>
+            <option value="2">2 - A ameliorer</option>
+            <option value="1">1 - Pas encore pret</option>
           </select>
         </label>
       )}
       <label className="span-full">
-        <span>{isReview ? "Review" : "Feedback"}</span>
+        <span>{isAvis ? "Avis" : "Retours"}</span>
         <textarea
           name="message"
           value={state.message}
           onChange={update}
-          placeholder={isReview ? "What worked, what did not, and who should try it?" : "Bug, idea, confusion, feature request, or anything else."}
+          placeholder={
+            isAvis
+              ? "Ce qui fonctionne, ce qui bloque, et a qui recommander l outil ?"
+              : "Bug, idee, incomprehension, demande de fonction ou autre retour."
+          }
           required
           rows="5"
         />
       </label>
-      <input className="hidden-field" name="website" value={state.website} onChange={update} tabIndex="-1" autoComplete="off" aria-hidden="true" />
+      <input
+        className="hidden-field"
+        name="website"
+        value={state.website}
+        onChange={update}
+        tabIndex="-1"
+        autoComplete="off"
+        aria-hidden="true"
+      />
       <div className="feedback-actions">
         <button className="button primary" type="submit" disabled={submitting}>
           <Icon name={submitting ? "pulse" : "arrow"} />
-          {submitting ? "Sending" : "Send"}
+          {submitting ? "Envoi" : "Envoyer"}
         </button>
         <a className="button secondary" href={`${repoUrl}/issues/new`}>
           <Icon name="github" />
-          GitHub issue
+          Issue GitHub
         </a>
       </div>
-      {status.message && <p className={`form-status ${status.type}`}>{status.message}</p>}
+      {status.message && (
+        <p className={`form-status ${status.type}`}>{status.message}</p>
+      )}
     </form>
   );
 }
@@ -525,7 +632,13 @@ function Icon({ name }) {
     return (
       <svg className="logo-mark" viewBox="0 0 32 32" aria-hidden="true">
         <rect x="1" y="1" width="30" height="30" rx="9" fill="#1F1A14" />
-        <path d="M10 21 L10 11 M10 11 L16 11 Q22 11 22 16 Q22 21 16 21 L13 21" stroke="#F4EFE6" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        <path
+          d="M10 21 L10 11 M10 11 L16 11 Q22 11 22 16 Q22 21 16 21 L13 21"
+          stroke="#F4EFE6"
+          strokeWidth="2.2"
+          fill="none"
+          strokeLinecap="round"
+        />
         <circle cx="22" cy="11" r="2" fill="#C96442" />
       </svg>
     );
@@ -533,8 +646,10 @@ function Icon({ name }) {
 
   const paths = {
     download: "M12 3v12 M7 10l5 5 5-5 M5 21h14",
-    spark: "M12 3v4 M12 17v4 M3 12h4 M17 12h4 M5.6 5.6l2.8 2.8 M15.6 15.6l2.8 2.8 M5.6 18.4l2.8-2.8 M15.6 8.4l2.8-2.8",
-    graph: "M12 5a2 2 0 1 0 0 .1 M5 18a2 2 0 1 0 0 .1 M19 18a2 2 0 1 0 0 .1 M8.5 11a2 2 0 1 0 0 .1 M15.5 11a2 2 0 1 0 0 .1 M12 7v2 M10 12l-3 4 M14 12l3 4 M10 11h4",
+    spark:
+      "M12 3v4 M12 17v4 M3 12h4 M17 12h4 M5.6 5.6l2.8 2.8 M15.6 15.6l2.8 2.8 M5.6 18.4l2.8-2.8 M15.6 8.4l2.8-2.8",
+    graph:
+      "M12 5a2 2 0 1 0 0 .1 M5 18a2 2 0 1 0 0 .1 M19 18a2 2 0 1 0 0 .1 M8.5 11a2 2 0 1 0 0 .1 M15.5 11a2 2 0 1 0 0 .1 M12 7v2 M10 12l-3 4 M14 12l3 4 M10 11h4",
     arrow: "M5 12h14 M13 6l6 6-6 6",
     check: "M5 12l5 5L20 7",
     layers: "M12 3 2 8l10 5 10-5-10-5Z M2 13l10 5 10-5 M2 18l10 5 10-5",
@@ -543,34 +658,52 @@ function Icon({ name }) {
     pulse: "M3 12h4l3-8 4 16 3-8h4",
     user: "M12 8a4 4 0 1 0 0 .1 M4 21c0-4 4-7 8-7s8 3 8 7",
     star: "M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.2L5.8 21 7 14.2 2 9.3l6.9-1L12 2z",
-    github: "M9 19c-5 1.5-5-2.5-7-3 M15 22v-3.9a3.4 3.4 0 0 0-.9-2.6c3-.3 6.1-1.5 6.1-6.6a5.2 5.2 0 0 0-1.4-3.6 4.8 4.8 0 0 0-.1-3.6s-1.1-.3-3.7 1.4a12.7 12.7 0 0 0-6.7 0C5.7.4 4.6.7 4.6.7a4.8 4.8 0 0 0-.1 3.6A5.2 5.2 0 0 0 3.1 8c0 5.1 3.1 6.3 6.1 6.6a3.4 3.4 0 0 0-.9 2.6V22",
-    globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M3 12h18 M12 3a14 14 0 0 1 0 18 M12 3a14 14 0 0 0 0 18",
+    github:
+      "M9 19c-5 1.5-5-2.5-7-3 M15 22v-3.9a3.4 3.4 0 0 0-.9-2.6c3-.3 6.1-1.5 6.1-6.6a5.2 5.2 0 0 0-1.4-3.6 4.8 4.8 0 0 0-.1-3.6s-1.1-.3-3.7 1.4a12.7 12.7 0 0 0-6.7 0C5.7.4 4.6.7 4.6.7a4.8 4.8 0 0 0-.1 3.6A5.2 5.2 0 0 0 3.1 8c0 5.1 3.1 6.3 6.1 6.6a3.4 3.4 0 0 0-.9 2.6V22",
+    globe:
+      "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M3 12h18 M12 3a14 14 0 0 1 0 18 M12 3a14 14 0 0 0 0 18",
     xlogo: "M4 4l16 16 M20 4L4 20",
     ban: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M5.6 5.6l12.8 12.8",
-    external: "M14 3h7v7 M21 3l-9 9 M19 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6",
+    external:
+      "M14 3h7v7 M21 3l-9 9 M19 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h6",
     tag: "M20.5 13.5l-7 7a2 2 0 0 1-2.8 0L3 12.8V3h9.8l7.7 7.7a2 2 0 0 1 0 2.8z M7.5 7.5h.1",
     laptop: "M4 5h16v10H4z M2 19h20 M8 19h8",
     message: "M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z",
-    coffee: "M4 7h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V7z M17 9h1.5a2.5 2.5 0 0 1 0 5H17 M6 21h10 M8 3v2 M12 3v2 M16 3v2",
+    coffee:
+      "M4 7h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V7z M17 9h1.5a2.5 2.5 0 0 1 0 5H17 M6 21h10 M8 3v2 M12 3v2 M16 3v2",
   };
 
   return (
-    <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {paths[name].split(" M").map((d, index) => <path key={index} d={index === 0 ? d : `M${d}`} />)}
+    <svg
+      className="icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {paths[name].split(" M").map((d, index) => (
+        <path key={index} d={index === 0 ? d : `M${d}`} />
+      ))}
     </svg>
   );
 }
 
-function WorkflowAsset() {
+function ParcoursAsset() {
   const steps = [
-    ["Profile", "user", "green"],
-    ["Leads", "layers", "blue"],
+    ["Profil", "user", "green"],
+    ["Offres", "layers", "blue"],
     ["Score", "graph", "purple"],
-    ["Draft", "file", "orange"],
+    ["Brouillon", "file", "orange"],
   ];
 
   return (
-    <div className="workflow-asset" aria-label="Animated JustHireMe workflow">
+    <div
+      className="workflow-asset"
+      aria-label="Parcours anime Juste Recrute Moi"
+    >
       {steps.map(([label, icon, tone], index) => (
         <React.Fragment key={label}>
           <div className={`flow-chip tone-${tone}`}>
@@ -586,15 +719,23 @@ function WorkflowAsset() {
 
 function IntelligenceMap() {
   return (
-    <div className="intel-map" aria-label="JustHireMe intelligence system">
+    <div
+      className="intel-map"
+      aria-label="Systeme d intelligence Juste Recrute Moi"
+    >
       <div className="intel-center">
         <Icon name="logo" />
-        <strong>Local match engine</strong>
-        <span>Profile graph + embeddings + CRM</span>
+        <strong>Moteur de matching local</strong>
+        <span>Graphe profil + embeddings + CRM</span>
       </div>
       {intelligence.map((item, index) => (
-        <article className={`intel-node intel-node-${index + 1} tone-${item.tone}`} key={item.title}>
-          <span className="feature-icon"><Icon name={item.icon} /></span>
+        <article
+          className={`intel-node intel-node-${index + 1} tone-${item.tone}`}
+          key={item.title}
+        >
+          <span className="feature-icon">
+            <Icon name={item.icon} />
+          </span>
           <div>
             <h3>{item.title}</h3>
             <p>{item.copy}</p>
@@ -607,43 +748,64 @@ function IntelligenceMap() {
 
 function MiniApp() {
   return (
-    <div className="app-preview" aria-label="JustHireMe product preview">
-      <aside className="preview-sidebar">
-        <div className="brand-mini"><Icon name="logo" /><span>JustHireMe</span></div>
-        {["Customize", "Dashboard", "Leads", "Job Pipeline", "Knowledge"].map((item, index) => (
-          <div className={`preview-nav ${index === 3 ? "active" : ""}`} key={item}>
-            <span className={`nav-dot tone-${["green", "blue", "orange", "purple", "teal"][index]}`} />
+    <div
+      className="app-pa verifier"
+      aria-label="Juste Recrute Moi apercu produit"
+    >
+      <aside className="pa verifier-sidebar">
+        <div className="brand-mini">
+          <Icon name="logo" />
+          <span>Juste Recrute Moi</span>
+        </div>
+        {[
+          "Adapter",
+          "Tableau de bord",
+          "Offres",
+          "Pipeline d offres",
+          "Connaissances",
+        ].map((item, index) => (
+          <div
+            className={`pa verifier-nav ${index === 3 ? "active" : ""}`}
+            key={item}
+          >
+            <span
+              className={`nav-dot tone-${["green", "blue", "orange", "purple", "teal"][index]}`}
+            />
             {item}
           </div>
         ))}
-        <div className="preview-status">
+        <div className="pa verifier-status">
           <span className="live-dot" />
-          Local agent ready
-          <small>latest release live</small>
+          Agent local pret
+          <small>derniere release active</small>
         </div>
       </aside>
-      <main className="preview-main">
-        <div className="preview-top">
+      <main className="pa verifier-main">
+        <div className="pa verifier-top">
           <div>
             <span className="eyebrow">Pipeline</span>
-            <h3>Signal-first job hunt</h3>
+            <h3>Recherche d emploi orientee signal</h3>
           </div>
-          <button className="tiny-button"><Icon name="spark" /> Scan</button>
+          <button className="tiny-button">
+            <Icon name="spark" /> Scan
+          </button>
         </div>
         <div className="score-card">
           <div>
-            <span className="eyebrow">Today</span>
-            <strong>3 high-fit roles</strong>
-            <small>2 drafts ready for review</small>
+            <span className="eyebrow">Aujourd hui</span>
+            <strong>3 offres tres pertinentes</strong>
+            <small>2 brouillons prets a relire</small>
           </div>
           <span className="score-ring">94</span>
         </div>
-        <div className="system-signals" aria-label="Matching signals">
+        <div className="system-signals" aria-label="Signaux de matching">
           {systemSignals.map(([label, tone]) => (
-            <span className={`tone-${tone}`} key={label}>{label}</span>
+            <span className={`tone-${tone}`} key={label}>
+              {label}
+            </span>
           ))}
         </div>
-        <div className="preview-grid">
+        <div className="pa verifier-grid">
           {pipeline.map((item) => (
             <div className={`metric tone-${item.tone}`} key={item.status}>
               <strong>{item.count}</strong>
@@ -653,32 +815,51 @@ function MiniApp() {
         </div>
         <div className="job-list">
           {[
-            ["Founding Engineer", "Remote - Product infra - 94%"],
-            ["AI Tools Engineer", "Hybrid - TypeScript - 88%"],
-            ["Full-stack Builder", "Remote - public-build friendly - 82%"],
+            ["Ingenieur founding", "Remote - infra produit - 94%"],
+            ["Ingenieur outils IA", "Hybride - TypeScript - 88%"],
+            [
+              "Developpeur full-stack",
+              "Remote - culture build in public - 82%",
+            ],
           ].map(([title, meta], index) => (
             <div className="job-row" key={title}>
-              <span className={`job-mark tone-${["green", "purple", "orange"][index]}`}>{title[0]}</span>
+              <span
+                className={`job-mark tone-${["green", "purple", "orange"][index]}`}
+              >
+                {title[0]}
+              </span>
               <div>
                 <strong>{title}</strong>
                 <small>{meta}</small>
               </div>
-              <span className="review-pill">review</span>
+              <span className="a verifier-pill">a verifier</span>
             </div>
           ))}
         </div>
-        <div className="preview-docs">
+        <div className="pa verifier-docs">
           <div className="doc-card resume-doc">
-            <span className="doc-icon"><Icon name="file" /></span>
-            <strong>Tailored resume</strong>
-            <small>Projects matched to role evidence</small>
-            <div className="doc-lines"><i /><i /><i /></div>
+            <span className="doc-icon">
+              <Icon name="file" />
+            </span>
+            <strong>CV adapte</strong>
+            <small>Projets relies aux preuves demandees</small>
+            <div className="doc-lines">
+              <i />
+              <i />
+              <i />
+            </div>
           </div>
           <div className="doc-card outreach-doc">
-            <span className="doc-icon"><Icon name="pulse" /></span>
-            <strong>Outreach draft</strong>
-            <small>Founder note + LinkedIn variant</small>
-            <div className="doc-lines"><i /><i /><i /></div>
+            <span className="doc-icon">
+              <Icon name="pulse" />
+            </span>
+            <strong>Message d approche</strong>
+            <small>Message fondateur + variante LinkedIn</small>
+            <div className="doc-lines">
+              <i />
+              <i />
+              <i />
+            </div>
           </div>
         </div>
       </main>
@@ -691,7 +872,9 @@ function App() {
   const { downloads, trackDownload } = useDownloadCounter();
   const github = useGitHubStars();
   const release = useLatestRelease();
-  const hasReleaseAssets = platformOptions.some((platform) => release.assets?.[platform.id]?.url);
+  const hasReleaseAssets = platformOptions.some(
+    (platform) => release.assets?.[platform.id]?.url,
+  );
   const preferredPlatformId = React.useMemo(getPreferredPlatformId, []);
   const preferredAsset = release.assets?.[preferredPlatformId];
   const availableDownload = preferredAsset?.url
@@ -701,30 +884,54 @@ function App() {
   return (
     <>
       <header className="site-header">
-        <a className="brand" href="#top" aria-label="JustHireMe home"><Icon name="logo" /><span>JustHireMe</span></a>
-        <nav aria-label="Primary navigation">
-          {navItems.map((item) => <a key={item} href={`#${item.toLowerCase().replace(" ", "-")}`}>{item}</a>)}
+        <a className="brand" href="#top" aria-label="Juste Recrute Moi accueil">
+          <Icon name="logo" />
+          <span>Juste Recrute Moi</span>
+        </a>
+        <nav aria-label="Navigation principale">
+          {navItems.map((item) => (
+            <a key={item} href={`#${item.toLowerCase().replace(" ", "-")}`}>
+              {item}
+            </a>
+          ))}
         </nav>
         <div className="header-actions">
-          <a className="header-link hide-mobile" href="https://vasudev.live"><Icon name="globe" /> <span>Portfolio</span></a>
-          <a className="header-link hide-mobile" href="https://x.com/vasu_devs"><Icon name="xlogo" /> <span>X</span></a>
-          <a className="header-link support-link" href={coffeeUrl}><Icon name="coffee" /> <span>Support</span></a>
-          <a className="header-link" href={repoUrl}><Icon name="github" /> <span>GitHub</span></a>
+          <a
+            className="header-link hide-mobile"
+            href="https://www.valentin-fiess.fr/"
+          >
+            <Icon name="globe" /> <span>Portfolio</span>
+          </a>
+          <a
+            className="header-link hide-mobile"
+            href="https://www.valentin-fiess.fr/"
+          >
+            <Icon name="xlogo" /> <span>X</span>
+          </a>
+          <a className="header-link support-link" href={coffeeUrl}>
+            <Icon name="coffee" /> <span>Support</span>
+          </a>
+          <a className="header-link" href={repoUrl}>
+            <Icon name="github" /> <span>GitHub</span>
+          </a>
         </div>
       </header>
 
       <main id="top">
         <section className="hero band">
           <div className="hero-copy">
-            <span className="eyebrow">Local-first AI job intelligence workbench</span>
-            <h1>JustHireMe</h1>
+            <span className="eyebrow">
+              Agregateur local-first d offres d emploi
+            </span>
+            <h1>Juste Recrute Moi</h1>
             <p>
-              A local-first workbench that turns noisy job hunting into a clear, reviewable pipeline.
+              A local-first workbench that turns noisy job hunting into a clear,
+              a verifierable pipeline.
             </p>
             <div className="proof-line">
-              <span>Semantic matching</span>
-              <span>Built in public</span>
-              <span>Desktop-first</span>
+              <span>Matching semantique</span>
+              <span>Construit publiquement</span>
+              <span>Desktop d abord</span>
             </div>
             <div className="hero-actions">
               {availableDownload ? (
@@ -733,28 +940,33 @@ function App() {
                   href={availableDownload.asset.url}
                   download={availableDownload.asset.name}
                   onClick={() => trackDownload(availableDownload.platformId)}
-                  title={`Download ${availableDownload.asset.name}`}
+                  title={`Télécharger ${availableDownload.asset.name}`}
                 >
                   <Icon name="download" />
-                  Download
+                  Télécharger
                 </a>
               ) : (
                 <button
                   className="button primary"
                   type="button"
                   disabled
-                  title="Installer assets are still publishing"
+                  title="Les installateurs sont encore en publication"
                 >
                   <Icon name="pulse" />
-                  Download pending
+                  Téléchargement en attente
                 </button>
               )}
               <a className="button secondary" href={repoUrl}>
                 <Icon name="star" />
-                {github.stars == null ? "GitHub stars" : `${formatCount(github.stars)} stars`}
+                {github.etoiles == null
+                  ? "Etoiles GitHub"
+                  : `${formatCount(github.etoiles)} etoiles`}
               </a>
             </div>
-            <div className="hero-downloads" aria-label="Latest downloads">
+            <div
+              className="hero-downloads"
+              aria-label="Derniers téléchargements"
+            >
               {platformOptions.map((platform) => (
                 <PlatformDownload
                   key={platform.id}
@@ -768,20 +980,36 @@ function App() {
             {!hasReleaseAssets && (
               <div className="wait-note">
                 <span className="spinner" />
-                Installer assets are still publishing. Download controls will stay disabled until direct assets are ready.
+                Les installateurs sont encore en publication. Télécharger
+                controls will stay disabled until direct assets are ready.
               </div>
             )}
-            <div className="live-counter" title={configured ? "Backed by the deployed view counter" : "Connect Upstash Redis on Vercel to persist this counter"}>
+            <div
+              className="live-counter"
+              title={
+                configured
+                  ? "Alimente par le compteur de vues deploye"
+                  : "Relier Upstash Redis on Vercel to persist this counter"
+              }
+            >
               <span className="live-dot" />
               <strong>{formatCount(views)}</strong>
-              <span>unique launch views tracked live</span>
+              <span>vues uniques suivies</span>
             </div>
             <div className="metric-strip">
               {[
-                [github.stars == null ? "-" : formatCount(github.stars), "GitHub stars"],
-                [github.pullRequests == null ? "-" : formatCount(github.pullRequests), "open PRs"],
-                [formatCount(downloads.total), "total downloads"],
-                [formatCount(views), "unique views"],
+                [
+                  github.etoiles == null ? "-" : formatCount(github.etoiles),
+                  "Etoiles GitHub",
+                ],
+                [
+                  github.pullRequests == null
+                    ? "-"
+                    : formatCount(github.pullRequests),
+                  "PR ouvertes",
+                ],
+                [formatCount(downloads.total), "téléchargements"],
+                [formatCount(views), "vues uniques"],
               ].map(([value, label]) => (
                 <div key={label}>
                   <strong>{value}</strong>
@@ -795,20 +1023,31 @@ function App() {
 
         <section id="workflow" className="section band paper-2">
           <div className="section-head">
-            <span className="eyebrow">Workflow</span>
-            <h2>Find the role. Understand the fit. Ship the application.</h2>
+            <span className="eyebrow">Parcours</span>
+            <h2>
+              Trouvez l offre, comprenez la pertinence, preparez la candidature.
+            </h2>
           </div>
-          <WorkflowAsset />
+          <ParcoursAsset />
           <div className="story-grid">
             {story.map((item) => (
-              <article className={`story-card tone-${item.tone}`} key={item.title}>
+              <article
+                className={`story-card tone-${item.tone}`}
+                key={item.title}
+              >
                 <h3>{item.title}</h3>
                 <p>{item.copy}</p>
               </article>
             ))}
           </div>
           <div className="workflow">
-            {["Import profile", "Collect leads", "Quality gate", "Rank fit", "Tailor drafts"].map((step, index) => (
+            {[
+              "Importer le profil",
+              "Collecter les offres",
+              "Filtre qualite",
+              "Scorer la pertinence",
+              "Adapter les brouillons",
+            ].map((step, index) => (
               <div className="workflow-step" key={step}>
                 <span>{String(index + 1).padStart(2, "0")}</span>
                 <strong>{step}</strong>
@@ -819,13 +1058,21 @@ function App() {
 
         <section id="features" className="section band">
           <div className="section-head">
-            <span className="eyebrow">What it does</span>
-            <h2>Built for applicants who want signal, control, and speed.</h2>
+            <span className="eyebrow">Ce que fait l app</span>
+            <h2>
+              Pour les candidats qui veulent du signal, du controle et de la
+              vitesse.
+            </h2>
           </div>
           <div className="feature-grid">
             {features.map((feature) => (
-              <article className={`feature tone-${feature.tone}`} key={feature.title}>
-                <span className="feature-icon"><Icon name={feature.icon} /></span>
+              <article
+                className={`feature tone-${feature.tone}`}
+                key={feature.title}
+              >
+                <span className="feature-icon">
+                  <Icon name={feature.icon} />
+                </span>
                 <h3>{feature.title}</h3>
                 <p>{feature.copy}</p>
               </article>
@@ -835,12 +1082,21 @@ function App() {
 
         <section className="section band paper-2">
           <div className="section-head">
-            <span className="eyebrow">Intelligence layer</span>
-            <h2>Advanced matching, explained without the black box.</h2>
+            <span className="eyebrow">Couche d intelligence</span>
+            <h2>Un matching avance, explique sans boite noire.</h2>
           </div>
           <IntelligenceMap />
           <div className="tech-strip">
-            {["Scrapers", "JD embeddings", "Profile embeddings", "LanceDB", "SQLite CRM", "Kuzu graph", "Quality gates", "Semantic ranker"].map((item) => (
+            {[
+              "Collecteurs",
+              "Indexerdings d offres",
+              "Indexerdings profil",
+              "LanceDB",
+              "SQLite CRM",
+              "Kuzu graph",
+              "Filtres qualite",
+              "Ranker semantique",
+            ].map((item) => (
               <span key={item}>{item}</span>
             ))}
           </div>
@@ -848,8 +1104,11 @@ function App() {
 
         <section id="why-local" className="section split band paper-3">
           <div>
-            <span className="eyebrow">Why local-first</span>
-            <h2>Your job search should feel private, legible, and yours.</h2>
+            <span className="eyebrow">Pourquoi local-first</span>
+            <h2>
+              Votre recherche doit rester privee, lisible et sous votre
+              controle.
+            </h2>
           </div>
           <div className="principle-list">
             {principles.map((item) => (
@@ -863,43 +1122,54 @@ function App() {
 
         <section id="feedback" className="section band paper-2">
           <div className="section-head">
-            <span className="eyebrow">Feedback</span>
-            <h2>Tell me what to fix, polish, or keep exactly as it is.</h2>
+            <span className="eyebrow">Retours</span>
+            <h2>Dites ce qu il faut corriger, polir ou garder tel quel.</h2>
           </div>
           <div className="feedback-grid">
-            <FeedbackCard
+            <RetoursCard
               kind="feedback"
-              title="Feedback form"
-              copy="Share bugs, rough edges, missing sources, installer issues, or workflow ideas."
+              title="Formulaire de retour"
+              copy="Partagez bugs, irritants, sources manquantes, problemes d installation ou idees de parcours."
               tone="blue"
             />
-            <FeedbackCard
-              kind="review"
-              title="Review form"
-              copy="Leave a public-product-style review with a rating and practical notes."
+            <RetoursCard
+              kind="a verifier"
+              title="Avis utilisateur"
+              copy="Laissez un avis court avec une note et des remarques concretes."
               tone="green"
             />
           </div>
           <div className="support-callout">
             <div>
-              <span className="eyebrow">Support the build</span>
-              <h3>Fuel the open-source roadmap.</h3>
-              <p>JustHireMe is built in public. Coffee helps keep releases, adapters, and docs moving.</p>
+              <span className="eyebrow">Soutenir le projet</span>
+              <h3>Faire avancer la feuille de route open source.</h3>
+              <p>
+                Juste Recrute Moi est construit publiquement. Le soutien aide a
+                maintenir les releases, les connecteurs et la documentation.
+              </p>
             </div>
             <a className="button primary" href={coffeeUrl}>
               <Icon name="coffee" />
-              Buy me a coffee
+              Site de Valentin
             </a>
           </div>
         </section>
 
         <section id="release" className="section final-cta band">
-          <span className="eyebrow">Release status</span>
-          <h2>{release.tag ? `${release.tag} downloads` : "Latest downloads"}</h2>
+          <span className="eyebrow">Statut de release</span>
+          <h2>
+            {release.tag
+              ? `${release.tag} - telechargements`
+              : "Derniers téléchargements"}
+          </h2>
           <p>
-            Download the latest public build. Stats stay live, and download links update from GitHub Releases automatically.
+            Telechargez le dernier build public. Les statistiques restent a jour
+            et les liens se synchronisent avec GitHub Releases.
           </p>
-          <div className="hero-downloads release-downloads" aria-label="Latest platform downloads">
+          <div
+            className="hero-downloads release-downloads"
+            aria-label="Derniers telechargements par plateforme"
+          >
             {platformOptions.map((platform) => (
               <PlatformDownload
                 key={platform.id}
@@ -914,7 +1184,7 @@ function App() {
           <div className="download-proof">
             <Icon name="download" />
             <strong>{formatCount(downloads.total)}</strong>
-            <span>tracked downloads</span>
+            <span>téléchargements suivis</span>
           </div>
           <div className="download-breakdown">
             {platformOptions.map((platform) => (
@@ -925,24 +1195,31 @@ function App() {
             ))}
           </div>
           <div className="hero-actions centered">
-            <a className="button primary" href={release.url || `${repoUrl}/releases`}><Icon name="external" /> GitHub release</a>
-            <a className="button secondary" href={repoUrl}><Icon name="github" /> View source</a>
+            <a
+              className="button primary"
+              href={release.url || `${repoUrl}/releases`}
+            >
+              <Icon name="external" /> Release GitHub
+            </a>
+            <a className="button secondary" href={repoUrl}>
+              <Icon name="github" /> Voir le code
+            </a>
           </div>
-          <div className="creator-links" aria-label="Creator links">
-            <a href="https://vasudev.live">vasudev.live</a>
-            <a href="https://x.com/vasu_devs">@vasu_devs</a>
-            <a href={coffeeUrl}>Buy me a coffee</a>
+          <div className="creator-links" aria-label="Liens createur">
+            <a href="https://www.valentin-fiess.fr/">valentin-fiess.fr</a>
+            <a href="https://www.valentin-fiess.fr/">Valentin Fiess</a>
+            <a href={coffeeUrl}>Site de Valentin</a>
           </div>
         </section>
       </main>
 
       <footer>
-        <span>JustHireMe</span>
+        <span>Juste Recrute Moi</span>
         <span className="footer-legal">
-          <a href="/legal/terms-of-use.html">Terms</a>
-          <a href="/legal/privacy-policy.html">Privacy</a>
+          <a href="/legal/terms-of-use.html">Conditions</a>
+          <a href="/legal/privacy-policy.html">Confidentialite</a>
         </span>
-        <span>By Vasudev - vasudev.live - @vasu_devs - buymeacoffee.com/vasu.devs</span>
+        <span>Cree par Valentin Fiess</span>
       </footer>
     </>
   );

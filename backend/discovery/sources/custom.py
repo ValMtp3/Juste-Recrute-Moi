@@ -66,7 +66,7 @@ async def scrape_custom_connector(
         return []
 
     headers = {
-        "User-Agent": "JustHireMe custom connector",
+        "User-Agent": "Juste Recrute Moi custom connector",
         "Accept": "application/json",
         **connector_headers(raw_headers, name, errors),
     }

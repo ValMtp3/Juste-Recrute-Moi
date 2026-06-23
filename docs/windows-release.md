@@ -1,10 +1,10 @@
-# Windows Release Checklist
+# Checklist de release Windows
 
-The stable public target for this RC is the Windows desktop installer. macOS and Linux artifacts may still be built by CI where supported, but Windows is the promoted stable path for this pass.
+La cible publique stable de cette passe est l'installateur desktop Windows. Les artefacts macOS et Linux peuvent continuer a etre construits en CI quand c'est possible, mais Windows reste le chemin de release prioritaire.
 
-## Local Validation
+## Validation locale
 
-Local machines should validate behavior, not produce public signed installers:
+Les machines locales servent a valider le comportement, pas a produire les installateurs publics signes :
 
 ```powershell
 npm install
@@ -15,79 +15,79 @@ npm run release:smoke
 npm run smoke:windows-update
 ```
 
-`npm run release:smoke` is the supported fast local release check. It builds the frontend/backend release path and smokes the sidecar without requiring Tauri updater signing secrets.
+`npm run release:smoke` est le controle local rapide recommande. Il construit le chemin frontend/backend de release et teste le sidecar sans demander les secrets de signature Tauri.
 
-`npm run smoke:windows-update` runs static Windows updater checks locally. To smoke a real installer, set:
+`npm run smoke:windows-update` lance les controles statiques Windows. Pour tester un vrai installateur :
 
 ```powershell
 $env:JHM_WINDOWS_INSTALLER_SMOKE = "1"
-$env:JHM_NEW_INSTALLER = "path\to\JustHireMe_<version>_x64-setup.exe"
+$env:JHM_NEW_INSTALLER = "path\to\Juste-Recrute-Moi_<version>_x64-setup.exe"
 npm run smoke:windows-update
 ```
 
-To test update-over-existing locally with two already-built installers:
+Pour tester une mise a jour par-dessus une version deja installee :
 
 ```powershell
 $env:JHM_WINDOWS_UPDATE_SMOKE = "1"
-$env:JHM_OLD_INSTALLER = "path\to\previous\JustHireMe_<old>_x64-setup.exe"
-$env:JHM_NEW_INSTALLER = "path\to\new\JustHireMe_<new>_x64-setup.exe"
+$env:JHM_OLD_INSTALLER = "path\to\previous\Juste-Recrute-Moi_<old>_x64-setup.exe"
+$env:JHM_NEW_INSTALLER = "path\to\new\Juste-Recrute-Moi_<new>_x64-setup.exe"
 npm run smoke:windows-update
 ```
 
-## Packaging And Signing
+## Packaging et signature
 
-Public Windows packaging and updater signing happen in GitHub Actions from a release tag. The release workflow owns these secrets:
+Le packaging Windows public et la signature updater doivent venir de GitHub Actions a partir d'un tag de release. Le workflow utilise ces secrets :
 
 - `TAURI_SIGNING_PRIVATE_KEY`
-- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, when the key is encrypted
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, si la cle est chiffree
 
-Do not spend local RC time trying to produce signed public installers. `npm run release:windows` and `npm run package:windows` are only useful locally when those signing variables are intentionally available for a packaging rehearsal. Otherwise, use `npm run release:smoke` locally and let tagged CI build the installer.
+Ne perdez pas de temps a produire localement un installateur public signe. `npm run release:windows` et `npm run package:windows` ne sont utiles en local que pour une repetition explicite avec les variables de signature disponibles. Sinon, utilisez `npm run release:smoke` et laissez la CI taggee construire l'installateur.
 
-| Artifact | Use |
+| Artefact | Usage |
 | --- | --- |
-| `src-tauri/target/release/bundle/nsis/JustHireMe_<version>_x64-setup.exe` | GitHub Actions-built public Windows installer |
-| `src-tauri/target/release/justhireme.exe` | Unbundled release executable for local smoke tests |
-| `release-assets/JustHireMe-runtime-pack-windows.zip` | Mandatory first-run OTA runtime pack with LanceDB, PyArrow, vector support, local embeddings, and Playwright Chromium |
-| `release-assets/JustHireMe-vector-runtime-windows.zip` | Legacy compatibility asset for older app builds |
-| `release-assets/JustHireMe-browser-runtime-windows.zip` | Legacy compatibility asset for older app builds |
+| `src-tauri/target/release/bundle/nsis/Juste-Recrute-Moi_<version>_x64-setup.exe` | Installateur Windows public construit par GitHub Actions |
+| `src-tauri/target/release/juste-recrute-moi.exe` | Executable non bundle pour les smoke tests locaux |
+| `release-assets/Juste-Recrute-Moi-runtime-pack-windows.zip` | Pack runtime obligatoire au premier lancement : LanceDB, PyArrow, recherche vectorielle, embeddings locaux et Playwright Chromium |
+| `release-assets/Juste-Recrute-Moi-vector-runtime-windows.zip` | Artefact de compatibilite pour les anciennes versions |
+| `release-assets/Juste-Recrute-Moi-browser-runtime-windows.zip` | Artefact de compatibilite pour les anciennes versions |
 
-Build MSI only when managed Windows deployment is explicitly needed:
+Ne construisez un MSI que pour un deploiement Windows administre :
 
 ```powershell
 npm run package:windows:msi
 ```
 
-## CI Release Checks
+## Controles CI obligatoires
 
-Tagged releases must verify:
+Une release taggee doit verifier :
 
-- updater signing secrets are present before packaging
-- the Windows NSIS installer is produced by Tauri
-- `latest.json` matches the tag, uploaded artifacts, and `.sig` files
-- the newly built Windows installer installs into a temp directory
-- the slim installed sidecar reports `/health` with app, sqlite, and graph OK
-- the mandatory runtime pack OTA installs once and then reports vector/browser OK
-- update-over-existing smoke passes when a previous stable Windows installer is available
+- les secrets de signature updater sont presents avant le packaging ;
+- l'installateur Windows NSIS est produit par Tauri ;
+- `latest.json` correspond au tag, aux artefacts uploades et aux fichiers `.sig` ;
+- l'installateur fraichement construit s'installe dans un dossier temporaire ;
+- le sidecar installe repond a `/health` avec app, sqlite et graphe OK ;
+- le pack runtime obligatoire s'installe une seule fois, puis expose vector/browser OK ;
+- le smoke de mise a jour par-dessus une version stable precedente passe quand un ancien installateur est disponible.
 
-## Stable Core Scope
+## Perimetre stable
 
-The stable core installer supports app launch, settings, profile/lead workflows, deterministic ranking, local CRM, and document/outreach generation. The required runtime pieces are delivered as one first-run OTA runtime pack so the installer stays small while LanceDB, PyArrow, vector search support, the built-in local embedder path, and Playwright Chromium are installed only once per machine.
+Le coeur stable couvre le lancement de l'application, les reglages, le profil, l'agregation d'offres, le CRM local, le scoring deterministe et la generation de documents.
 
-Browser automation and auto-apply remain experimental, opt-in lab features. Their Chromium runtime is still installed in the required runtime pack so users are not hit with another download later, but these features should not be described as the primary workflow in release notes.
+L'automatisation navigateur et l'auto-apply restent des fonctions de laboratoire, opt-in et experimentales. Elles ne doivent pas etre presentees comme le flux principal dans les notes de release.
 
-## Manual Smoke Test
+## Smoke test manuel
 
-- Install on a clean Windows machine or VM.
-- Open the app without developer tools.
-- Accept the required runtime pack install prompt and wait for it to finish.
-- Enter a local/Ollama or API provider setting.
-- Import a profile or resume.
-- Run a scan.
-- Verify leads show signal, fit, and quality explanations.
-- Generate resume PDF, cover letter PDF, and outreach drafts.
-- Confirm browser automation and auto-apply remain clearly experimental and opt-in.
-- If a previous release is installed, confirm the update installs over it and preserves local app data.
+- Installer sur une machine ou VM Windows propre.
+- Ouvrir l'application sans outils developpeur.
+- Accepter l'installation du pack runtime obligatoire et attendre la fin.
+- Configurer Ollama local ou un fournisseur API.
+- Importer un profil ou un CV.
+- Lancer une recherche d'offres.
+- Verifier que les offres affichent source, score et explication qualite.
+- Generer un CV PDF, une lettre PDF et des brouillons de prise de contact.
+- Confirmer que l'automatisation navigateur reste clairement experimentale et opt-in.
+- Si une ancienne release est installee, verifier que la mise a jour preserve les donnees locales.
 
-## Release Notes
+## Notes de release
 
-Mention whether the build is the Windows stable-core installer. Include SHA256 checksums for every uploaded installer asset. Public installers should be built by GitHub Actions from the release tag, not uploaded from a local workstation.
+Precisez si le build est l'installateur Windows stable. Ajoutez les SHA256 de chaque artefact publie. Les installateurs publics doivent etre construits par GitHub Actions depuis le tag, jamais uploades depuis une machine locale.

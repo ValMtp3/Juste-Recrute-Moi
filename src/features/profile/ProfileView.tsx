@@ -57,14 +57,14 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
   const fetchProfile = useCallback(async (options?: { errorPrefix?: string; suppressError?: boolean }) => {
     try {
       const r = await api(`/api/v1/profile`);
-      if (!r.ok) throw new Error(`Profile load failed (${r.status})`);
+      if (!r.ok) throw new Error(`Chargement du profil échoué (${r.status})`);
       const data = await r.json();
       setProfile(applyLocalDeletes(mergeProfileWithGraphFallback(data, stats), true));
       setProfileErr(null);
       return true;
     } catch (err: any) {
-      console.error("Profile load failed:", err);
-      const message = err?.message || "Profile load failed";
+      console.error("Chargement du profil échoué :", err);
+      const message = err?.message || "Chargement du profil échoué";
       if (!options?.suppressError) {
         setProfileErr(options?.errorPrefix ? `${options.errorPrefix}: ${message}` : message);
       }
@@ -123,12 +123,12 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
     try {
       const res = await api(profileDeletePath(type, id), { method: "DELETE", timeoutMs: 120000 });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || `Delete failed (${res.status})`);
+      if (!res.ok) throw new Error(body.detail || `Suppression échouée (${res.status})`);
       const markers = addDeleteMarker(marker);
       setProfile((prev: any) => prev ? applyProfileDeleteMarkers(removeProfileItem(prev, type, id), markers) : prev);
       const refreshed = await fetchProfile({ suppressError: true });
       if (!refreshed) {
-        setProfileErr("Deleted, but profile refresh failed. The deleted item is hidden locally and will stay tombstoned.");
+        setProfileErr("Élément supprimé, mais le profil n'a pas pu être rechargé. Il reste masqué localement.");
       } else {
         setProfileErr(null);
       }
@@ -136,7 +136,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
     } catch (err: any) {
       console.error("Delete error:", err);
       removeDeleteMarker(marker);
-      setProfileErr(err?.message || "Delete failed");
+      setProfileErr(err?.message || "Suppression échouée");
     } finally {
       deleteInFlightRef.current = false;
       setDeletingItem(null);
@@ -145,7 +145,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
 
   const saveEdit = async (type: string, id: string) => {
     if (!id) {
-      setProfileErr("This profile row needs a graph id before it can be edited. Delete it or re-import profile context.");
+      setProfileErr("Cette ligne de profil doit avoir un identifiant de graphe pour être modifiée. Supprimez-la ou réimportez le profil.");
       return;
     }
     try {
@@ -153,7 +153,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editData),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || `Save failed (${res.status})`);
+      if (!res.ok) throw new Error(body.detail || `Enregistrement échoué (${res.status})`);
       setEditId(null);
       setEditData(null);
       setProfileErr(null);
@@ -161,7 +161,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       window.dispatchEvent(new CustomEvent("profile-refresh"));
       window.dispatchEvent(new CustomEvent("graph-refresh"));
     } catch (err: any) {
-      setProfileErr(err?.message || "Profile save failed");
+      setProfileErr(err?.message || "L'enregistrement du profil a échoué");
     }
   };
 
@@ -171,15 +171,15 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(candForm),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || `Save failed (${res.status})`);
+      if (!res.ok) throw new Error(body.detail || `Enregistrement échoué (${res.status})`);
       setProfile((prev: any) => normalizeProfileResponse({ ...(prev || {}), n: body.n ?? candForm.n, s: body.s ?? candForm.s }));
       setEditingCandidate(false);
       setProfileErr(null);
-      await fetchProfile({ errorPrefix: "Identity Context saved, but refresh failed" });
+      await fetchProfile({ errorPrefix: "Contexte d'identité enregistré, mais le rafraîchissement a échoué" });
       window.dispatchEvent(new CustomEvent("profile-refresh"));
       window.dispatchEvent(new CustomEvent("graph-refresh"));
     } catch (err: any) {
-      setProfileErr(err?.message || "Identity Context save failed");
+      setProfileErr(err?.message || "L'enregistrement du contexte d'identité a échoué");
     }
   };
 
@@ -189,15 +189,15 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(identityForm),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || `Save failed (${res.status})`);
+      if (!res.ok) throw new Error(body.detail || `Enregistrement échoué (${res.status})`);
       setProfile((prev: any) => normalizeProfileResponse({ ...(prev || {}), identity: { ...((prev || {}).identity || {}), ...body } }));
       setEditingIdentity(false);
       setProfileErr(null);
-      await fetchProfile({ errorPrefix: "Contact details saved, but refresh failed" });
+      await fetchProfile({ errorPrefix: "Coordonnées enregistrées, mais le rafraîchissement a échoué" });
       window.dispatchEvent(new CustomEvent("profile-refresh"));
       window.dispatchEvent(new CustomEvent("graph-refresh"));
     } catch (err: any) {
-      setProfileErr(err?.message || "Contact save failed");
+      setProfileErr(err?.message || "L'enregistrement du contact a échoué");
     }
   };
 
@@ -277,23 +277,23 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
               <div className="profile-identity-head">
                 <div className="profile-avatar">{(profile?.n || "C").slice(0, 1).toUpperCase()}</div>
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <span className="eyebrow">Identity Context</span>
-                  <h1 className="profile-name">{profile?.n || "Candidate Profile"}</h1>
+                  <span className="eyebrow">Contexte d'identité</span>
+                  <h1 className="profile-name">{profile?.n || "Profil candidat"}</h1>
                 </div>
                 {!editingCandidate && (
                   <button className="btn profile-edit-btn" onClick={() => { setEditingCandidate(true); setCandForm({ n: profile?.n || "", s: profile?.s || "" }); }}>
-                    <Icon name="edit" size={13} /> Edit
+                    <Icon name="edit" size={13} /> Modifier
                   </button>
                 )}
               </div>
 
           {editingCandidate ? (
             <div className="col gap-3" style={{ marginTop: 18 }}>
-              <input className="field-input" placeholder="Your full name" value={candForm.n} onChange={e => setCandForm({ ...candForm, n: e.target.value })} style={{ fontSize: 18, fontWeight: 600 }} />
-              <textarea className="field-input" placeholder="Professional summary / target role - agents use this for scoring" rows={4} value={candForm.s} onChange={e => setCandForm({ ...candForm, s: e.target.value })} style={{ fontSize: 14, lineHeight: 1.6 }} />
+              <input className="field-input" placeholder="Votre nom complet" value={candForm.n} onChange={e => setCandForm({ ...candForm, n: e.target.value })} style={{ fontSize: 18, fontWeight: 600 }} />
+              <textarea className="field-input" placeholder="Résumé professionnel / poste cible - utilisé pour le scoring" rows={4} value={candForm.s} onChange={e => setCandForm({ ...candForm, s: e.target.value })} style={{ fontSize: 14, lineHeight: 1.6 }} />
               <div className="row gap-2">
-                <button className="btn btn-primary" style={{ padding: "10px 24px" }} onClick={saveCandidate}>Save Identity</button>
-                <button className="btn btn-ghost" onClick={() => setEditingCandidate(false)}>Cancel</button>
+                <button className="btn btn-primary" style={{ padding: "10px 24px" }} onClick={saveCandidate}>Enregistrer l'identité</button>
+                <button className="btn btn-ghost" onClick={() => setEditingCandidate(false)}>Annuler</button>
               </div>
             </div>
           ) : (
@@ -314,31 +314,31 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                 </div>
               )}
               <div className="profile-pill-row">
-                <span className="pill mono">{skills.length} SKILLS</span>
-                <span className="pill mono">{exp.length} ROLES</span>
-                <span className="pill mono">{projects.length} PROJECTS</span>
+                <span className="pill mono">{skills.length} COMPÉTENCES</span>
+                <span className="pill mono">{exp.length} RÔLES</span>
+                <span className="pill mono">{projects.length} PROJETS</span>
               </div>
               {editingIdentity ? (
                 <div className="col gap-2" style={{ marginTop: 14 }}>
                   <input className="field-input" placeholder="Email" value={identityForm.email} onChange={e => setIdentityForm({ ...identityForm, email: e.target.value })} />
-                  <input className="field-input" placeholder="Phone" value={identityForm.phone} onChange={e => setIdentityForm({ ...identityForm, phone: e.target.value })} />
+                   <input className="field-input" placeholder="Téléphone" value={identityForm.phone} onChange={e => setIdentityForm({ ...identityForm, phone: e.target.value })} />
                   <input className="field-input" placeholder="LinkedIn URL" value={identityForm.linkedin_url} onChange={e => setIdentityForm({ ...identityForm, linkedin_url: e.target.value })} />
                   <input className="field-input" placeholder="GitHub URL" value={identityForm.github_url} onChange={e => setIdentityForm({ ...identityForm, github_url: e.target.value })} />
-                  <input className="field-input" placeholder="Website URL" value={identityForm.website_url} onChange={e => setIdentityForm({ ...identityForm, website_url: e.target.value })} />
-                  <input className="field-input" placeholder="City / location" value={identityForm.city} onChange={e => setIdentityForm({ ...identityForm, city: e.target.value })} />
+                   <input className="field-input" placeholder="URL du site" value={identityForm.website_url} onChange={e => setIdentityForm({ ...identityForm, website_url: e.target.value })} />
+                   <input className="field-input" placeholder="Ville / localisation" value={identityForm.city} onChange={e => setIdentityForm({ ...identityForm, city: e.target.value })} />
                   <div className="row gap-2">
-                    <button className="btn btn-primary" onClick={saveIdentity}>Save Contact</button>
-                    <button className="btn btn-ghost" onClick={() => setEditingIdentity(false)}>Cancel</button>
+                    <button className="btn btn-primary" onClick={saveIdentity}>Enregistrer le contact</button>
+                    <button className="btn btn-ghost" onClick={() => setEditingIdentity(false)}>Annuler</button>
                   </div>
                 </div>
               ) : (
                 <button className="profile-add-context" style={{ marginTop: 12 }} onClick={() => { setEditingIdentity(true); setIdentityForm({ email: identity.email || "", phone: identity.phone || "", linkedin_url: identity.linkedin_url || "", github_url: identity.github_url || "", website_url: identity.website_url || "", city: identity.city || "" }); }}>
-                  <Icon name="edit" size={14} /> Contact & Links
+                  <Icon name="edit" size={14} /> Contact et liens
                 </button>
               )}
               <div className="profile-rail-stats">
                 <div>
-                  <span>Evidence</span>
+                  <span>Preuves</span>
                   <strong>{evidenceCount}</strong>
                 </div>
                 <div>
@@ -352,7 +352,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                 </div>
               )}
               <button className="profile-primary-action" onClick={() => setView("ingestion")}>
-                <Icon name="plus" size={14} /> Add Context
+                 <Icon name="plus" size={14} /> Ajouter du contexte
               </button>
             </>
           )}
@@ -363,11 +363,11 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
             <section className="card profile-overview-card">
               <div className="profile-overview-head">
                 <div>
-                  <span className="eyebrow">Profile Snapshot</span>
-                  <h3>Structured Candidate Data</h3>
+                  <span className="eyebrow">Aperçu du profil</span>
+                  <h3>Données candidat structurées</h3>
                 </div>
                 <button className="btn btn-ghost" onClick={() => setView("ingestion")}>
-                  <Icon name="plus" size={14} /> Add Context
+                  <Icon name="plus" size={14} /> Ajouter du contexte
                 </button>
               </div>
               <div className="profile-overview-grid">
@@ -478,7 +478,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
 
                 {activeProfileTab === "projects" && (
                   <div className="profile-project-grid">
-                    {projects.length === 0 && <div className="profile-empty">No projects mapped.</div>}
+                    {projects.length === 0 && <div className="profile-empty">Aucun projet mappé.</div>}
                     {previewProjects.map((p: any, idx: number) => {
                       const rowId = String(p?.id || "");
                       const rowKey = profileDeleteKey(p) || `project-${idx}`;
@@ -486,13 +486,13 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                       <div key={rowKey} className="profile-project-card">
                         {rowId && editId === rowId ? (
                           <div className="col gap-3">
-                            <input className="field-input" value={editData.title} placeholder="Title" onChange={v => setEditData({ ...editData, title: v.target.value })} />
-                            <input className="field-input" value={editData.stack} placeholder="Stack (comma-separated)" onChange={v => setEditData({ ...editData, stack: v.target.value })} />
-                            <input className="field-input" value={editData.repo} placeholder="Repo URL" onChange={v => setEditData({ ...editData, repo: v.target.value })} />
+                            <input className="field-input" value={editData.title} placeholder="Titre" onChange={v => setEditData({ ...editData, title: v.target.value })} />
+                            <input className="field-input" value={editData.stack} placeholder="Stack (séparée par des virgules)" onChange={v => setEditData({ ...editData, stack: v.target.value })} />
+                            <input className="field-input" value={editData.repo} placeholder="URL du repo" onChange={v => setEditData({ ...editData, repo: v.target.value })} />
                             <textarea className="field-input" value={editData.impact} rows={4} placeholder="Impact" onChange={v => setEditData({ ...editData, impact: v.target.value })} />
                             <div className="row gap-2">
-                              <button className="btn btn-primary" onClick={() => saveEdit("project", rowId)}>Save</button>
-                              <button className="btn btn-ghost" onClick={() => setEditId(null)}>Cancel</button>
+                              <button className="btn btn-primary" onClick={() => saveEdit("project", rowId)}>Enregistrer</button>
+                              <button className="btn btn-ghost" onClick={() => setEditId(null)}>Annuler</button>
                             </div>
                           </div>
                         ) : (

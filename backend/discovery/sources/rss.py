@@ -63,7 +63,7 @@ def source_cap(item: dict) -> int:
 
 def http_headers(source: str) -> dict:
     return {
-        "User-Agent": f"JustHireMe {source} scout",
+        "User-Agent": f"Juste Recrute Moi {source} scout",
         "Accept": "application/json, application/rss+xml, application/xml;q=0.9, text/xml;q=0.8, */*;q=0.7",
     }
 

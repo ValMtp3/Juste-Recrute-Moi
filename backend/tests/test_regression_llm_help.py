@@ -23,11 +23,11 @@ class RegressionTests(unittest.TestCase):
         text = result["answer"].lower()
 
         self.assertEqual(result["source"], "guide")
-        self.assertIn("api key is", text)
-        self.assertIn("settings > global ai", text)
+        self.assertIn("clé api", text)
+        self.assertIn("réglages > ia globale", text)
         for provider in ["gemini", "deepseek", "nvidia", "groq", "grok", "kimi", "anthropic", "ollama"]:
             self.assertIn(provider, text)
-        self.assertIn("run the provider check", text)
+        self.assertIn("lancez la vérification", text)
 
     def test_azure_provider_without_endpoint_falls_back_cleanly(self):
         from pydantic import BaseModel
@@ -71,7 +71,7 @@ class RegressionTests(unittest.TestCase):
         joined = "\n".join(contracts).lower()
 
         self.assertIn("production", joined)
-        self.assertIn("untrusted", joined)
-        self.assertIn("never invent", joined)
-        self.assertIn("do not click final", actuator._VISION_SYSTEM.lower())
-        self.assertIn("structured output only", scout._SCOUT_EXTRACT_SYSTEM.lower())
+        self.assertIn("non fiable", joined)
+        self.assertTrue("n'invente jamais" in joined or "ne fabrique jamais" in joined)
+        self.assertIn("ne clique pas sur les boutons finaux", actuator._VISION_SYSTEM.lower())
+        self.assertIn("retourne uniquement une sortie structurée", scout._SCOUT_EXTRACT_SYSTEM.lower())

@@ -1,24 +1,24 @@
-name: Ranker or scoring improvement
-description: Improve lead quality, fit scoring, semantic matching, or feedback learning
-title: "[Ranker]: "
+name: Amélioration du scoring
+description: Améliorer la qualité des offres, le score de fit, le matching sémantique ou l'apprentissage par feedback
+title: "[Scoring] "
 labels: ["ranker", "scoring"]
 body:
   - type: textarea
     id: case
     attributes:
-      label: Ranking case
-      description: Provide a sanitized job snippet and expected score/ranking behavior.
+      label: Cas de scoring
+      description: Fournissez un extrait d'offre anonymisé et le score ou classement attendu.
     validations:
       required: true
   - type: textarea
     id: current
     attributes:
-      label: Current behavior
+      label: Comportement actuel
     validations:
       required: true
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
+      label: Comportement attendu
     validations:
       required: true

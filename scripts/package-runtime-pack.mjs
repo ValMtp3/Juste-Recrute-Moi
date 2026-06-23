@@ -84,15 +84,15 @@ function platformName() {
 }
 
 function runtimePackAssetName() {
-  return `JustHireMe-runtime-pack-${platformName()}.zip`;
+  return `Juste-Recrute-Moi-runtime-pack-${platformName()}.zip`;
 }
 
 function vectorRuntimeAssetName() {
-  return `JustHireMe-vector-runtime-${platformName()}.zip`;
+  return `Juste-Recrute-Moi-vector-runtime-${platformName()}.zip`;
 }
 
 function browserRuntimeAssetName() {
-  return `JustHireMe-browser-runtime-${platformName()}.zip`;
+  return `Juste-Recrute-Moi-browser-runtime-${platformName()}.zip`;
 }
 
 function bytes(path) {

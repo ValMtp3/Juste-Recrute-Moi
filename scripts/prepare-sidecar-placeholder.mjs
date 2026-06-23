@@ -23,9 +23,18 @@ if (!triple) {
 
 const extension = process.platform === "win32" ? ".exe" : "";
 const sidecar = join(sidecarDir, `jhm-sidecar-next-${triple}${extension}`);
+const manifest = join(sidecarDir, "sidecar-manifest.json");
 
 mkdirSync(sidecarDir, { recursive: true });
 if (!existsSync(sidecar)) {
   writeFileSync(sidecar, "");
   console.log(`Created temporary sidecar placeholder: ${sidecar}`);
+}
+if (!existsSync(manifest)) {
+  writeFileSync(manifest, JSON.stringify({
+    placeholder: true,
+    targetTriple: triple,
+    runtimePackVersion: "dev-placeholder",
+  }, null, 2));
+  console.log(`Created temporary sidecar manifest: ${manifest}`);
 }

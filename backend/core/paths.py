@@ -4,7 +4,7 @@ import os
 import platform
 from pathlib import Path
 
-APP_DIR_NAME = "JustHireMe"
+APP_DIR_NAME = "Juste Recrute Moi"
 
 
 def app_data_base_dir() -> Path:

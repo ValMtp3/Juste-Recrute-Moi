@@ -98,7 +98,7 @@ export function cleanId(value) {
 export function hashVisitorId(value) {
   const id = cleanId(value);
   if (!id) return "";
-  const salt = process.env.COUNTER_HASH_SALT || process.env.UPSTASH_REDIS_REST_TOKEN || "justhireme-public-counter";
+  const salt = process.env.COUNTER_HASH_SALT || process.env.UPSTASH_REDIS_REST_TOKEN || "juste-recrute-moi-public-counter";
   if (salt) {
     return createHmac("sha256", salt).update(id).digest("base64url").slice(0, 48);
   }

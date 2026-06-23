@@ -479,7 +479,7 @@
     min-height: 38px;
     padding: 9px 12px;
     border-radius: 8px;
-    background: #1a54b3;
+    background: transparent;
     color: #e4501c;
     font-family: "Space Grotesk", var(--font-sans);
     font-size: 12px;
@@ -487,12 +487,12 @@
     line-height: 1.2;
     text-align: center;
     text-decoration: none;
-    border: 1px solid rgba(var(--white-rgb), 0.22);
-    box-shadow: var(--shadow-xs);
+    border: 0;
+    text-shadow: 0 1px 0 rgba(var(--black-rgb), 0.18);
   }
 
   .creator-footer:hover {
-    filter: brightness(1.04);
+    color: #ff6a2a;
   }
 
   .creator-footer.compact {

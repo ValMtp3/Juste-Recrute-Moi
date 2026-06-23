@@ -95,11 +95,11 @@ class TestBrowserRuntimePackaging(unittest.TestCase):
         from automation import browser_runtime
 
         with mock.patch.object(browser_runtime, "sys_platform", return_value="windows"):
-            self.assertEqual(browser_runtime.browser_runtime_asset_name(), "JustHireMe-browser-runtime-windows.zip")
+            self.assertEqual(browser_runtime.browser_runtime_asset_name(), "Juste-Recrute-Moi-browser-runtime-windows.zip")
         with mock.patch.object(browser_runtime, "sys_platform", return_value="darwin"):
-            self.assertEqual(browser_runtime.browser_runtime_asset_name(), "JustHireMe-browser-runtime-macos.zip")
+            self.assertEqual(browser_runtime.browser_runtime_asset_name(), "Juste-Recrute-Moi-browser-runtime-macos.zip")
         with mock.patch.object(browser_runtime, "sys_platform", return_value="linux"):
-            self.assertEqual(browser_runtime.browser_runtime_asset_name(), "JustHireMe-browser-runtime-linux.zip")
+            self.assertEqual(browser_runtime.browser_runtime_asset_name(), "Juste-Recrute-Moi-browser-runtime-linux.zip")
 
     def test_browser_runtime_ready_detects_chromium_payload(self):
         from automation.browser_runtime import browser_runtime_ready
@@ -149,11 +149,11 @@ class TestBrowserRuntimePackaging(unittest.TestCase):
         from data.vector import runtime
 
         with mock.patch.object(runtime, "sys_platform", return_value="windows"):
-            self.assertEqual(runtime.vector_runtime_asset_name(), "JustHireMe-vector-runtime-windows.zip")
-            self.assertEqual(runtime.runtime_pack_asset_name(), "JustHireMe-runtime-pack-windows.zip")
+            self.assertEqual(runtime.vector_runtime_asset_name(), "Juste-Recrute-Moi-vector-runtime-windows.zip")
+            self.assertEqual(runtime.runtime_pack_asset_name(), "Juste-Recrute-Moi-runtime-pack-windows.zip")
         with mock.patch.object(runtime, "sys_platform", return_value="darwin"):
-            self.assertEqual(runtime.vector_runtime_asset_name(), "JustHireMe-vector-runtime-macos.zip")
-            self.assertEqual(runtime.runtime_pack_asset_name(), "JustHireMe-runtime-pack-macos.zip")
+            self.assertEqual(runtime.vector_runtime_asset_name(), "Juste-Recrute-Moi-vector-runtime-macos.zip")
+            self.assertEqual(runtime.runtime_pack_asset_name(), "Juste-Recrute-Moi-runtime-pack-macos.zip")
         with mock.patch.object(runtime, "sys_platform", return_value="linux"):
-            self.assertEqual(runtime.vector_runtime_asset_name(), "JustHireMe-vector-runtime-linux.zip")
-            self.assertEqual(runtime.runtime_pack_asset_name(), "JustHireMe-runtime-pack-linux.zip")
+            self.assertEqual(runtime.vector_runtime_asset_name(), "Juste-Recrute-Moi-vector-runtime-linux.zip")
+            self.assertEqual(runtime.runtime_pack_asset_name(), "Juste-Recrute-Moi-runtime-pack-linux.zip")

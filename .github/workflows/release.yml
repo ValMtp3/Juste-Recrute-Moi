@@ -41,7 +41,7 @@ env:
 jobs:
   # ── Gate ──────────────────────────────────────────────────
   release-preflight:
-    name: Release preflight
+    name: Préparation de la release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -58,7 +58,7 @@ jobs:
 
   # ── Shared frontend build (platform-agnostic) ────────────
   build-frontend:
-    name: Build frontend
+    name: Compiler le frontend
     needs: release-preflight
     runs-on: ubuntu-latest
     steps:
@@ -71,13 +71,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Install frontend dependencies
+      - name: Installer les dépendances frontend
         run: npm ci
 
-      - name: Build frontend
+      - name: Compiler le frontend
         run: npm run build
 
-      - name: Upload frontend dist
+      - name: Publier le dist frontend
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
@@ -99,7 +99,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Install frontend dependencies
+      - name: Installer les dépendances frontend
         run: npm ci
 
       - name: Audit frontend dependencies
@@ -166,7 +166,7 @@ jobs:
 
   # ── Backend sidecars (one per platform) ──────────────────
   backend-windows:
-    name: Build backend sidecar (Windows)
+    name: Compiler le sidecar backend (Windows)
     needs: release-preflight
     runs-on: windows-latest
     steps:
@@ -189,10 +189,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install backend dependencies
+      - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
-      - name: Install Playwright Chromium runtime
+      - name: Installer le runtime Playwright Chromium
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -200,10 +200,10 @@ jobs:
           cd backend
           uv run python -m playwright install chromium
 
-      - name: Build sidecar with canonical script
+      - name: Compiler le sidecar avec le script canonique
         run: npm run build:sidecar
 
-      - name: Package mandatory runtime pack OTA asset
+      - name: Préparer le pack runtime OTA obligatoire
         run: npm run build:runtime-pack
 
       - name: List sidecar output
@@ -224,7 +224,7 @@ jobs:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
         run: npm run smoke:sidecar
 
-      - name: Upload backend sidecar artifact
+      - name: Publier l'artefact sidecar backend
         uses: actions/upload-artifact@v4
         with:
           name: backend-sidecar-windows
@@ -232,7 +232,7 @@ jobs:
             src-tauri/resources/backend/
           retention-days: 1
 
-      - name: Upload OTA runtime assets
+      - name: Publier les artefacts runtime OTA
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-runtime-windows
@@ -240,7 +240,7 @@ jobs:
           retention-days: 1
 
   backend-macos:
-    name: Build backend sidecar (macOS)
+    name: Compiler le sidecar backend (macOS)
     needs: release-preflight
     runs-on: macos-latest
     steps:
@@ -263,10 +263,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install backend dependencies
+      - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
-      - name: Install Playwright Chromium runtime
+      - name: Installer le runtime Playwright Chromium
         shell: bash
         run: |
           set -euo pipefail
@@ -274,10 +274,10 @@ jobs:
           cd backend
           uv run python -m playwright install chromium
 
-      - name: Build sidecar with canonical script
+      - name: Compiler le sidecar avec le script canonique
         run: npm run build:sidecar
 
-      - name: Package mandatory runtime pack OTA asset
+      - name: Préparer le pack runtime OTA obligatoire
         run: npm run build:runtime-pack
 
       - name: List sidecar output
@@ -295,7 +295,7 @@ jobs:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
         run: npm run smoke:sidecar
 
-      - name: Upload backend sidecar artifact
+      - name: Publier l'artefact sidecar backend
         uses: actions/upload-artifact@v4
         with:
           name: backend-sidecar-macos
@@ -303,7 +303,7 @@ jobs:
             src-tauri/resources/backend/
           retention-days: 1
 
-      - name: Upload OTA runtime assets
+      - name: Publier les artefacts runtime OTA
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-runtime-macos
@@ -311,7 +311,7 @@ jobs:
           retention-days: 1
 
   backend-linux:
-    name: Build backend sidecar (Linux)
+    name: Compiler le sidecar backend (Linux)
     needs: release-preflight
     runs-on: ubuntu-latest
     steps:
@@ -334,10 +334,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install backend dependencies
+      - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
-      - name: Install Playwright Chromium runtime
+      - name: Installer le runtime Playwright Chromium
         shell: bash
         run: |
           set -euo pipefail
@@ -345,10 +345,10 @@ jobs:
           cd backend
           uv run python -m playwright install chromium
 
-      - name: Build sidecar with canonical script
+      - name: Compiler le sidecar avec le script canonique
         run: npm run build:sidecar
 
-      - name: Package mandatory runtime pack OTA asset
+      - name: Préparer le pack runtime OTA obligatoire
         run: npm run build:runtime-pack
 
       - name: List sidecar output
@@ -366,7 +366,7 @@ jobs:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
         run: npm run smoke:sidecar
 
-      - name: Upload backend sidecar artifact
+      - name: Publier l'artefact sidecar backend
         uses: actions/upload-artifact@v4
         with:
           name: backend-sidecar-linux
@@ -374,7 +374,7 @@ jobs:
             src-tauri/resources/backend/
           retention-days: 1
 
-      - name: Upload OTA runtime assets
+      - name: Publier les artefacts runtime OTA
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-runtime-linux
@@ -384,7 +384,7 @@ jobs:
   # ── Tauri installers (each waits only for its own sidecar + frontend) ──
 
   tauri-windows:
-    name: Build Tauri installer (Windows)
+    name: Compiler l'installateur Tauri (Windows)
     needs: [backend-windows, build-frontend]
     runs-on: windows-latest
     timeout-minutes: 40
@@ -400,7 +400,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Install frontend dependencies
+      - name: Installer les dépendances frontend
         run: npm ci
 
       - uses: dtolnay/rust-toolchain@stable
@@ -409,19 +409,19 @@ jobs:
         with:
           workspaces: "src-tauri -> target"
 
-      - name: Download backend sidecar
+      - name: Télécharger le sidecar backend
         uses: actions/download-artifact@v4
         with:
           name: backend-sidecar-windows
           path: src-tauri/resources/backend/
 
-      - name: Download frontend dist
+      - name: Télécharger le dist frontend
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: dist/
 
-      - name: Download Windows runtime pack
+      - name: Télécharger le pack runtime Windows
         uses: actions/download-artifact@v4
         with:
           name: release-assets-runtime-windows
@@ -456,7 +456,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build Tauri installer
+      - name: Compiler l'installateur Tauri
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -467,7 +467,7 @@ jobs:
       - name: Smoke installed Windows package
         shell: pwsh
         env:
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\JustHireMe-runtime-pack-windows.zip
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste Recrute Moi-runtime-pack-windows.zip
         run: |
           $ErrorActionPreference = "Stop"
           $installer = Get-ChildItem -Path "src-tauri\target\release\bundle\nsis" -Filter "*.exe" -File -Recurse |
@@ -484,7 +484,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\JustHireMe-runtime-pack-windows.zip
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste Recrute Moi-runtime-pack-windows.zip
         run: |
           $ErrorActionPreference = "Stop"
           $currentTag = "${{ github.ref_name }}"
@@ -530,7 +530,7 @@ jobs:
         shell: pwsh
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\JustHireMe-runtime-pack-windows.zip
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste Recrute Moi-runtime-pack-windows.zip
         run: |
           $ErrorActionPreference = "Stop"
           $triple = (rustc -vV | Select-String "host:").ToString().Split(" ")[1].Trim()
@@ -560,7 +560,7 @@ jobs:
           }
           $lines | Set-Content -Path "$releaseDir\SHA256SUMS-windows.txt" -Encoding utf8
 
-      - name: Upload release assets
+      - name: Publier les artefacts de release
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-windows
@@ -568,7 +568,7 @@ jobs:
           retention-days: 1
 
   tauri-macos:
-    name: Build Tauri installer (macOS)
+    name: Compiler l'installateur Tauri (macOS)
     needs: [backend-macos, build-frontend]
     runs-on: macos-latest
     timeout-minutes: 40
@@ -584,7 +584,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Install frontend dependencies
+      - name: Installer les dépendances frontend
         run: npm ci
 
       - uses: dtolnay/rust-toolchain@stable
@@ -593,25 +593,25 @@ jobs:
         with:
           workspaces: "src-tauri -> target"
 
-      - name: Download backend sidecar
+      - name: Télécharger le sidecar backend
         uses: actions/download-artifact@v4
         with:
           name: backend-sidecar-macos
           path: src-tauri/resources/backend/
 
-      - name: Download frontend dist
+      - name: Télécharger le dist frontend
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: dist/
 
-      - name: Download macOS runtime pack
+      - name: Télécharger le pack runtime macOS
         uses: actions/download-artifact@v4
         with:
           name: release-assets-runtime-macos
           path: runtime-assets/
 
-      - name: Prepare sidecar for Rust tests
+      - name: Préparer le sidecar pour les tests Rust
         shell: bash
         run: |
           set -euo pipefail
@@ -645,7 +645,7 @@ jobs:
           echo "Sidecar verified: $sidecar ($(du -h "$sidecar" | awk '{print $1}'))"
           echo "The mandatory runtime pack is bundled into the installer and also published as an OTA recovery asset."
 
-      - name: Prepare macOS sidecar permissions
+      - name: Préparer les permissions du sidecar macOS
         shell: bash
         run: |
           set -euo pipefail
@@ -682,7 +682,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build Tauri installer
+      - name: Compiler l'installateur Tauri
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -694,7 +694,7 @@ jobs:
         shell: bash
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets/JustHireMe-runtime-pack-macos.zip
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets/Juste Recrute Moi-runtime-pack-macos.zip
         run: |
           set -euo pipefail
           app_path="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name "*.app" -type d -print -quit)"
@@ -743,7 +743,7 @@ jobs:
           done < "$asset_list"
           rm "$asset_list"
 
-      - name: Upload release assets
+      - name: Publier les artefacts de release
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-macos
@@ -751,7 +751,7 @@ jobs:
           retention-days: 1
 
   tauri-linux:
-    name: Build Tauri installer (Linux)
+    name: Compiler l'installateur Tauri (Linux)
     needs: [backend-linux, build-frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -767,10 +767,10 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Install frontend dependencies
+      - name: Installer les dépendances frontend
         run: npm ci
 
-      - name: Install Tauri Linux system dependencies
+      - name: Installer les dépendances système Tauri Linux
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -794,25 +794,25 @@ jobs:
         with:
           workspaces: "src-tauri -> target"
 
-      - name: Download backend sidecar
+      - name: Télécharger le sidecar backend
         uses: actions/download-artifact@v4
         with:
           name: backend-sidecar-linux
           path: src-tauri/resources/backend/
 
-      - name: Download frontend dist
+      - name: Télécharger le dist frontend
         uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: dist/
 
-      - name: Download Linux runtime pack
+      - name: Télécharger le pack runtime Linux
         uses: actions/download-artifact@v4
         with:
           name: release-assets-runtime-linux
           path: runtime-assets/
 
-      - name: Prepare sidecar for Rust tests
+      - name: Préparer le sidecar pour les tests Rust
         shell: bash
         run: |
           set -euo pipefail
@@ -858,7 +858,7 @@ jobs:
             exit 1
           fi
 
-      - name: Build Tauri installer
+      - name: Compiler l'installateur Tauri
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
@@ -888,7 +888,7 @@ jobs:
           done < "$asset_list"
           rm "$asset_list"
 
-      - name: Upload release assets
+      - name: Publier les artefacts de release
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-linux
@@ -897,7 +897,7 @@ jobs:
 
   # ── Publish ──────────────────────────────────────────────
   publish-release:
-    name: Publish GitHub release
+    name: Publier la release GitHub
     needs: [tauri-windows, tauri-macos, tauri-linux, audit]
     runs-on: ubuntu-latest
     permissions:
@@ -907,7 +907,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
-      - name: Download release assets
+      - name: Télécharger les artefacts de release
         uses: actions/download-artifact@v4
         with:
           pattern: release-assets-*
@@ -974,7 +974,7 @@ jobs:
               raise SystemExit("No updater platforms found. Missing signed updater artifacts.")
           pathlib.Path("latest.json").write_text(json.dumps({
               "version": version,
-              "notes": f"JustHireMe {tag}: signed desktop update.",
+              "notes": f"Juste Recrute Moi {tag}: signed desktop update.",
               "pub_date": os.environ["PUB_DATE"],
               "platforms": platforms,
           }, indent=2), encoding="utf-8")
@@ -984,20 +984,20 @@ jobs:
           npm run release:verify-updater -- release-assets "${tag}"
 
           {
-            echo "## JustHireMe ${tag}"
+            echo "## Juste Recrute Moi ${tag}"
             echo
             echo "### Installation"
             if find release-assets -maxdepth 1 -type f -name "*.exe" | grep -q .; then
-              echo "- Windows: download JustHireMe_${version}_x64-setup.exe, run it, and use More info -> Run anyway if SmartScreen appears."
+              echo "- Windows: download Juste Recrute Moi_${version}_x64-setup.exe, run it, and use More info -> Run anyway if SmartScreen appears."
             fi
             if find release-assets -maxdepth 1 -type f \( -name "*.AppImage" -o -name "*.deb" \) | grep -q .; then
               echo "- Linux: download the .AppImage, run chmod a+x on it, then launch it; or install the .deb on Debian/Ubuntu-based systems."
             fi
             if find release-assets -maxdepth 1 -type f -name "*.dmg" | grep -q .; then
-              echo "- macOS: download the .dmg and drag JustHireMe into Applications. If the build is not notarized, macOS may require Privacy & Security -> Open Anyway."
+              echo "- macOS: download the .dmg and drag Juste Recrute Moi into Applications. If the build is not notarized, macOS may require Privacy & Security -> Open Anyway."
             fi
             echo
-            echo "> **Your data stays on your machine.** JustHireMe is local-first: no hosted backend, no tracking, and no app data leaves your computer by default."
+            echo "> **Your data stays on your machine.** Juste Recrute Moi is local-first: no hosted backend, no tracking, and no app data leaves your computer by default."
             echo
             echo "### SHA256 checksums"
             echo
@@ -1022,7 +1022,7 @@ jobs:
             echo "_This installer set was built by GitHub Actions from tag ${tag}. Having issues? [Open an issue](https://github.com/${GITHUB_REPOSITORY}/issues) or check the [README](https://github.com/${GITHUB_REPOSITORY}#readme)._"
           } > release-notes.md
 
-      - name: Publish GitHub release
+      - name: Publier la release GitHub
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -1051,13 +1051,13 @@ jobs:
               --clobber
             gh release edit "$tag" \
               --repo "${GITHUB_REPOSITORY}" \
-              --title "JustHireMe ${tag}" \
+              --title "Juste Recrute Moi ${tag}" \
               --notes-file "../release-notes.md" \
               "${promotion[@]}"
           else
             gh release create "$tag" "${assets[@]}" \
               --repo "${GITHUB_REPOSITORY}" \
-              --title "JustHireMe ${tag}" \
+              --title "Juste Recrute Moi ${tag}" \
               --notes-file "../release-notes.md" \
               "${promotion[@]}"
           fi
