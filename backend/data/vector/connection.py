@@ -230,6 +230,9 @@ def vector_status(*, refresh: bool = True) -> dict:
             return {"status": "degraded", "error": str(exc), "tables": []}
 
 
-_try_import_lancedb(log_warning=False)
-vec = NullVectorStore(_LANCEDB_IMPORT_ERROR or "LanceDB is not available")
-refresh_vector_store()
+if os.environ.get("JHM_SKIP_VECTOR_IMPORT") == "1":
+    vec = NullVectorStore("LanceDB import skipped for sidecar packaging")
+else:
+    _try_import_lancedb(log_warning=False)
+    vec = NullVectorStore(_LANCEDB_IMPORT_ERROR or "LanceDB is not available")
+    refresh_vector_store()

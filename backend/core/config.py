@@ -45,7 +45,6 @@ INDIA_JOB_TARGETS = [
 
 FRANCE_JOB_TARGETS = [
     "france_travail:developpeur;lieu=France;range=0-49",
-    "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168",
     "site:welcometothejungle.com/fr/jobs France",
     "site:hellowork.com/fr-fr/emplois France",
     "site:jobs.smartrecruiters.com France",

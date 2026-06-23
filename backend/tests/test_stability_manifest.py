@@ -137,6 +137,7 @@ def test_release_installer_stays_slim_and_runtime_pack_is_ota_only():
 
     backend_spec = _read(BACKEND / "backend.spec")
     assert "onedir_sidecar = False" in backend_spec
+    assert "JHM_SKIP_VECTOR_IMPORT" in backend_spec
 
     build_sidecar = _read(ROOT / "scripts/build-sidecar.mjs")
     assert "Release sidecars must be PyInstaller onefile builds" in build_sidecar

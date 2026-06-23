@@ -180,7 +180,6 @@ export const INDIA_SOURCE_PRESET = [
 
 export const FRANCE_SOURCE_PRESET = [
   "france_travail:developpeur;lieu=France;range=0-49,",
-  "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168,",
   "site:welcometothejungle.com/fr/jobs France,",
   "site:hellowork.com/fr-fr/emplois France,",
   "site:jobs.smartrecruiters.com France,",

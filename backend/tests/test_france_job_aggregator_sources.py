@@ -13,7 +13,7 @@ def test_france_market_targets_prioritize_stable_and_best_effort_sources():
 
     assert job_market_focus("fr") == "france"
     assert targets[0].startswith("france_travail:")
-    assert any(target.startswith("jobspy:") for target in targets)
+    assert not any(target.startswith("jobspy:") for target in targets)
     assert any("welcometothejungle" in target for target in targets)
 
 

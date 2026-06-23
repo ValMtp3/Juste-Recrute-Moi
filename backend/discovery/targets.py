@@ -26,8 +26,8 @@ from core.config import (
 __all__ = [
     "BLOCKED_JOB_TARGET_MARKERS",
     "DEFAULT_JOB_TARGETS",
-    "INDIA_JOB_TARGETS",
     "FRANCE_JOB_TARGETS",
+    "INDIA_JOB_TARGETS",
     "dedupe_targets",
     "desired_position",
     "free_sources_enabled",

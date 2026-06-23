@@ -2,7 +2,6 @@
   "market_focus": "france",
   "free_source_targets": [
     "france_travail:developpeur;lieu=France;range=0-49",
-    "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168",
     "ats:greenhouse:mistralai",
     "ats:lever:qonto",
     "ats:smartrecruiters:Ubisoft2",
@@ -10,7 +9,7 @@
   ],
   "notes": [
     "France Travail est la source stable et nécessite FRANCE_TRAVAIL_CLIENT_ID/SECRET.",
-    "JobSpy est une source best effort et nécessite le paquet optionnel python-jobspy.",
+    "JobSpy reste une source optionnelle si python-jobspy est installé hors build desktop.",
     "Les slugs ATS sont des exemples ; les utilisateurs peuvent les remplacer ou étendre cette liste sans changement de code."
   ]
 }
