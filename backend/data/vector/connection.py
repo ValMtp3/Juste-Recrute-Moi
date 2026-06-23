@@ -8,7 +8,12 @@ import threading
 
 from core.logging import get_logger
 from core.paths import app_data_dir
-from data.vector.runtime import add_vector_runtime_to_path, vector_runtime_files_complete, vector_runtime_ready
+from data.vector.runtime import (
+    add_vector_runtime_to_path,
+    clear_vector_runtime_modules,
+    vector_runtime_files_complete,
+    vector_runtime_ready,
+)
 
 _log = get_logger(__name__)
 lancedb = None
@@ -134,6 +139,7 @@ def _try_import_lancedb(*, log_warning: bool = True):
     if _LANCEDB_PYO3_DEGRADED:
         return None
     add_vector_runtime_to_path()
+    clear_vector_runtime_modules()
     importlib.invalidate_caches()
     if getattr(sys, "frozen", False) and not _runtime_package_installed():
         _clear_lancedb_modules()

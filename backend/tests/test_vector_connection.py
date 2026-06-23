@@ -371,6 +371,7 @@ def test_runtime_pack_install_copies_incomplete_vector_runtime(monkeypatch, tmp_
 def test_vector_runtime_ready_requires_real_import(monkeypatch, tmp_path):
     from data.vector import runtime
 
+    monkeypatch.setitem(sys.modules, "numpy", types.SimpleNamespace())
     monkeypatch.setattr(runtime, "_runtime_has_any_vector_payload", lambda _path: True)
     monkeypatch.setattr(runtime, "vector_runtime_files_complete", lambda _path: True)
     monkeypatch.setattr(runtime, "add_vector_runtime_to_path", lambda _path: None)
@@ -385,6 +386,7 @@ def test_vector_runtime_ready_requires_real_import(monkeypatch, tmp_path):
 
     assert runtime.vector_runtime_ready(tmp_path / "vector-runtime") is False
     assert runtime._vector_runtime_import_error(tmp_path / "vector-runtime") == "lancedb: ImportError: native module load failed"
+    assert "numpy" not in sys.modules
 
 
 def test_hash_embedding_fallback_reports_ok(monkeypatch):

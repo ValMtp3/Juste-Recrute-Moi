@@ -305,6 +305,12 @@ def add_vector_runtime_to_path(path: Path | None = None) -> None:
             _add_dll_dir(candidate / "numpy.libs")
 
 
+def clear_vector_runtime_modules() -> None:
+    for key in list(sys.modules):
+        if key in {"lancedb", "pyarrow", "numpy"} or key.startswith(("lancedb.", "pyarrow.", "numpy.")):
+            sys.modules.pop(key, None)
+
+
 def _vector_runtime_import_error(path: Path | None = None) -> str:
     root = path or vector_runtime_dir()
     has_payload = _runtime_has_any_vector_payload(root)
@@ -313,6 +319,7 @@ def _vector_runtime_import_error(path: Path | None = None) -> str:
     if getattr(sys, "frozen", False) and not vector_runtime_files_complete(root):
         return "vector runtime files are incomplete"
     add_vector_runtime_to_path(root)
+    clear_vector_runtime_modules()
     try:
         if not importlib.util.find_spec("lancedb"):
             return "lancedb module was not found"
