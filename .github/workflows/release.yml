@@ -427,12 +427,6 @@ jobs:
           name: release-assets-runtime-windows
           path: runtime-assets/
 
-      - name: Embarquer le pack runtime Windows
-        shell: pwsh
-        run: |
-          $env:JHM_RUNTIME_PACK_SOURCE_DIR = "runtime-assets"
-          npm run stage:runtime-pack
-
       - name: Run Rust unit tests
         run: cd src-tauri && cargo test --lib
 
@@ -616,12 +610,6 @@ jobs:
         with:
           name: release-assets-runtime-macos
           path: runtime-assets/
-
-      - name: Embarquer le pack runtime macOS
-        shell: bash
-        run: |
-          set -euo pipefail
-          JHM_RUNTIME_PACK_SOURCE_DIR=runtime-assets npm run stage:runtime-pack
 
       - name: Préparer le sidecar pour les tests Rust
         shell: bash
@@ -823,12 +811,6 @@ jobs:
         with:
           name: release-assets-runtime-linux
           path: runtime-assets/
-
-      - name: Embarquer le pack runtime Linux
-        shell: bash
-        run: |
-          set -euo pipefail
-          JHM_RUNTIME_PACK_SOURCE_DIR=runtime-assets npm run stage:runtime-pack
 
       - name: Préparer le sidecar pour les tests Rust
         shell: bash
