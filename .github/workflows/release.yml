@@ -192,14 +192,6 @@ jobs:
       - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
-      - name: Installer le runtime Playwright Chromium
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $env:PLAYWRIGHT_BROWSERS_PATH = "..\src-tauri\resources\bin\ms-playwright"
-          cd backend
-          uv run python -m playwright install chromium
-
       - name: Compiler le sidecar avec le script canonique
         run: npm run build:sidecar
 
@@ -216,7 +208,7 @@ jobs:
           $backendTotal = (Get-ChildItem -Path src-tauri\resources\backend\ -Recurse -File |
             Measure-Object -Property Length -Sum).Sum / 1MB
           Write-Host "Sidecar backend size: $([math]::Round($backendTotal, 1)) MB"
-          Write-Host "Installer sidecar is onefile; heavy runtime stays in the OTA runtime pack."
+          Write-Host "Installer sidecar is onefile; heavy vector runtime stays in the OTA runtime pack."
           Get-Content src-tauri\resources\backend\sidecar-manifest.json
 
       - name: Smoke sidecar startup
@@ -266,14 +258,6 @@ jobs:
       - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
-      - name: Installer le runtime Playwright Chromium
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PLAYWRIGHT_BROWSERS_PATH="../src-tauri/resources/bin/ms-playwright"
-          cd backend
-          uv run python -m playwright install chromium
-
       - name: Compiler le sidecar avec le script canonique
         run: npm run build:sidecar
 
@@ -287,7 +271,7 @@ jobs:
           find src-tauri/resources/backend -maxdepth 3 -type f -print
           backend_kb="$(du -sk src-tauri/resources/backend | awk '{print $1}')"
           echo "Sidecar backend size: $((backend_kb / 1024)) MB"
-          echo "Installer sidecar is onefile; heavy runtime stays in the OTA runtime pack."
+          echo "Installer sidecar is onefile; heavy vector runtime stays in the OTA runtime pack."
           cat src-tauri/resources/backend/sidecar-manifest.json
 
       - name: Smoke sidecar startup
@@ -337,14 +321,6 @@ jobs:
       - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
-      - name: Installer le runtime Playwright Chromium
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PLAYWRIGHT_BROWSERS_PATH="../src-tauri/resources/bin/ms-playwright"
-          cd backend
-          uv run python -m playwright install chromium
-
       - name: Compiler le sidecar avec le script canonique
         run: npm run build:sidecar
 
@@ -358,7 +334,7 @@ jobs:
           find src-tauri/resources/backend -maxdepth 3 -type f -print
           backend_kb="$(du -sk src-tauri/resources/backend | awk '{print $1}')"
           echo "Sidecar backend size: $((backend_kb / 1024)) MB"
-          echo "Installer sidecar is onefile; heavy runtime stays in the OTA runtime pack."
+          echo "Installer sidecar is onefile; heavy vector runtime stays in the OTA runtime pack."
           cat src-tauri/resources/backend/sidecar-manifest.json
 
       - name: Smoke sidecar startup
@@ -442,7 +418,7 @@ jobs:
             throw "Sidecar manifest not found."
           }
           Write-Host "Sidecar verified: $sidecar ($(( Get-Item $sidecar ).Length / 1MB) MB)"
-          Write-Host "The mandatory runtime pack is bundled into the installer and also published as an OTA recovery asset."
+          Write-Host "The mandatory vector runtime pack is published as an OTA recovery asset."
 
       - name: Verify updater signing secrets
         env:
@@ -643,7 +619,7 @@ jobs:
           fi
           chmod +x "$sidecar"
           echo "Sidecar verified: $sidecar ($(du -h "$sidecar" | awk '{print $1}'))"
-          echo "The mandatory runtime pack is bundled into the installer and also published as an OTA recovery asset."
+          echo "The mandatory vector runtime pack is published as an OTA recovery asset."
 
       - name: Préparer les permissions du sidecar macOS
         shell: bash
@@ -844,7 +820,7 @@ jobs:
           fi
           chmod +x "$sidecar"
           echo "Sidecar verified: $sidecar ($(du -h "$sidecar" | awk '{print $1}'))"
-          echo "The mandatory runtime pack is bundled into the installer and also published as an OTA recovery asset."
+          echo "The mandatory vector runtime pack is published as an OTA recovery asset."
 
       - name: Verify updater signing secrets
         env:
@@ -1014,8 +990,9 @@ jobs:
             echo "- Profile-aware graph and vector matching"
             echo "- Resume, cover letter, and outreach draft generation"
             echo "- Bundled backend sidecar"
-            echo "- Mandatory runtime pack as one first-run OTA download"
-            echo "- Runtime pack includes LanceDB, PyArrow, vector support, the local embedder path, and Playwright Chromium"
+            echo "- Mandatory vector runtime pack as one first-run OTA download"
+            echo "- Runtime pack includes LanceDB, PyArrow, vector support, and the local embedder path"
+            echo "- Browser automation uses an installed Chrome, Edge, or Brave browser by default"
             echo "- Signed in-app updates for future releases"
             echo
             echo "---"

@@ -150,6 +150,8 @@ def test_release_installer_stays_slim_and_runtime_pack_is_ota_only():
     assert "python313.dll" not in release
     assert "base_library.zip" not in release
     assert release.count("path: src-tauri/resources/backend/") == 3
+    assert "PLAYWRIGHT_BROWSERS_PATH" not in release
+    assert "playwright install chromium" not in release
 
 
 def test_release_includes_frozen_backend_and_windows_smoke():
@@ -196,7 +198,8 @@ def test_degradation_status_is_exposed_to_api_and_frontend():
     assert "def embedding_status" in _read(BACKEND / "data/vector/embeddings.py")
 
     app = _read(ROOT / "src/App.tsx")
+    hook = _read(ROOT / "src/shared/hooks/useSubsystemHealth.ts")
     css = _read(ROOT / "src/index.css")
     assert "SubsystemBanner" in app
-    assert "/api/v1/health/subsystems" in app
+    assert "/api/v1/health/subsystems" in hook
     assert ".subsystem-banner" in css
