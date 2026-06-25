@@ -97,7 +97,7 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
             <div style={{ padding: 16, borderRadius: 14, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 12 }}>
               <ProviderPills value={prov} onChange={v => onChange("llm_provider", v)} />
               {prov !== "ollama" && !isSubscriptionProvider(prov) && (
-                <ApiKeyInput value={cfg[KEY_FIELD[prov]] as string} onChange={v => onChange(KEY_FIELD[prov], v)} provider={prov} />
+                <ApiKeyInput value={cfg[KEY_FIELD[prov]] as string} onChange={v => onChange(KEY_FIELD[prov], v)} provider={prov} api={api} secretKey={KEY_FIELD[prov]} />
               )}
               {isSubscriptionProvider(prov) && (
                 <SubscriptionNote provider={prov} status={subStatus[prov]} onSignIn={signIn} busy={signingIn} />

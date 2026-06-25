@@ -24,6 +24,28 @@ DEFAULT_SCOPE = os.environ.get("FRANCE_TRAVAIL_SCOPE", "api_offresdemploiv2 o2ds
 _TOKEN_CACHE: dict[str, Any] = {}
 _SEARCH_CACHE: dict[str, tuple[float, list[dict]]] = {}
 _CACHE_TTL_SECONDS = 600
+_ERROR_EXCERPT_LEN = 220
+
+
+def _response_excerpt(response: httpx.Response) -> str:
+    text = str(response.text or "").strip().replace("\n", " ")
+    if not text:
+        return "réponse vide"
+    return text[:_ERROR_EXCERPT_LEN]
+
+
+def _json_response(response: httpx.Response, *, context: str) -> dict:
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        content_type = response.headers.get("content-type", "inconnu")
+        raise RuntimeError(
+            f"France Travail {context} a renvoyé une réponse non JSON "
+            f"(HTTP {response.status_code}, content-type={content_type}) : {_response_excerpt(response)}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise RuntimeError(f"France Travail {context} a renvoyé un JSON inattendu ({type(payload).__name__})")
+    return payload
 
 
 def _env_client() -> tuple[str, str]:
@@ -62,7 +84,7 @@ async def _access_token() -> str:
         except httpx.HTTPStatusError as exc:
             detail = _oauth_error_detail(response)
             raise RuntimeError(f"Authentification France Travail impossible : {detail}") from exc
-        payload = response.json()
+        payload = _json_response(response, context="authentification")
     token = str(payload.get("access_token") or "").strip()
     if not token:
         raise RuntimeError("La réponse France Travail ne contient pas de jeton d'accès")
@@ -85,7 +107,7 @@ def _oauth_error_detail(response: httpx.Response) -> str:
         )
     if error or description:
         return " - ".join(part for part in [error, description] if part)
-    return f"HTTP {response.status_code}"
+    return f"HTTP {response.status_code} : {_response_excerpt(response)}"
 
 
 def _parse_target(target: str) -> dict[str, str]:
@@ -144,8 +166,10 @@ async def _json_search(params: dict[str, str]) -> dict:
         if response.status_code == 429:
             await asyncio.sleep(int(response.headers.get("Retry-After", 5)))
             response = await cx.get(SEARCH_URL, params=params)
+        if response.status_code == 204 or (200 <= response.status_code < 300 and not (response.content or b"").strip()):
+            return {"resultats": []}
         response.raise_for_status()
-        return response.json()
+        return _json_response(response, context="recherche")
 
 
 def _salary_value(raw: str) -> tuple[float | None, float | None]:

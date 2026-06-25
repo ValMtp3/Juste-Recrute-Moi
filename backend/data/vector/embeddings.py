@@ -39,6 +39,8 @@ ONNX_MODEL_NAME = "all-MiniLM-L6-v2"
 ONNX_DIMS = 384
 OPENAI_MODEL = "text-embedding-3-small"
 OPENAI_DIMS = 1536
+OPENAI_MAX_INPUT_CHARS = 24_000
+OPENAI_MAX_INPUT_WORDS = 7_500
 HASH_DIMS = 384
 
 
@@ -248,6 +250,31 @@ def _openai_api_key() -> str | None:
         return os.environ.get("OPENAI_API_KEY")
 
 
+def _clip_openai_input(text: str) -> str:
+    """Conservative preflight cap for text-embedding-3-small.
+
+    OpenAI enforces an 8192-token input limit. We avoid pulling in a tokenizer
+    just for this path; the word + char caps stay under the limit for normal
+    French/English profile text and prevent a single oversized CV/project blob
+    from making the whole embedding batch fail.
+    """
+    value = str(text or "")
+    if len(value) > OPENAI_MAX_INPUT_CHARS:
+        value = value[:OPENAI_MAX_INPUT_CHARS]
+    words = value.split()
+    if len(words) > OPENAI_MAX_INPUT_WORDS:
+        value = " ".join(words[:OPENAI_MAX_INPUT_WORDS])
+    return value
+
+
+def _clip_openai_inputs(texts: list[str]) -> list[str]:
+    clipped = [_clip_openai_input(text) for text in texts]
+    changed = sum(1 for before, after in zip(texts, clipped, strict=False) if before != after)
+    if changed:
+        _log.info("OpenAI embedding input truncated for %s oversized text(s)", changed)
+    return clipped
+
+
 def _openai_embed(texts: list[str]) -> list[list[float]]:
     """Embed texts using the OpenAI API. Returns list of 1536-dim vectors."""
     api_key = _openai_api_key()
@@ -263,7 +290,7 @@ def _openai_embed(texts: list[str]) -> list[list[float]]:
 
     response = client.embeddings.create(
         model=OPENAI_MODEL,
-        input=texts,
+        input=_clip_openai_inputs(texts),
     )
     return [item.embedding for item in response.data]
 
@@ -273,7 +300,7 @@ def _openai_embed_urllib(texts: list[str], api_key: str) -> list[list[float]]:
     import json
     import urllib.request
 
-    payload = json.dumps({"model": OPENAI_MODEL, "input": texts}).encode("utf-8")
+    payload = json.dumps({"model": OPENAI_MODEL, "input": _clip_openai_inputs(texts)}).encode("utf-8")
     req = urllib.request.Request(
         "https://api.openai.com/v1/embeddings",
         data=payload,

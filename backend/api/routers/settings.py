@@ -10,11 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.dependencies import get_repository
 from api.scheduler import ensure_ghost_job
 from api.startup_validation import configuration_warnings
-from core.types import PreferencesBody, ResetDataBody, SettingsBody, TemplateBody
+from core.logging import get_logger
+from core.types import PreferencesBody, RebuildVectorsBody, ResetDataBody, SettingsBody, TemplateBody
 from data.repository import Repository
 
 
 MASK = "__JHM_SECRET_SET__"
+_log = get_logger(__name__)
 LEGACY_BULLET_MASK = "\u2022" * 20
 LEGACY_MOJIBAKE_BULLET_MASK = "\u00e2\u20ac\u00a2" * 20
 LEGACY_DOUBLE_ENCODED_BULLET_MASK = "\u00c3\u00a2\u00e2\u201a\u00ac\u00c2\u00a2" * 20
@@ -194,6 +196,31 @@ def _provider_key(cfg: dict, provider: str) -> str:
     ).strip()
 
 
+def _rebuild_vector_tables() -> dict:
+    summary: dict[str, object] = {"vectors_dropped": [], "errors": []}
+    try:
+        from data.graph.profile_vectors import vec_table_names
+        from data.vector.connection import vec
+
+        for name in list(vec_table_names() or []):
+            try:
+                vec.drop_table(name)
+                summary["vectors_dropped"].append(name)
+            except Exception as exc:
+                summary["errors"].append(f"vector {name}: {exc}")
+    except Exception as exc:
+        summary["errors"].append(f"vector store: {exc}")
+
+    try:
+        from data.graph.profile import sync_vectors_from_graph
+
+        summary["sync"] = sync_vectors_from_graph()
+    except Exception as exc:
+        summary["sync"] = {"status": "error", "synced": 0, "error": str(exc)}
+        summary["errors"].append(f"vector sync: {exc}")
+    return summary
+
+
 async def validate_provider_settings(repo: Repository, incoming: dict | None = None) -> dict:
     from llm import _KEY_NAMES, _OPENAI_COMPAT_BASE_URLS
 
@@ -248,10 +275,23 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
     @router.get("/settings")
     async def get_cfg(repo: Repository = Depends(get_repository)):
         settings = await asyncio.to_thread(repo.settings.get_settings)
+        present = sorted(key for key in sensitive_keys(settings) if settings.get(key))
+        _log.info("settings loaded: %s sensitive field(s) configured", len(present))
         for key in sensitive_keys(settings):
             if settings.get(key):
                 settings[key] = MASK
         return settings
+
+    @router.get("/settings/secrets/{key}")
+    async def reveal_secret(key: str, repo: Repository = Depends(get_repository)):
+        settings = await asyncio.to_thread(repo.settings.get_settings)
+        if key not in sensitive_keys(settings):
+            raise HTTPException(status_code=404, detail="unknown secret")
+        value = str(settings.get(key) or "")
+        if not value:
+            raise HTTPException(status_code=404, detail="secret not configured")
+        _log.info("settings secret revealed through local UI: %s", key)
+        return {"key": key, "value": value}
 
     @router.get("/settings/validate")
     async def validate_settings(repo: Repository = Depends(get_repository)):
@@ -341,6 +381,11 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
             await asyncio.to_thread(repo.settings.save_settings, payload)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        _log.info(
+            "settings saved: %s key(s), sensitive configured=%s",
+            len(payload),
+            sorted(key for key in sensitive_keys({**old, **payload}) if payload.get(key) or old.get(key)),
+        )
         if payload.get("ghost_mode") == "true":
             ensure_ghost_job(scheduler, ghost_tick)
         return {"ok": True}
@@ -359,6 +404,12 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
             from llm.client import reset_client_cache
 
             await asyncio.to_thread(reset_client_cache)
+        return {"ok": True, "summary": summary}
+
+    @router.post("/vectors/rebuild")
+    async def rebuild_vectors(body: RebuildVectorsBody):
+        summary = await asyncio.to_thread(_rebuild_vector_tables)
+        _log.info("vector tables rebuilt from settings UI: %s", summary)
         return {"ok": True, "summary": summary}
 
     return router

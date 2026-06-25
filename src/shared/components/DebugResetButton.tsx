@@ -3,20 +3,30 @@ import type { ApiFetch } from "../../types";
 import { settingsApi } from "../../api/settings";
 import Icon from "./Icon";
 
+const DEBUG_RESET_CONFIRM_MESSAGE = [
+  "Tout effacer (debug) va supprimer les données locales de travail.",
+  "",
+  "Supprimé :",
+  "- toutes les offres et leur historique ;",
+  "- le profil candidat, le graphe et les vecteurs ;",
+  "- les documents et assets générés.",
+  "",
+  "Conservé :",
+  "- les réglages, clés API et templates de CV.",
+  "",
+  "L'application sera ensuite rechargée. Continuer ?",
+].join("\n");
+
 /**
- * One-click debug wipe. Deletes all leads, the profile (graph + vectors), and
- * generated documents on the spot — no confirmation typing — then reloads so
- * every view returns to a clean first-run state. Settings and provider keys are
- * KEPT, so you can immediately re-ingest and re-test without re-entering config.
- *
- * This is a developer convenience for fast reset/re-test loops; the guarded,
- * type-DELETE-to-confirm flow still lives in Settings → Danger zone.
+ * Debug wipe for fast reset/re-test loops. It still requires an explicit
+ * browser confirmation because it deletes local work data immediately.
  */
 export function DebugResetButton({ api }: { api: ApiFetch | null }) {
   const [busy, setBusy] = useState(false);
 
   const wipe = async () => {
     if (!api || busy) return;
+    if (!window.confirm(DEBUG_RESET_CONFIRM_MESSAGE)) return;
     setBusy(true);
     try {
       const res = await settingsApi.resetData(api); // clearSettings defaults to false
@@ -36,6 +46,7 @@ export function DebugResetButton({ api }: { api: ApiFetch | null }) {
       onClick={wipe}
       disabled={!api || busy}
       title="DEBUG : supprime toutes les offres, le profil (graphe + vecteurs) et les documents générés. Les paramètres et clés sont conservés."
+      aria-label="Tout effacer en mode debug après confirmation explicite"
       style={{
         display: "inline-flex",
         alignItems: "center",

@@ -1,8 +1,9 @@
 import { useState, type ChangeEvent } from "react";
 import type { Cfg } from "./shared";
-import { BigToggle, FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, LabelledField, SECRET_MASKS, SectionLabel } from "./shared";
+import { BigToggle, FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, LabelledField, SecretInput, SectionLabel } from "./shared";
+import type { ApiFetch } from "../../../types";
 
-export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: keyof Cfg) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void }) {
+export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: (k: keyof Cfg) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void; api: ApiFetch }) {
   const [siteDraft, setSiteDraft] = useState("");
 
   const atsHosts = new Set(["greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com", "teamtailor.com"]);
@@ -55,8 +56,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
               </LabelledField>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <LabelledField label="Token Apify" hint="optionnel, pour scraping LinkedIn/X">
-                  <input type="password" placeholder="apify_api_***" value={cfg.apify_token} onChange={set("apify_token")} className="mono field-input"
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  <SecretInput placeholder="apify_api_***" value={cfg.apify_token} onChange={v => onChange("apify_token", v)} api={api} secretKey="apify_token" />
                 </LabelledField>
                 <LabelledField label="Actor Apify" hint="actor à exécuter">
                   <input type="text" placeholder="drobnikj/..." value={cfg.apify_actor} onChange={set("apify_actor")} className="mono field-input"
@@ -64,8 +64,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                 </LabelledField>
               </div>
               <LabelledField label="Cookie de session LinkedIn" hint="valeur li_at">
-                <input type="password" placeholder="li_at=***" value={cfg.linkedin_cookie} onChange={set("linkedin_cookie")} className="mono field-input"
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                <SecretInput placeholder="li_at=***" value={cfg.linkedin_cookie} onChange={v => onChange("linkedin_cookie", v)} api={api} secretKey="linkedin_cookie" />
               </LabelledField>
               <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
                 <SectionLabel label="Recherche de contacts" sub="emails Hunter.io, LinkedIn Proxycurl optionnel" />
@@ -80,12 +79,10 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <LabelledField label="Clé API Hunter.io" hint="recherche par domaine">
-                    <input type="password" placeholder="hunter key" value={cfg.hunter_api_key} onChange={set("hunter_api_key")} className="mono field-input"
-                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                    <SecretInput placeholder="hunter key" value={cfg.hunter_api_key} onChange={v => onChange("hunter_api_key", v)} api={api} secretKey="hunter_api_key" />
                   </LabelledField>
                   <LabelledField label="Clé API Proxycurl" hint="résolution LinkedIn optionnelle">
-                    <input type="password" placeholder="proxycurl key" value={cfg.proxycurl_api_key} onChange={set("proxycurl_api_key")} className="mono field-input"
-                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                    <SecretInput placeholder="proxycurl key" value={cfg.proxycurl_api_key} onChange={v => onChange("proxycurl_api_key", v)} api={api} secretKey="proxycurl_api_key" />
                   </LabelledField>
                 </div>
               </div>
@@ -93,8 +90,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
               <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
                 <SectionLabel label="Signaux X" sub="posts récents pouvant signaler une offre" />
                 <LabelledField label="Bearer token X" hint="token de la console développeur">
-                  <input type="password" placeholder="Bearer token" value={cfg.x_bearer_token} onChange={set("x_bearer_token")} className="mono field-input"
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  <SecretInput placeholder="Bearer token" value={cfg.x_bearer_token} onChange={v => onChange("x_bearer_token", v)} api={api} secretKey="x_bearer_token" />
                 </LabelledField>
                 <LabelledField label="Requêtes X recent-search" hint="une requête par ligne ; vide = valeurs IA par défaut">
                   <textarea value={cfg.x_search_queries} onChange={set("x_search_queries")} rows={4} className="mono field-input"
@@ -151,12 +147,10 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <LabelledField label="Client ID France Travail" hint="API Offres d'emploi">
-                    <input type="password" placeholder="client_id" value={SECRET_MASKS.has(cfg.france_travail_client_id) ? "" : cfg.france_travail_client_id} onChange={set("france_travail_client_id")} className="mono field-input"
-                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                    <SecretInput placeholder="client_id" value={cfg.france_travail_client_id} onChange={v => onChange("france_travail_client_id", v)} api={api} secretKey="france_travail_client_id" />
                   </LabelledField>
                   <LabelledField label="Secret France Travail" hint="conservé masqué après sauvegarde">
-                    <input type="password" placeholder="client_secret" value={SECRET_MASKS.has(cfg.france_travail_client_secret) ? "" : cfg.france_travail_client_secret} onChange={set("france_travail_client_secret")} className="mono field-input"
-                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                    <SecretInput placeholder="client_secret" value={cfg.france_travail_client_secret} onChange={v => onChange("france_travail_client_secret", v)} api={api} secretKey="france_travail_client_secret" />
                   </LabelledField>
                 </div>
                 <LabelledField label="Entreprises à surveiller" hint="fournisseur,slug par ligne : greenhouse,<slug-entreprise>">
@@ -235,6 +229,36 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                 </LabelledField>
                 <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.45 }}>
                   Chaque connecteur récupère du JSON, lit <span className="mono">items_path</span>, mappe les champs, puis envoie les offres dans le même filtre qualité. Gardez les tokens dans les headers, pas dans les définitions.
+                </div>
+              </div>
+              <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
+                <SectionLabel label="Scan navigateur" sub="Playwright, extraction IA légère, budget contrôlé" />
+                <BigToggle
+                  active={cfg.browser_scan_enabled !== "false"}
+                  onToggle={() => onChange("browser_scan_enabled", cfg.browser_scan_enabled === "false" ? "true" : "false")}
+                  icon="search"
+                  label="Jobboards web volumétriques"
+                  badge={cfg.browser_scan_enabled !== "false" ? "on" : "off"}
+                  sub="Transforme les requêtes site: en pages Google récentes, avec erreurs isolées par source"
+                  tone="blue"
+                />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+                  <LabelledField label="Concurrence" hint="pages en parallèle">
+                    <input type="number" min={1} max={8} value={cfg.browser_scan_concurrency} onChange={set("browser_scan_concurrency")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                  <LabelledField label="Cibles max" hint="par lot jobboard">
+                    <input type="number" min={1} max={80} value={cfg.browser_scan_max_targets} onChange={set("browser_scan_max_targets")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                  <LabelledField label="Mode IA scan" hint="budget de seconde passe">
+                    <select value={cfg.llm_scan_mode || "balanced"} onChange={e => onChange("llm_scan_mode", e.target.value)} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }}>
+                      <option value="lean">lean</option>
+                      <option value="balanced">balanced</option>
+                      <option value="thorough">thorough</option>
+                    </select>
+                  </LabelledField>
                 </div>
               </div>
               <LabelledField label="Jobboards / URLs de recherche ciblés" hint="séparés par des virgules">

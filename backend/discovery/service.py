@@ -8,6 +8,7 @@ from discovery.targets import (
     has_profile_discovery_signal,
     has_x_token,
     int_cfg,
+    job_market_focus,
     profile_free_source_targets,
     profile_x_queries,
     truthy,
@@ -91,7 +92,7 @@ class DiscoveryService:
 
         result = await asyncio.to_thread(
             run_free_scout,
-            raw_targets=raw_targets,
+            raw_targets=_filter_free_targets_for_market(raw_targets, cfg.get("job_market_focus", "global")),
             raw_watchlist=cfg.get("company_watchlist", ""),
             raw_custom_connectors=cfg.get("custom_connectors", ""),
             raw_custom_headers=cfg.get("custom_connector_headers", ""),
@@ -137,6 +138,17 @@ class DiscoveryService:
 
 def create_discovery_service() -> DiscoveryService:
     return DiscoveryService()
+
+
+def _filter_free_targets_for_market(raw_targets: str, market_focus: str) -> str:
+    if job_market_focus(market_focus) != "france":
+        return str(raw_targets or "")
+    lines = []
+    for line in str(raw_targets or "").splitlines():
+        if line.strip().lower().startswith("reddit:"):
+            continue
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _is_direct_free_target(target: str) -> bool:

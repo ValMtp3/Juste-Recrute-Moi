@@ -41,6 +41,31 @@ def _target_label(target: str) -> str:
     return value
 
 
+def _configured(value) -> bool:
+    return bool(str(value or "").strip())
+
+
+def _yesno(value) -> str:
+    return "oui" if _configured(value) else "non"
+
+
+def _target_debug_summary(targets: list[str], *, limit: int = 10) -> str:
+    labels = [_target_label(target) for target in targets[:limit]]
+    suffix = f" +{len(targets) - limit}" if len(targets) > limit else ""
+    return ", ".join(labels) + suffix if labels else "aucune"
+
+
+def _by_source_summary(usage: dict | None, *, limit: int = 8) -> str:
+    by_source = (usage or {}).get("by_source") or {}
+    if not isinstance(by_source, dict) or not by_source:
+        return "aucune source détaillée"
+    items = list(by_source.items())
+    chunks = [f"{_target_label(str(key))}={value}" for key, value in items[:limit]]
+    if len(items) > limit:
+        chunks.append(f"+{len(items) - limit}")
+    return ", ".join(chunks)
+
+
 class TaskRegistry:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
@@ -102,6 +127,11 @@ def _merge_scan_usage(total: dict, incoming: dict, target_count: int) -> None:
     total["configured"] = total.get("configured", 0) + target_count
     for key in ("executed", "candidates", "saved", "duplicates", "filtered", "missing_url", "errors"):
         total[key] = total.get(key, 0) + int(incoming.get(key, 0) or 0)
+    for key in ("browser_configured", "browser_executed", "browser_skipped"):
+        total[key] = total.get(key, 0) + int(incoming.get(key, 0) or 0)
+    for key in ("browser_concurrency", "llm_scan_mode"):
+        if incoming.get(key) and not total.get(key):
+            total[key] = incoming.get(key)
     for key, value in (incoming.get("by_source") or {}).items():
         total.setdefault("by_source", {})[key] = value
 
@@ -132,6 +162,7 @@ async def run_x_signal_scan(
     discovery_service=None,
 ) -> list[dict]:
     if not has_x_token(cfg):
+        await manager.broadcast({"type": "agent", "event": "x_scout_skip", "msg": "Diagnostic X : scan ignoré, bearer token absent."})
         return []
 
     discovery_service = discovery_service or get_discovery_service()
@@ -170,6 +201,7 @@ async def run_free_source_scan(
     discovery_service=None,
 ) -> tuple[list[dict], dict, list[str]]:
     if not force and not free_sources_enabled(cfg):
+        await manager.broadcast({"type": "agent", "event": "free_scout_skip", "msg": "Diagnostic sources gratuites : scan ignoré, option désactivée."})
         return [], {}, []
 
     discovery_service = discovery_service or get_discovery_service()
@@ -193,6 +225,11 @@ async def run_free_source_scan(
             f"({usage.get('candidates', 0)} candidat(s), {usage.get('duplicates', 0)} doublon(s), "
             f"{usage.get('filtered', 0)} filtrée(s), {usage.get('executed', 0)} source(s) vérifiée(s))"
         ),
+    })
+    await manager.broadcast({
+        "type": "agent",
+        "event": "free_scout_sources",
+        "msg": f"Diagnostic sources gratuites : {_by_source_summary(usage)}",
     })
     for msg in result.errors[:4]:
         record_error("free_source_fetch_failed", msg, "api.discovery")
@@ -276,6 +313,25 @@ async def _run_scan_inner(
         search_text=str(profile.get("_discovery_search_text") or profile.get("desired_position") or profile.get("s") or ""),
         location=str(profile.get("_discovery_location") or ""),
     )
+    await manager.broadcast({
+        "type": "agent",
+        "event": "scan_debug_config",
+        "msg": (
+            f"Diagnostic scan : marché={market_focus}, profil={'oui' if has_profile_discovery_signal(profile) else 'non'}, "
+            f"sources gratuites={'on' if free_sources_enabled(cfg) else 'off'}, X token={_yesno(cfg.get('x_bearer_token'))}, "
+            f"Apify token={_yesno(cfg.get('apify_token'))}, actor={cfg.get('apify_actor') or 'défaut'}, "
+            f"France Travail id={_yesno(cfg.get('france_travail_client_id'))}/secret={_yesno(cfg.get('france_travail_client_secret'))}, "
+            f"LinkedIn cible={'oui' if any('linkedin.com/jobs' in target.lower() for target in raw_urls) else 'non'}, "
+            f"LLM={cfg.get('llm_provider', 'ollama')}, embeddings={cfg.get('embedding_provider', 'onnx')}, "
+            f"navigateur={cfg.get('browser_scan_enabled', 'true')}@{int_cfg(cfg, 'browser_scan_concurrency', 4, 1, 8)}, "
+            f"mode IA scan={cfg.get('llm_scan_mode', 'balanced') or 'balanced'}"
+        ),
+    })
+    await manager.broadcast({
+        "type": "agent",
+        "event": "scan_debug_targets",
+        "msg": f"Diagnostic cibles brutes ({len(raw_urls)}) : {_target_debug_summary(raw_urls)}",
+    })
     await run_x_signal_scan(manager, cfg, "job", profile, discovery_service=discovery_service)
     await run_free_source_scan(manager, cfg, "job", profile, discovery_service=discovery_service)
 
@@ -298,17 +354,45 @@ async def _run_scan_inner(
     for batch_index, batch in enumerate(batches, start=1):
         if stop_event.is_set():
             break
+        direct_targets = [target for target in batch if str(target).lower().startswith(("france_travail:", "jobspy:", "import:", "ats:"))]
+        board_targets = [target for target in batch if target not in direct_targets]
+        await manager.broadcast({
+            "type": "agent",
+            "event": "scout_batch_start",
+            "msg": (
+                f"Lot jobboard {batch_index}/{len(batches)} : {len(batch)} cible(s), "
+                f"{len(direct_targets)} directe(s), {len(board_targets)} via Apify/browser. "
+                f"Cibles : {_target_debug_summary(batch, limit=6)}"
+            ),
+        })
         try:
             scout_result = await discovery_service.scan_job_boards(batch, cfg)
             leads.extend(scout_result.leads)
             _merge_scan_usage(scout_usage, scout_result.usage or {}, len(batch))
             scout_errors.extend(scout_result.errors or [])
+            await manager.broadcast({
+                "type": "agent",
+                "event": "scout_batch_done",
+                "msg": (
+                    f"Lot jobboard {batch_index}/{len(batches)} terminé : "
+                    f"{len(scout_result.leads)} offre(s), "
+                    f"{(scout_result.usage or {}).get('candidates', 0)} candidat(s), "
+                    f"{(scout_result.usage or {}).get('duplicates', 0)} doublon(s), "
+                    f"{(scout_result.usage or {}).get('filtered', 0)} filtrée(s). "
+                    f"Détail : {_by_source_summary(scout_result.usage)}"
+                ),
+            })
         except Exception as exc:
             scout_usage["configured"] += len(batch)
             scout_usage["errors"] += len(batch)
             detail = str(exc).strip() or type(exc).__name__
             scout_errors.append(f"lot jobboard {batch_index}/{len(batches)} ignoré ({len(batch)} cible(s)) : {detail}")
             record_error("source_fetch_failed", detail, "api.discovery")
+            await manager.broadcast({
+                "type": "agent",
+                "event": "scout_batch_error",
+                "msg": f"Lot jobboard {batch_index}/{len(batches)} échoué : {detail}",
+            })
 
     await manager.broadcast({
         "type": "agent",
@@ -316,7 +400,8 @@ async def _run_scan_inner(
         "msg": (
             f"Scan terminé : {len(leads)} nouvelle(s) offre(s) "
             f"({scout_usage.get('candidates', 0)} candidat(s), {scout_usage.get('duplicates', 0)} doublon(s), "
-            f"{scout_usage.get('filtered', 0)} filtrée(s), {scout_usage.get('errors', 0)} erreur(s) source)"
+            f"{scout_usage.get('filtered', 0)} filtrée(s), {scout_usage.get('errors', 0)} erreur(s) source, "
+            f"{scout_usage.get('browser_executed', 0)}/{scout_usage.get('browser_configured', 0)} cible(s) navigateur)"
         ),
     })
     for msg in scout_errors[:5]:
@@ -336,7 +421,9 @@ async def _run_scan_inner(
     await manager.broadcast({"type": "agent", "event": "eval_start", "msg": f"Évaluation de {len(to_score)} nouvelle(s) offre(s) via {cfg.get('llm_provider', 'ollama')}"})
 
     fallback_count = 0
+    fallback_errors: list[str] = []
     prefiltered_count = 0
+    triaged_count = 0
     for lead in to_score:
         if stop_event.is_set():
             await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Scan arrêté pendant l'évaluation."})
@@ -351,8 +438,19 @@ async def _run_scan_inner(
             )
             if result.get("scored_by") == "deterministic_fallback":
                 fallback_count += 1
+                error = str(result.get("fallback_error") or "LLM indisponible").strip()
+                if error and error not in fallback_errors:
+                    fallback_errors.append(error)
+                if fallback_count <= 3:
+                    await manager.broadcast({
+                        "type": "agent",
+                        "event": "eval_llm_fallback",
+                        "msg": f"Évaluation IA indisponible pour {lead.get('title','')} : {error}. Score local utilisé.",
+                    })
             if result.get("scored_by") == "prefiltered_off_field":
                 prefiltered_count += 1
+            if result.get("scored_by") == "deterministic_triage":
+                triaged_count += 1
             await manager.broadcast({"type": "LEAD_UPDATED", "data": {**lead, **result}})
             await manager.broadcast({"type": "agent", "event": "eval_scored", "msg": f"Score {lead.get('title','')} = {result['score']}/100"})
         except Exception as exc:
@@ -364,11 +462,18 @@ async def _run_scan_inner(
             "event": "eval_prefilter_summary",
             "msg": f"{prefiltered_count}/{len(to_score)} offre(s) ignorée(s) hors cible (aucun token LLM utilisé)",
         })
+    if triaged_count > 0:
+        await manager.broadcast({
+            "type": "agent",
+            "event": "eval_triage_summary",
+            "msg": f"{triaged_count}/{len(to_score)} offre(s) gardée(s) au score local selon le mode IA {cfg.get('llm_scan_mode', 'balanced') or 'balanced'}",
+        })
     if fallback_count > 0:
+        detail = f" Dernière erreur : {fallback_errors[0]}" if fallback_errors else ""
         await manager.broadcast({
             "type": "agent",
             "event": "eval_fallback_summary",
-            "msg": f"{fallback_count}/{len(to_score)} offre(s) scorée(s) par repli local (LLM indisponible)",
+            "msg": f"{fallback_count}/{len(to_score)} offre(s) scorée(s) par repli local (LLM indisponible).{detail}",
         })
     await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Cycle d'évaluation terminé"})
     await asyncio.to_thread(repo.settings.save_settings, {"last_scan_finished_at": datetime.now(timezone.utc).isoformat()})
@@ -442,6 +547,8 @@ async def _run_reevaluate_jobs_inner(
     scored = 0
     failed = 0
     fallback_count = 0
+    fallback_errors: list[str] = []
+    triaged_count = 0
 
     await manager.broadcast({
         "type": "agent",
@@ -469,6 +576,17 @@ async def _run_reevaluate_jobs_inner(
             )
             if result.get("scored_by") == "deterministic_fallback":
                 fallback_count += 1
+                error = str(result.get("fallback_error") or "LLM indisponible").strip()
+                if error and error not in fallback_errors:
+                    fallback_errors.append(error)
+                if fallback_count <= 3:
+                    await manager.broadcast({
+                        "type": "agent",
+                        "event": "reeval_llm_fallback",
+                        "msg": f"Réévaluation IA indisponible pour {lead.get('title','')} : {error}. Score local utilisé.",
+                    })
+            if result.get("scored_by") == "deterministic_triage":
+                triaged_count += 1
             saved = await asyncio.to_thread(repo.leads.get_lead_by_id, lead["job_id"])
             await manager.broadcast({"type": "LEAD_UPDATED", "data": saved or {**lead, **result}})
             scored += 1
@@ -490,6 +608,10 @@ async def _run_reevaluate_jobs_inner(
         summary += f", {failed} failed"
     if fallback_count:
         summary += f", {fallback_count} fallback"
+        if fallback_errors:
+            summary += f" ({fallback_errors[0]})"
+    if triaged_count:
+        summary += f", {triaged_count} local triage"
     await manager.broadcast({"type": "agent", "event": "reeval_done", "msg": summary})
     job_store.update(job.job_id, status="succeeded", progress=100, result={"scored": scored, "failed": failed, "total": total})
 

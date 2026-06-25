@@ -30,6 +30,7 @@ export interface Cfg {
   free_sources_enabled: string; free_source_targets: string; company_watchlist: string; free_source_max_requests: string; free_source_min_signal_score: string;
   custom_connectors_enabled: string; custom_connectors: string; custom_connector_headers: string;
   desired_position: string; onboarding_target_role: string; job_boards: string; job_market_focus: string;
+  browser_scan_enabled: string; browser_scan_concurrency: string; browser_scan_max_targets: string; llm_scan_mode: string;
   ghost_mode: string; auto_apply: string; headed_browser: string;
 }
 
@@ -60,6 +61,7 @@ export const EMPTY: Cfg = {
   free_sources_enabled: "true", free_source_targets: "", company_watchlist: "", free_source_max_requests: "20", free_source_min_signal_score: "60",
   custom_connectors_enabled: "false", custom_connectors: "", custom_connector_headers: "",
   desired_position: "", onboarding_target_role: "", job_boards: "", job_market_focus: "france",
+  browser_scan_enabled: "true", browser_scan_concurrency: "4", browser_scan_max_targets: "32", llm_scan_mode: "balanced",
   ghost_mode: "false", auto_apply: "false", headed_browser: "false",
 };
 
@@ -249,6 +251,7 @@ export const SECRET_MASKS = new Set([
   LEGACY_MOJIBAKE_BULLET_MASK,
   LEGACY_DOUBLE_ENCODED_BULLET_MASK,
 ]);
+const SECRET_DISPLAY_MASK = "••••••••••••••••";
 
 /* helpers */
 export function LabelledField({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -438,8 +441,91 @@ export function ModelChips({ provider, value, onChange, api, cfg }: {
   );
 }
 
-export function ApiKeyInput({ value, onChange, provider, isStep, disabled = false, placeholder }: {
-  value: string; onChange: (v: string) => void; provider: string; isStep?: boolean; disabled?: boolean; placeholder?: string;
+export function SecretInput({ value, onChange, placeholder, disabled = false, api, secretKey, ariaLabel }: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  api?: ApiFetch | null;
+  secretKey?: keyof Cfg;
+  ariaLabel?: string;
+}) {
+  const [visible, setVisible] = useState(false);
+  const [revealed, setRevealed] = useState("");
+  const [revealing, setRevealing] = useState(false);
+  const masked = SECRET_MASKS.has(value);
+  const displayValue = masked ? (visible ? (revealed || "Secret enregistré") : SECRET_DISPLAY_MASK) : value;
+
+  const toggleVisible = async () => {
+    const nextVisible = !visible;
+    setVisible(nextVisible);
+    if (!nextVisible || !masked || revealed || !api || !secretKey) return;
+    setRevealing(true);
+    try {
+      const response = await settingsApi.revealSecret(api, String(secretKey));
+      if (response.ok) {
+        const data = await response.json();
+        setRevealed(typeof data.value === "string" ? data.value : "");
+      }
+    } finally {
+      setRevealing(false);
+    }
+  };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        type={visible ? "text" : "password"}
+        value={displayValue}
+        onChange={e => { setRevealed(""); onChange(e.target.value); }}
+        onFocus={e => {
+          if (masked && !revealed) e.currentTarget.select();
+        }}
+        disabled={disabled}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        className="mono field-input"
+        style={{
+          width: "100%",
+          padding: "9px 38px 9px 12px",
+          borderRadius: 9,
+          border: "1px solid var(--line)",
+          background: disabled ? "var(--paper-3)" : "var(--card)",
+          fontSize: 12,
+          opacity: disabled ? 0.75 : 1,
+          cursor: disabled ? "not-allowed" : "text",
+        }}
+      />
+      <button
+        type="button"
+        onClick={toggleVisible}
+        disabled={disabled || revealing}
+        aria-label={visible ? "Masquer le secret" : "Afficher le secret"}
+        title={visible ? "Masquer le secret" : "Afficher le secret"}
+        style={{
+          position: "absolute",
+          right: 7,
+          top: "50%",
+          transform: "translateY(-50%)",
+          width: 26,
+          height: 26,
+          border: "none",
+          borderRadius: 7,
+          display: "grid",
+          placeItems: "center",
+          background: "transparent",
+          color: "var(--ink-3)",
+          cursor: disabled || revealing ? "not-allowed" : "pointer",
+        }}
+      >
+        {revealing ? <span className="spinner-sm" aria-hidden="true" /> : <Icon name={visible ? "eye-off" : "eye"} size={14} />}
+      </button>
+    </div>
+  );
+}
+
+export function ApiKeyInput({ value, onChange, provider, isStep, disabled = false, placeholder, api, secretKey }: {
+  value: string; onChange: (v: string) => void; provider: string; isStep?: boolean; disabled?: boolean; placeholder?: string; api?: ApiFetch | null; secretKey?: keyof Cfg;
 }) {
   if (provider === "ollama" || isSubscriptionProvider(provider)) return null;
   const ph: Record<string, string> = {
@@ -450,10 +536,8 @@ export function ApiKeyInput({ value, onChange, provider, isStep, disabled = fals
     sambanova: "****", qwen: "sk-****", azure: "Clé Azure OpenAI", custom: "Clé API",
   };
   return (
-    <input type="password" value={SECRET_MASKS.has(value) ? "" : value} onChange={e => onChange(e.target.value)} disabled={disabled}
+    <SecretInput value={value} onChange={onChange} disabled={disabled} api={api} secretKey={secretKey}
       placeholder={placeholder || (isStep ? `Clé API pour ${provider}` : ph[provider] || "Clé API")}
-      className="mono field-input"
-      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: disabled ? "var(--paper-3)" : "var(--card)", fontSize: 12, opacity: disabled ? 0.75 : 1, cursor: disabled ? "not-allowed" : "text" }}
     />
   );
 }
@@ -591,6 +675,8 @@ export function StepCard({ step, cfg, onChange, api }: { step: typeof STEPS[0]; 
                 provider={stepProv}
                 isStep
                 disabled={usesGlobalKey}
+                api={api}
+                secretKey={apiKey}
                 placeholder={usesGlobalKey ? "Clé globale utilisée ; choisissez le modèle ci-dessous" : `Clé ${stepProv} optionnelle pour cette étape`}
               />
             </div>

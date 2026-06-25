@@ -497,6 +497,24 @@ def candidate_domain_phrases(candidate_data: dict) -> set[str]:
     return phrases
 
 
+def _same_wrong_field_as_candidate(candidate_data: dict, wrong_terms: Iterable[str]) -> bool:
+    candidate_text = _profile_text(candidate_data).lower()
+    for term in wrong_terms:
+        normalized = _normalize_phrase(term)
+        if not normalized:
+            continue
+        if _contains_phrase(candidate_text, normalized):
+            return True
+        parts = [
+            part
+            for part in normalized.split()
+            if len(part) >= 5 and part not in _PHRASE_STOPWORDS
+        ]
+        if parts and any(_contains_phrase(candidate_text, part) for part in parts):
+            return True
+    return False
+
+
 def apply_domain_generalization(posting: PostingSignals, candidate: CandidateEvidence, candidate_data: dict, jd: str) -> set[str]:
     """Match the candidate's own domain vocabulary against the posting and fold
     the hits into the keyword rubric, then make the wrong-field judgement
@@ -517,8 +535,7 @@ def apply_domain_generalization(posting: PostingSignals, candidate: CandidateEvi
         # If the candidate works in the posting's profession (their skills show
         # up in the JD, or their profile names the same profession), it's the
         # RIGHT field and the hard cap must not fire.
-        cand_text = _profile_text(candidate_data).lower()
-        same_profession = any(_contains_phrase(cand_text, term) for term in posting.wrong_field_terms)
+        same_profession = _same_wrong_field_as_candidate(candidate_data, posting.wrong_field_terms)
         if matched or same_profession:
             posting.wrong_field = False
     return matched

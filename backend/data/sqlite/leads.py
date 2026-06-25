@@ -423,6 +423,7 @@ def update_lead_score(
         source_meta = json_dict(row["source_meta"] if row else "{}")
         if scored_by:
             source_meta["scored_by"] = scored_by
+            source_meta["match_scoring_mode"] = scored_by
 
         if preserve_status:
             status = current_status

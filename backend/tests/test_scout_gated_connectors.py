@@ -20,6 +20,8 @@ the module-level persistence hooks (`url_exists` / `save_lead`) are stubbed.
 
 from __future__ import annotations
 
+import threading
+import time
 from datetime import datetime, timezone
 from unittest import mock
 
@@ -101,9 +103,16 @@ def test_apify_gated_invokes_actor_with_derived_queries():
     assert captured.get("actor") == "acme/job-actor", "Apify actor was not invoked (dead path not revived)"
     assert captured.get("tok") == "tok-123"
     assert captured.get("inp", {}).get("queries") == [
-        "linkedin.com/jobs welder",
-        "indeed.com/jobs nurse",
+        "site:linkedin.com/jobs welder",
+        "site:indeed.com/jobs nurse",
     ], f"actor did not receive site-derived queries: {captured.get('inp')}"
+
+
+def test_apify_query_templates_keep_google_site_operator():
+    assert scout._apify_actor_queries([
+        "site:jobs.lever.co \"Python\" Montpellier",
+        "https://remotive.com/api/remote-jobs",
+    ]) == ["site:jobs.lever.co \"Python\" Montpellier"]
 
 
 def test_apify_not_invoked_without_credentials():
@@ -123,3 +132,118 @@ def test_apify_not_invoked_without_credentials():
         scout.run(urls=["site:linkedin.com/jobs welder"])  # no apify creds
 
     assert invoked["called"] is False, "Apify actor must not run without token+actor"
+
+
+def test_browser_scan_respects_target_cap_and_concurrency_limit():
+    active = 0
+    max_active = 0
+    counter = 0
+    lock = threading.Lock()
+    calls: list[str] = []
+
+    def fake_scrape(target, headed=False):
+        nonlocal active, max_active, counter
+        with lock:
+            active += 1
+            max_active = max(max_active, active)
+            counter += 1
+            idx = counter
+        try:
+            time.sleep(0.03)
+            calls.append(target)
+            return [{
+                "title": f"Junior Python Developer {idx}",
+                "company": "Acme",
+                "url": f"https://jobs.example.com/browser-{idx}",
+                "platform": "google_search",
+                "description": (
+                    "Acme is hiring a junior Python developer for a full-time remote "
+                    "or hybrid role. Responsibilities include building APIs, maintaining "
+                    "data workflows, collaborating with product teams, and shipping tested "
+                    "features. Required skills include Python, SQL, Git, API integrations, "
+                    "clear communication, and willingness to learn. Apply through the job page."
+                ),
+                "posted_date": _now_iso(),
+                "signal_score": 90,
+                "source_meta": {"source": "google_search"},
+            }]
+        finally:
+            with lock:
+                active -= 1
+
+    with (
+        mock.patch.object(scout.web_sources, "scrape", fake_scrape),
+        mock.patch.object(scout, "url_exists", lambda _jid: False),
+        mock.patch.object(scout, "save_lead", lambda *a, **k: None),
+    ):
+        leads = scout.run(
+            urls=[
+                "site:jobs.lever.co python",
+                "site:jobs.ashbyhq.com python",
+                "site:boards.greenhouse.io python",
+            ],
+            browser_scan_concurrency=2,
+            browser_scan_max_targets=2,
+            llm_scan_mode="lean",
+        )
+
+    assert len(calls) == 2
+    assert max_active <= 2
+    assert len(leads) == 2
+    assert scout.LAST_USAGE["browser_configured"] == 3
+    assert scout.LAST_USAGE["browser_executed"] == 2
+    assert scout.LAST_USAGE["browser_skipped"] == 1
+    assert scout.LAST_USAGE["browser_concurrency"] == 2
+    assert scout.LAST_USAGE["llm_scan_mode"] == "lean"
+    assert all(lead["source_meta"]["extraction_mode"] == "browser_google_qdr_week" for lead in leads)
+    assert all(lead["source_meta"]["query"].startswith("site:") for lead in leads)
+
+
+def test_browser_scan_can_be_disabled_without_touching_web_scraper():
+    with (
+        mock.patch.object(scout.web_sources, "scrape", side_effect=AssertionError("browser should not run")),
+        mock.patch.object(scout, "url_exists", lambda _jid: False),
+        mock.patch.object(scout, "save_lead", lambda *a, **k: None),
+    ):
+        leads = scout.run(
+            urls=["site:jobs.lever.co python", "site:jobs.ashbyhq.com python"],
+            browser_scan_enabled=False,
+        )
+
+    assert leads == []
+    assert scout.LAST_USAGE["browser_configured"] == 2
+    assert scout.LAST_USAGE["browser_executed"] == 0
+    assert scout.LAST_USAGE["browser_skipped"] == 2
+    assert any("scan navigateur désactivé" in error for error in scout.LAST_ERRORS)
+
+
+def test_browser_source_errors_are_isolated_per_target():
+    def fake_scrape(target, headed=False):
+        if "lever" in target:
+            raise RuntimeError("blocked")
+        return [{
+            "title": "Junior Analyst",
+            "company": "Acme",
+            "url": "https://jobs.example.com/browser-ok",
+            "platform": "google_search",
+            "description": (
+                "Junior analyst role with clear hiring signal, application path, "
+                "remote or hybrid work, and documented responsibilities."
+            ),
+            "posted_date": _now_iso(),
+            "source_meta": {"source": "google_search"},
+        }]
+
+    with (
+        mock.patch.object(scout.web_sources, "scrape", fake_scrape),
+        mock.patch.object(scout, "url_exists", lambda _jid: False),
+        mock.patch.object(scout, "save_lead", lambda *a, **k: None),
+    ):
+        leads = scout.run(urls=["site:jobs.lever.co python", "site:jobs.ashbyhq.com python"])
+
+    assert len(leads) == 1
+    assert scout.LAST_USAGE["errors"] == 1
+    assert scout.LAST_USAGE["browser_executed"] == 1
+    assert scout.LAST_USAGE["by_source"]["site:jobs.lever.co python"] == 0
+    assert scout.LAST_USAGE["by_source"]["site:jobs.ashbyhq.com python"] == 1
+    assert any("site:jobs.lever.co" in error and "blocked" in error for error in scout.LAST_ERRORS)

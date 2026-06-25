@@ -9,7 +9,19 @@ SETTINGS_SCHEMA = {
     "free_source_min_signal_score": {"type": "int", "min": 0, "max": 100, "default": 60},
     "free_source_max_requests": {"type": "int", "min": 1, "max": 80, "default": 20},
     "board_scan_batch_size": {"type": "int", "min": 1, "max": 12, "default": 4},
+    "browser_scan_concurrency": {"type": "int", "min": 1, "max": 8, "default": 4},
+    "browser_scan_max_targets": {"type": "int", "min": 1, "max": 80, "default": 32},
     "x_hot_lead_threshold": {"type": "int", "min": 1, "max": 100, "default": 80},
+    "browser_scan_enabled": {
+        "type": "str",
+        "allowed": ["", "true", "false"],
+        "default": "true",
+    },
+    "llm_scan_mode": {
+        "type": "str",
+        "allowed": ["", "lean", "balanced", "thorough"],
+        "default": "balanced",
+    },
     "llm_provider": {
         "type": "str",
         "allowed": [

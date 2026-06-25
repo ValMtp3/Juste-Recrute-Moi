@@ -21,13 +21,26 @@ def run_free_scout(**kwargs) -> SourceAdapterResult:
     )
 
 
-def run_apify_scout(*, urls: list[str], apify_token: str | None = None, apify_actor: str | None = None) -> SourceAdapterResult:
+def run_apify_scout(
+    *,
+    urls: list[str],
+    apify_token: str | None = None,
+    apify_actor: str | None = None,
+    browser_scan_enabled: bool = True,
+    browser_scan_concurrency: int = 4,
+    browser_scan_max_targets: int = 32,
+    llm_scan_mode: str = "balanced",
+) -> SourceAdapterResult:
     from automation import scout
 
     leads = scout.run(
         urls=urls,
         apify_token=apify_token,
         apify_actor=apify_actor,
+        browser_scan_enabled=browser_scan_enabled,
+        browser_scan_concurrency=browser_scan_concurrency,
+        browser_scan_max_targets=browser_scan_max_targets,
+        llm_scan_mode=llm_scan_mode,
     )
     return SourceAdapterResult(
         leads=leads,

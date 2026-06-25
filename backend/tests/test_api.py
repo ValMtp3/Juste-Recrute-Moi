@@ -591,6 +591,40 @@ class TestSettingsEndpoints(unittest.TestCase):
         resp = get("/api/v1/settings/validate")
         self.assertIsInstance(resp.json(), dict)
 
+    def test_sensitive_settings_are_masked_but_revealable_locally(self):
+        from api.dependencies import get_repository
+
+        class FakeSettings:
+            def get_settings(self):
+                return {"openai_api_key": "sk-test-secret", "public_setting": "visible"}
+
+        fake_repo = types.SimpleNamespace(settings=FakeSettings())
+        app.dependency_overrides[get_repository] = lambda: fake_repo
+        try:
+            masked = get("/api/v1/settings")
+            revealed = get("/api/v1/settings/secrets/openai_api_key")
+            public = get("/api/v1/settings/secrets/public_setting")
+        finally:
+            app.dependency_overrides.pop(get_repository, None)
+
+        self.assertEqual(masked.status_code, 200)
+        self.assertEqual(masked.json()["openai_api_key"], "__JHM_SECRET_SET__")
+        self.assertEqual(revealed.status_code, 200)
+        self.assertEqual(revealed.json()["value"], "sk-test-secret")
+        self.assertEqual(public.status_code, 404)
+
+    def test_rebuild_vectors_endpoint_requires_confirmation_and_returns_summary(self):
+        from api.routers import settings as settings_router
+
+        with mock.patch.object(settings_router, "_rebuild_vector_tables", return_value={"vectors_dropped": ["skills"], "sync": {"synced": 3}}):
+            rejected = post("/api/v1/vectors/rebuild", json={"confirm": "NOPE"})
+            accepted = post("/api/v1/vectors/rebuild", json={"confirm": "VECTORS"})
+
+        self.assertEqual(rejected.status_code, 422)
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(accepted.json()["summary"]["vectors_dropped"], ["skills"])
+        self.assertEqual(accepted.json()["summary"]["sync"]["synced"], 3)
+
 
 class TestFollowupsEndpoint(unittest.TestCase):
     def test_due_followups_returns_list(self):

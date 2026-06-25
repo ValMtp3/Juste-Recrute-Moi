@@ -6,7 +6,7 @@ import { GlobalSettings } from "./panels/GlobalSettings";
 import { ResumeTemplatesPanel } from "./panels/ResumeTemplatesPanel";
 import { StepSettings } from "./panels/StepSettings";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { EMPTY, SECRET_MASKS, type Cfg } from "./panels/shared";
+import { EMPTY, SecretInput, type Cfg } from "./panels/shared";
 import { SectionLabel } from "./panels/shared";
 import { useTheme, type ThemePref } from "../../shared/lib/theme";
 import { settingsApi } from "../../api/settings";
@@ -79,7 +79,7 @@ const EMBEDDING_OPTIONS = [
   { value: "hash", label: "Fallback", sub: "léger, non sémantique" },
 ];
 
-function EmbeddingSettings({ cfg, onChange }: { cfg: Cfg; onChange: (k: keyof Cfg, v: string) => void }) {
+function EmbeddingSettings({ cfg, onChange, api }: { cfg: Cfg; onChange: (k: keyof Cfg, v: string) => void; api: ApiFetch }) {
   const provider = cfg.embedding_provider || "onnx";
 
   return (
@@ -107,11 +107,12 @@ function EmbeddingSettings({ cfg, onChange }: { cfg: Cfg; onChange: (k: keyof Cf
         {provider === "openai" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase" }}>Clé OpenAI embeddings</div>
-            <input type="password" value={SECRET_MASKS.has(cfg.embedding_openai_api_key) ? "" : cfg.embedding_openai_api_key}
-              onChange={e => onChange("embedding_openai_api_key", e.target.value)}
+            <SecretInput value={cfg.embedding_openai_api_key}
+              onChange={v => onChange("embedding_openai_api_key", v)}
+              api={api}
+              secretKey="embedding_openai_api_key"
               placeholder="sk-..."
-              className="mono field-input"
-              style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+            />
             <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
               Le chat peut rester sur Custom. Cette clé sert seulement à générer les vecteurs avec text-embedding-3-small.
             </div>
@@ -128,8 +129,14 @@ function DangerZone({ api }: { api: ApiFetch }) {
   const [clearSettings, setClearSettings] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [vectorOpen, setVectorOpen] = useState(false);
+  const [vectorConfirm, setVectorConfirm] = useState("");
+  const [vectorBusy, setVectorBusy] = useState(false);
+  const [vectorResult, setVectorResult] = useState<string | null>(null);
+  const [vectorError, setVectorError] = useState<string | null>(null);
 
   const armed = confirmText.trim().toUpperCase() === "DELETE";
+  const vectorsArmed = vectorConfirm.trim().toUpperCase() === "VECTORS";
 
   const reset = async () => {
     if (!armed) return;
@@ -150,9 +157,66 @@ function DangerZone({ api }: { api: ApiFetch }) {
     }
   };
 
+  const rebuildVectors = async () => {
+    if (!vectorsArmed) return;
+    setVectorBusy(true);
+    setVectorError(null);
+    setVectorResult(null);
+    try {
+      const response = await settingsApi.rebuildVectors(api);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || "Reconstruction des vecteurs échouée");
+      }
+      const dropped = Array.isArray(data.summary?.vectors_dropped) ? data.summary.vectors_dropped.length : 0;
+      const synced = data.summary?.sync?.synced ?? 0;
+      setVectorResult(`${dropped} table(s) supprimée(s), ${synced} vecteur(s) resynchronisé(s).`);
+      setVectorOpen(false);
+      setVectorConfirm("");
+    } catch (e) {
+      setVectorError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setVectorBusy(false);
+    }
+  };
+
   return (
     <div>
       <SectionLabel label="Zone dangereuse" sub="Efface les données locales pour repartir à zéro : action irréversible" />
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ border: "1px solid var(--yellow)", background: "var(--yellow-soft)", borderRadius: 12, padding: 14 }}>
+        {!vectorOpen ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)", maxWidth: 460 }}>
+              Supprime seulement les tables vectorielles et les reconstruit depuis le graphe. À utiliser après un changement de provider embeddings.
+              {vectorResult && <div style={{ marginTop: 6, color: "var(--green-ink)", fontWeight: 700 }}>{vectorResult}</div>}
+              {vectorError && <div style={{ marginTop: 6, color: "var(--bad)", fontWeight: 700 }}>{vectorError}</div>}
+            </div>
+            <button className="btn" onClick={() => { setVectorOpen(true); setVectorResult(null); setVectorError(null); }}
+              style={{ color: "var(--yellow-ink)", borderColor: "var(--yellow)", fontSize: 13, padding: "8px 16px", whiteSpace: "nowrap" }}>
+              <Icon name="graph" size={13} /> Reconstruire les vecteurs
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+              <Icon name="alert" size={13} /> Cette action recrée les embeddings locaux sans supprimer les offres, le profil ni les paramètres. Tape <b>VECTORS</b> pour confirmer.
+            </div>
+            <input type="text" value={vectorConfirm} onChange={e => setVectorConfirm(e.target.value)}
+              placeholder="Tape VECTORS pour confirmer" className="field-input" style={{ fontSize: 13 }} />
+            {vectorError && <div style={{ color: "var(--bad)", fontSize: 12, fontWeight: 700 }}>{vectorError}</div>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn" disabled={vectorBusy}
+                onClick={() => { setVectorOpen(false); setVectorConfirm(""); setVectorError(null); }}
+                style={{ fontSize: 13, padding: "8px 16px" }}>Annuler</button>
+              <button className="btn" onClick={rebuildVectors} disabled={vectorBusy || !vectorsArmed}
+                style={{ background: "var(--yellow)", color: "var(--yellow-ink)", borderColor: "var(--yellow)", fontSize: 13, padding: "8px 18px", opacity: (vectorBusy || !vectorsArmed) ? 0.55 : 1 }}>
+                <Icon name="graph" size={13} /> {vectorBusy ? "Reconstruction..." : "Reconstruire"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
       <div style={{ border: "1px solid var(--bad)", background: "var(--bad-soft, rgba(220,38,38,0.06))", borderRadius: 12, padding: 14 }}>
         {!open ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -187,6 +251,7 @@ function DangerZone({ api }: { api: ApiFetch }) {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );
@@ -249,10 +314,10 @@ export default function SettingsModal({ api, onClose }: Props) {
         <div className="scroll" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 22 }}>
           <AppearanceSettings />
           <GlobalSettings cfg={cfg} set={set} onChange={onChange} prov={prov} api={api} />
-          <EmbeddingSettings cfg={cfg} onChange={onChange} />
+          <EmbeddingSettings cfg={cfg} onChange={onChange} api={api} />
           <ResumeTemplatesPanel api={api} />
           <StepSettings cfg={cfg} onChange={onChange} api={api} />
-          <DiscoverySettings cfg={cfg} set={set} onChange={onChange} />
+          <DiscoverySettings cfg={cfg} set={set} onChange={onChange} api={api} />
           <AutomationSettings cfg={cfg} onChange={onChange} />
           <LegalSettings />
           <DangerZone api={api} />

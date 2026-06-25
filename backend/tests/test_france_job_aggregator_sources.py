@@ -3,6 +3,9 @@ import sys
 from types import SimpleNamespace
 from unittest import mock
 
+import httpx
+import pytest
+
 from core.config import job_market_focus, job_targets, parse_search_intent, profile_for_discovery
 from discovery.service import DiscoveryService
 from discovery.sources import ats, france_travail, jobspy, url_import
@@ -33,6 +36,19 @@ def test_france_market_plain_search_keeps_fallback_sources():
     assert "https://remotive.com/api/remote-jobs" in targets
     assert "https://jobicy.com/api/v2/remote-jobs?count=50" in targets
     assert any("welcometothejungle" in target for target in targets)
+
+
+def test_france_market_replaces_generic_france_travail_target_with_profile_intent():
+    targets = job_targets(
+        "france_travail:developpeur;lieu=France;range=0-49\nsite:hellowork.com/fr-fr/emplois",
+        "france",
+        search_text="Développeur IA Montpellier alternance",
+        location="Montpellier",
+    )
+
+    assert targets[0] == "france_travail:Développeur IA;lieu=Montpellier;range=0-49;typeContrat=APP"
+    assert "site:hellowork.com/fr-fr/emplois" in targets
+    assert "france_travail:developpeur;lieu=France;range=0-49" not in targets
 
 
 def test_france_market_plain_search_detects_role_location_and_contract():
@@ -74,6 +90,30 @@ def test_france_default_targets_use_profile_search_intent():
     assert profile["_discovery_location"] == "Montpellier"
     assert profile["_remote_preference"] == "remote"
     assert targets[0] == "france_travail:IA;lieu=Montpellier;range=0-49;typeContrat=APP"
+
+
+def test_france_profile_free_sources_skip_reddit():
+    from discovery.targets import profile_free_source_targets
+
+    profile = profile_for_discovery({}, {
+        "job_market_focus": "france",
+        "desired_position": "Développeur IA Montpellier",
+    })
+
+    targets = profile_free_source_targets(profile)
+
+    assert "github:" in targets
+    assert "hn:" in targets
+    assert "reddit:" not in targets
+
+
+def test_france_market_filters_explicit_reddit_free_targets():
+    from discovery.service import _filter_free_targets_for_market
+
+    raw = "github:data hiring\nreddit:forhire:data remote\nhn:data hiring"
+
+    assert "reddit:" not in _filter_free_targets_for_market(raw, "france")
+    assert "reddit:" in _filter_free_targets_for_market(raw, "global")
 
 
 def test_france_travail_search_params_keep_structured_filters():
@@ -121,6 +161,43 @@ def test_france_travail_mapper_returns_stable_lead():
     assert lead["source_meta"]["source"] == "france_travail"
     assert lead["source_meta"]["source_reliability"] == "stable"
     assert lead["source_meta"]["contract_type"] == "CDI"
+
+
+def test_france_travail_non_json_response_is_actionable():
+    response = httpx.Response(
+        200,
+        headers={"content-type": "text/html"},
+        text="<html>maintenance</html>",
+    )
+
+    with pytest.raises(RuntimeError) as exc:
+        france_travail._json_response(response, context="recherche")
+
+    message = str(exc.value)
+    assert "réponse non JSON" in message
+    assert "HTTP 200" in message
+    assert "text/html" in message
+    assert "maintenance" in message
+
+
+def test_france_travail_empty_204_search_response_is_empty_result(monkeypatch):
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, *args, **kwargs):
+            return httpx.Response(204)
+
+    async def fake_access_token():
+        return "token"
+
+    monkeypatch.setattr(france_travail, "_access_token", fake_access_token)
+    monkeypatch.setattr(france_travail, "guarded_async_client", lambda *args, **kwargs: FakeClient())
+
+    assert asyncio.run(france_travail._json_search({"motsCles": "data"})) == {"resultats": []}
 
 
 def test_france_travail_credentials_can_come_from_settings(monkeypatch):

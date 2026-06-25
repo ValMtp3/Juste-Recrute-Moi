@@ -65,6 +65,12 @@ FRANCE_JOB_TARGETS = [
     "site:apply.workable.com France",
 ]
 
+GENERIC_FRANCE_TRAVAIL_ROLES = {
+    "developpeur",
+    "développeur",
+    "developer",
+}
+
 CONFIGURED_TARGET_PREFIXES = (
     "http://",
     "https://",
@@ -176,6 +182,24 @@ def _clean_france_travail_value(value: str, fallback: str) -> str:
     cleaned = re.sub(r"[;|=]+", " ", str(value or "")).strip()
     cleaned = re.sub(r"\s+", " ", cleaned)
     return cleaned or fallback
+
+
+def _is_generic_france_travail_target(target: str) -> bool:
+    lower = str(target or "").strip().lower()
+    if not lower.startswith("france_travail:"):
+        return False
+    body = lower.split(":", 1)[1]
+    parts = [part.strip() for part in body.replace("|", ";").split(";") if part.strip()]
+    role = parts[0] if parts and "=" not in parts[0] else ""
+    params: dict[str, str] = {}
+    for part in parts[1:] if role else parts:
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        params[key.strip()] = value.strip()
+    location = params.get("lieu") or params.get("location") or ""
+    has_specific_filter = any(key in params for key in ("typecontrat", "contrat", "teletravail", "rayon"))
+    return role in GENERIC_FRANCE_TRAVAIL_ROLES and location in {"", "france"} and not has_specific_filter
 
 
 def _norm_token(value: str) -> str:
@@ -305,6 +329,14 @@ def job_targets(
         plain_france_target = france_travail_target_from_plain(targets, location or "France")
         if plain_france_target:
             targets = [plain_france_target, *FRANCE_JOB_TARGETS[1:]]
+        elif str(search_text or "").strip() and any(_is_generic_france_travail_target(target) for target in targets):
+            profile_france_targets = _france_targets_from_intent(search_text, location or "France")
+            profile_france_target = profile_france_targets[0] if profile_france_targets else ""
+            if profile_france_target:
+                targets = [
+                    profile_france_target if _is_generic_france_travail_target(target) else target
+                    for target in targets
+                ]
 
     filtered: list[str] = []
     for target in targets:
@@ -448,6 +480,7 @@ def profile_for_discovery(profile: dict | None, cfg: dict) -> dict:
     # The user's free-text "what I'm looking for" preferences steer the scan
     # toward roles they actually want (used by the query planner + evaluator).
     profile["_job_preferences"] = str((cfg or {}).get("job_preferences") or "").strip()
+    profile["_job_market_focus"] = job_market_focus((cfg or {}).get("job_market_focus"))
     return profile
 
 
@@ -537,11 +570,13 @@ def profile_free_source_targets(profile: dict) -> str:
         return ""
     terms = terms_for_discovery(profile, 3)
     role_query = " ".join(terms[:2])
-    return "\n".join([
+    targets = [
         f"github:{role_query} hiring help wanted",
         f"hn:{role_query} remote hiring",
-        f"reddit:forhire:{role_query} hiring job remote",
-    ])
+    ]
+    if job_market_focus(profile.get("_job_market_focus")) != "france":
+        targets.append(f"reddit:forhire:{role_query} hiring job remote")
+    return "\n".join(targets)
 
 
 def profile_x_queries(profile: dict, market_focus: str = "global") -> str:
