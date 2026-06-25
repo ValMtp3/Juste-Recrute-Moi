@@ -42,6 +42,36 @@ def test_startup_validation_warns_when_free_sources_have_no_targets():
     ]
 
 
+def test_startup_validation_warns_when_france_travail_credentials_missing(monkeypatch):
+    from api.startup_validation import FRANCE_TRAVAIL_CREDENTIAL_WARNING, startup_warnings
+
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_ID", raising=False)
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_SECRET", raising=False)
+
+    warnings = startup_warnings(_repo_with_settings({
+        "job_market_focus": "france",
+        "job_boards": "",
+        "free_source_targets": "",
+    }))
+
+    assert FRANCE_TRAVAIL_CREDENTIAL_WARNING in warnings
+
+
+def test_startup_validation_accepts_france_travail_credentials_from_settings(monkeypatch):
+    from api.startup_validation import FRANCE_TRAVAIL_CREDENTIAL_WARNING, startup_warnings
+
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_ID", raising=False)
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_SECRET", raising=False)
+
+    warnings = startup_warnings(_repo_with_settings({
+        "job_market_focus": "france",
+        "france_travail_client_id": "client",
+        "france_travail_client_secret": "secret",
+    }))
+
+    assert FRANCE_TRAVAIL_CREDENTIAL_WARNING not in warnings
+
+
 def test_startup_validation_logs_every_warning(monkeypatch):
     from api.startup_validation import log_startup_warnings
 

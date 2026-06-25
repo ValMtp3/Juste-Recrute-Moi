@@ -5,7 +5,8 @@ import { ApiKeyInput, GLOBAL_MODEL_FIELD, isSubscriptionProvider, KEY_FIELD, Mod
 import type { ApiFetch } from "../../../types";
 
 type KeyStatus = "ok" | "invalid_key" | "unreachable" | "not_configured" | "unchecked";
-type ValidationResult = Record<string, { status: KeyStatus; latency_ms?: number }>;
+type ProviderValidation = { status: KeyStatus; latency_ms?: number };
+type ValidationResult = Record<string, ProviderValidation | string[]>;
 
 export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; set: (k: keyof Cfg) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void; prov: string; api: ApiFetch }) {
   const [checking, setChecking] = useState(false);
@@ -79,8 +80,9 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
     unchecked: "non vérifié",
   }[status]);
 
+  const validationWarnings = Array.isArray(results?._warnings) ? results._warnings : [];
   const resultEntries = results
-    ? Object.entries(results).sort(([left], [right]) => {
+    ? (Object.entries(results).filter(([, result]) => !Array.isArray(result)) as [string, ProviderValidation][]).sort(([left], [right]) => {
       if (left === prov) return -1;
       if (right === prov) return 1;
       return left.localeCompare(right);
@@ -127,16 +129,27 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
                 )}
                 {err && <div style={{ fontSize: 12, color: "var(--bad)" }}>{err}</div>}
                 {results && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
-                    {resultEntries.map(([provider, result]) => (
-                      <div key={provider} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)" }}>
-                        <span style={{ fontSize: 12, fontWeight: 700 }}>{provider}</span>
-                        <span className="mono" style={{ fontSize: 10.5, padding: "2px 7px", borderRadius: 999, ...badgeStyle(result.status) }}>
-                          {label(result.status)}{["ok", "unreachable"].includes(result.status) && result.latency_ms ? ` · ${result.latency_ms}ms` : ""}
-                        </span>
+                  <>
+                    {validationWarnings.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {validationWarnings.map((warning, index) => (
+                          <div key={index} style={{ padding: "8px 10px", borderRadius: 9, border: "1px solid var(--yellow)", background: "var(--yellow-soft)", color: "var(--yellow-ink)", fontSize: 11.5, lineHeight: 1.45 }}>
+                            {warning}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+                      {resultEntries.map(([provider, result]) => (
+                        <div key={provider} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)" }}>
+                          <span style={{ fontSize: 12, fontWeight: 700 }}>{provider}</span>
+                          <span className="mono" style={{ fontSize: 10.5, padding: "2px 7px", borderRadius: 999, ...badgeStyle(result.status) }}>
+                            {label(result.status)}{["ok", "unreachable"].includes(result.status) && result.latency_ms ? ` · ${result.latency_ms}ms` : ""}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
