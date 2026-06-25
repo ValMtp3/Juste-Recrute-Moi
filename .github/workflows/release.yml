@@ -214,6 +214,8 @@ jobs:
       - name: Smoke sidecar startup
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
+          JHM_SMOKE_PREINSTALL_RUNTIME: "1"
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: release-assets\Juste-Recrute-Moi-runtime-pack-windows.zip
         run: npm run smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
@@ -278,6 +280,9 @@ jobs:
         # The raw macOS sidecar is not codesigned with library-validation
         # entitlements yet. The packaged macOS smoke below verifies the vector
         # runtime strictly after codesign.
+        env:
+          JHM_SMOKE_PREINSTALL_RUNTIME: "1"
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: release-assets/Juste-Recrute-Moi-runtime-pack-macos.zip
         run: npm run smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
@@ -341,6 +346,8 @@ jobs:
       - name: Smoke sidecar startup
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
+          JHM_SMOKE_PREINSTALL_RUNTIME: "1"
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: release-assets/Juste-Recrute-Moi-runtime-pack-linux.zip
         run: npm run smoke:sidecar
 
       - name: Publier l'artefact sidecar backend

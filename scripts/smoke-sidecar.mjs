@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
@@ -51,6 +51,56 @@ function localVectorRuntimeArchive() {
 
 function localRuntimePackUrl() {
   return pathToFileURL(localVectorRuntimeArchive()).href;
+}
+
+function extractArchive(archive, target) {
+  mkdirSync(target, { recursive: true });
+  const result = process.platform === "win32"
+    ? spawnSync("powershell", [
+      "-NoProfile",
+      "-Command",
+      "Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
+      archive,
+      target,
+    ], { stdio: "inherit" })
+    : spawnSync("unzip", ["-q", archive, "-d", target], { stdio: "inherit" });
+  if (result.status !== 0) {
+    fail(`Could not extract runtime pack ${archive}`);
+  }
+}
+
+function findRuntimePayload(root) {
+  const queue = [root];
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    const vectorPayload = join(current, "vector-runtime");
+    if (existsSync(join(vectorPayload, "lancedb")) && existsSync(join(vectorPayload, "pyarrow"))) {
+      return vectorPayload;
+    }
+    try {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        if (entry.isDirectory()) queue.push(join(current, entry.name));
+      }
+    } catch {
+      // Ignore unreadable extraction debris.
+    }
+  }
+  return null;
+}
+
+function preinstallRuntimePack() {
+  if (process.env.JHM_SMOKE_PREINSTALL_RUNTIME !== "1") return;
+  const archive = localVectorRuntimeArchive();
+  if (!existsSync(archive)) {
+    fail(`Runtime pack archive not found at ${archive}`);
+  }
+  const extractDir = join(appDataDir, "runtime-pack-extract");
+  extractArchive(archive, extractDir);
+  const payload = findRuntimePayload(extractDir);
+  if (!payload) {
+    fail(`Runtime pack archive does not contain a vector-runtime payload: ${archive}`);
+  }
+  cpSync(payload, join(appDataDir, "vector-runtime"), { recursive: true });
 }
 
 function remove(path, options = {}) {
@@ -357,6 +407,7 @@ let childClosed = false;
 remove(appDataDir);
 mkdirSync(appDataDir, { recursive: true });
 mkdirSync(cwd, { recursive: true });
+preinstallRuntimePack();
 
 const child = spawn(sidecar, ["--no-services"], {
   cwd,
