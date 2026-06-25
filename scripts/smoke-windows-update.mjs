@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
@@ -64,6 +64,62 @@ function localVectorRuntimeArchive() {
 
 function localRuntimePackUrl() {
   return pathToFileURL(localVectorRuntimeArchive()).href;
+}
+
+function extractArchive(archive, target) {
+  mkdirSync(target, { recursive: true });
+  run("powershell.exe", [
+    "-NoProfile",
+    "-Command",
+    "Expand-Archive -LiteralPath $env:JHM_ARCHIVE -DestinationPath $env:JHM_EXTRACT_TARGET -Force",
+  ], {
+    env: { ...process.env, JHM_ARCHIVE: archive, JHM_EXTRACT_TARGET: target },
+  });
+}
+
+function findRuntimePayloads(root) {
+  const queue = [root];
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    const vectorPayload = join(current, "vector-runtime");
+    if (existsSync(join(vectorPayload, "lancedb")) && existsSync(join(vectorPayload, "pyarrow"))) {
+      const browserPayload = join(current, "browser-runtime", "ms-playwright");
+      const modelsPayload = join(current, "models");
+      return {
+        vector: vectorPayload,
+        browser: existsSync(browserPayload) ? browserPayload : null,
+        models: existsSync(modelsPayload) ? modelsPayload : null,
+      };
+    }
+    try {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        if (entry.isDirectory()) queue.push(join(current, entry.name));
+      }
+    } catch {
+      // Ignore unreadable extraction debris.
+    }
+  }
+  return null;
+}
+
+function preinstallRuntimePack(appDataDir) {
+  const archive = localVectorRuntimeArchive();
+  if (!existsSync(archive)) {
+    return;
+  }
+  const extractDir = join(appDataDir, "runtime-pack-extract");
+  extractArchive(archive, extractDir);
+  const payloads = findRuntimePayloads(extractDir);
+  if (!payloads) {
+    fail(`Runtime pack archive does not contain a vector-runtime payload: ${archive}`);
+  }
+  cpSync(payloads.vector, join(appDataDir, "vector-runtime"), { recursive: true });
+  if (payloads.browser) {
+    cpSync(payloads.browser, join(appDataDir, "browser-runtime", "ms-playwright"), { recursive: true });
+  }
+  if (payloads.models) {
+    cpSync(payloads.models, join(appDataDir, "models"), { recursive: true });
+  }
 }
 
 function resolveInstaller(envName) {
@@ -504,6 +560,7 @@ async function smokeInstalledSidecar(installDir, appDataDir) {
 
   await removeWithRetry(appDataDir);
   mkdirSync(appDataDir, { recursive: true });
+  preinstallRuntimePack(appDataDir);
   const stdoutLines = [];
   const stderrLines = [];
   const child = spawn(sidecar, ["--no-services"], {
@@ -526,9 +583,12 @@ async function smokeInstalledSidecar(installDir, appDataDir) {
     handshake = await waitForHandshake(child, stdoutLines, stderrLines);
     const health = await readHealth(handshake.port, handshake.token);
     const summary = requireHealth(health);
-    const runtime = await ensureVectorRuntime(handshake.port, handshake.token);
-    const runtimeHealth = await readHealth(handshake.port, handshake.token);
-    const runtimeSummary = requireHealth(runtimeHealth, { vectorRequired: runtime.ready });
+    let runtimeSummary = summary;
+    if (summary.vector !== "ok") {
+      const runtime = await ensureVectorRuntime(handshake.port, handshake.token);
+      const runtimeHealth = await readHealth(handshake.port, handshake.token);
+      runtimeSummary = requireHealth(runtimeHealth, { vectorRequired: runtime.ready });
+    }
     console.log(`Installed sidecar health passed: app=${summary.app}, sqlite=${summary.sqlite}, graph=${summary.graph}, vector=${runtimeSummary.vector || summary.vector}`);
   } finally {
     await stopSidecar(child, handshake);

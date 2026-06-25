@@ -94,7 +94,7 @@ NOISE_TERMS = (
 
 
 def _h(value: str) -> str:
-    return hashlib.md5(value.encode()).hexdigest()[:16]
+    return hashlib.blake2s(value.encode(), digest_size=16).hexdigest()[:16]
 
 
 def _int_setting(value, default: int, min_value: int, max_value: int) -> int:

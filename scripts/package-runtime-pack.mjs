@@ -253,9 +253,34 @@ function downloadOnnxModel() {
     console.log(`Downloading ONNX model file: ${local} from ${url}`);
     // Use Python urllib since Node fetch may not follow redirects cleanly for large files
     const code = `
-import urllib.request, sys
-urllib.request.urlretrieve(sys.argv[1], sys.argv[2])
-print(f"Downloaded {sys.argv[2]}")
+import time
+import urllib.error
+import urllib.request
+import sys
+
+url, target = sys.argv[1], sys.argv[2]
+last_error = None
+for attempt in range(1, 6):
+    try:
+        urllib.request.urlretrieve(url, target)
+        print(f"Downloaded {target}")
+        break
+    except urllib.error.HTTPError as exc:
+        last_error = exc
+        if exc.code not in {429, 500, 502, 503, 504} or attempt == 5:
+            raise
+        delay = min(60, 5 * attempt)
+        print(f"Download failed with HTTP {exc.code}; retrying in {delay}s ({attempt}/5)", file=sys.stderr)
+        time.sleep(delay)
+    except urllib.error.URLError as exc:
+        last_error = exc
+        if attempt == 5:
+            raise
+        delay = min(60, 5 * attempt)
+        print(f"Download failed: {exc}; retrying in {delay}s ({attempt}/5)", file=sys.stderr)
+        time.sleep(delay)
+else:
+    raise last_error or RuntimeError("download failed")
 `;
     run(python, ["-c", code, url, target], { cwd: repoRoot });
     if (!existsSync(target) || statSync(target).size === 0) {

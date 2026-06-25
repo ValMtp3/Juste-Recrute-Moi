@@ -54,7 +54,7 @@ def _runtime_payload(sync: dict | None = None) -> dict:
     if current_sync is not None:
         payload["sync"] = current_sync
     if _LAST_ERROR:
-        payload["install_error"] = _LAST_ERROR
+        payload["install_error"] = "runtime install failed"
     return payload
 
 
@@ -77,8 +77,8 @@ def _install_worker() -> None:
         _LAST_ERROR = ""
         payload = _install_and_refresh()
         _LAST_SYNC = payload.get("sync")
-    except Exception as exc:
-        _LAST_ERROR = str(exc)
+    except Exception:
+        _LAST_ERROR = "runtime install failed"
 
 
 def _ensure_install_job() -> None:

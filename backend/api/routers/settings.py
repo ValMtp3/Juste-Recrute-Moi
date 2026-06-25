@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_repository
 from api.scheduler import ensure_ghost_job
+from api.startup_validation import configuration_warnings
 from core.types import PreferencesBody, ResetDataBody, SettingsBody, TemplateBody
 from data.repository import Repository
 
@@ -215,7 +216,11 @@ async def validate_provider_settings(repo: Repository, incoming: dict | None = N
         return provider, await probe_provider_key(provider, key, cfg)
 
     pairs = await asyncio.gather(*(one(provider) for provider in providers))
-    return {provider: result for provider, result in pairs}
+    results: dict[str, object] = {provider: result for provider, result in pairs}
+    warnings = configuration_warnings(cfg)
+    if warnings:
+        results["_warnings"] = warnings
+    return results
 
 
 def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
@@ -321,9 +326,9 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
             raise HTTPException(status_code=400, detail="unknown subscription provider")
         try:
             return subscription_cli.login(provider)
-        except subscription_cli.CliNotInstalled as exc:
+        except subscription_cli.CliNotInstalled:
             return {"started": False, "error": "not_installed",
-                    "hint": subscription_cli.install_hint(provider), "detail": str(exc)}
+                    "hint": subscription_cli.install_hint(provider), "detail": "CLI provider is not installed"}
 
     @router.post("/settings")
     async def save_cfg(body: SettingsBody, repo: Repository = Depends(get_repository)):

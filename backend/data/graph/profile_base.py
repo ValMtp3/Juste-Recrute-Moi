@@ -39,7 +39,7 @@ def _vec():
 
 
 def hash_id(text: str) -> str:
-    return hashlib.md5(text.encode()).hexdigest()[:12]
+    return hashlib.blake2s(text.encode(), digest_size=12).hexdigest()[:12]
 
 
 @contextlib.contextmanager

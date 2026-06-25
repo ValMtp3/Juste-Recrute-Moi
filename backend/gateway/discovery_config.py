@@ -27,6 +27,10 @@ def int_cfg(cfg: dict, key: str, default: int, min_value: int, max_value: int) -
     return _targets().int_cfg(cfg, key, default, min_value, max_value)
 
 
+def job_market_focus(value) -> str:
+    return _targets().job_market_focus(value)
+
+
 def job_targets(
     raw: str,
     market_focus: str = "global",

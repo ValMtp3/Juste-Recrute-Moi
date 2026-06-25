@@ -33,6 +33,11 @@ describe("Settings UI contracts", () => {
     expect(globalPanel).toContain("settingsApi.validate(api, cfg)");
   });
 
+  it("surfaces configuration warnings from settings validation", () => {
+    expect(globalPanel).toContain("_warnings");
+    expect(globalPanel).toContain("validationWarnings");
+  });
+
   it("auto-loads the model catalog in the picker (no manual button)", () => {
     // The picker fetches the always-current model list itself, on provider change.
     expect(sharedPanel).toContain("settingsApi.models(api, provider, cfg || {})");
