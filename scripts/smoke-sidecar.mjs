@@ -59,10 +59,11 @@ function extractArchive(archive, target) {
     ? spawnSync("powershell", [
       "-NoProfile",
       "-Command",
-      "Expand-Archive -LiteralPath $args[0] -DestinationPath $args[1] -Force",
-      archive,
-      target,
-    ], { stdio: "inherit" })
+      "Expand-Archive -LiteralPath $env:JHM_ARCHIVE -DestinationPath $env:JHM_EXTRACT_TARGET -Force",
+    ], {
+      env: { ...process.env, JHM_ARCHIVE: archive, JHM_EXTRACT_TARGET: target },
+      stdio: "inherit",
+    })
     : spawnSync("unzip", ["-q", archive, "-d", target], { stdio: "inherit" });
   if (result.status !== 0) {
     fail(`Could not extract runtime pack ${archive}`);
@@ -475,9 +476,14 @@ try {
   const health = await readHealth(handshake.port, handshake.token);
   const summary = requireHealth(health);
   await smokeCoreApi(handshake.port, handshake.token);
-  const vectorRuntime = await ensureVectorRuntime(handshake.port, handshake.token);
-  const healthAfterRuntime = await readHealth(handshake.port, handshake.token);
-  const summaryAfterRuntime = requireHealth(healthAfterRuntime, { vectorRequired: vectorRuntime.ready });
+  let summaryAfterRuntime = summary;
+  if (process.env.JHM_SMOKE_PREINSTALL_RUNTIME === "1" && summary.vector === "ok") {
+    summaryAfterRuntime = summary;
+  } else {
+    const vectorRuntime = await ensureVectorRuntime(handshake.port, handshake.token);
+    const healthAfterRuntime = await readHealth(handshake.port, handshake.token);
+    summaryAfterRuntime = requireHealth(healthAfterRuntime, { vectorRequired: vectorRuntime.ready });
+  }
 
   console.log(`Sidecar smoke passed: ${sidecar}`);
   console.log(`- port: ${handshake.port}`);
