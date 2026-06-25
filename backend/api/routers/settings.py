@@ -326,9 +326,9 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
             raise HTTPException(status_code=400, detail="unknown subscription provider")
         try:
             return subscription_cli.login(provider)
-        except subscription_cli.CliNotInstalled as exc:
+        except subscription_cli.CliNotInstalled:
             return {"started": False, "error": "not_installed",
-                    "hint": subscription_cli.install_hint(provider), "detail": str(exc)}
+                    "hint": subscription_cli.install_hint(provider), "detail": "CLI provider is not installed"}
 
     @router.post("/settings")
     async def save_cfg(body: SettingsBody, repo: Repository = Depends(get_repository)):
