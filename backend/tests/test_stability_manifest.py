@@ -172,7 +172,7 @@ def test_sidecar_packaging_checks_manifest_and_runtime_path():
 
     tauri_lib = _read(ROOT / "src-tauri/src/lib.rs")
     assert "packaged_sidecar_path" in tauri_lib
-    assert "Bundled backend sidecar was not found" in tauri_lib
+    assert "Le sidecar backend integre est introuvable" in tauri_lib
     assert 'join("resources").join("backend")' in tauri_lib
 
 
