@@ -27,10 +27,17 @@ _CACHE_TTL_SECONDS = 600
 
 
 def _env_client() -> tuple[str, str]:
-    client_id = os.environ.get("FRANCE_TRAVAIL_CLIENT_ID", "").strip()
-    client_secret = os.environ.get("FRANCE_TRAVAIL_CLIENT_SECRET", "").strip()
+    settings: dict[str, Any] = {}
+    try:
+        from data.repository import create_repository
+
+        settings = create_repository().settings.get_settings()
+    except Exception:
+        settings = {}
+    client_id = str(settings.get("france_travail_client_id") or os.environ.get("FRANCE_TRAVAIL_CLIENT_ID", "")).strip()
+    client_secret = str(settings.get("france_travail_client_secret") or os.environ.get("FRANCE_TRAVAIL_CLIENT_SECRET", "")).strip()
     if not client_id or not client_secret:
-        raise RuntimeError("France Travail credentials missing: set FRANCE_TRAVAIL_CLIENT_ID and FRANCE_TRAVAIL_CLIENT_SECRET")
+        raise RuntimeError("Identifiants France Travail absents : renseignez-les dans Paramètres > Découverte ou via FRANCE_TRAVAIL_CLIENT_ID / FRANCE_TRAVAIL_CLIENT_SECRET")
     return client_id, client_secret
 
 
@@ -54,11 +61,11 @@ async def _access_token() -> str:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             detail = _oauth_error_detail(response)
-            raise RuntimeError(f"France Travail OAuth failed: {detail}") from exc
+            raise RuntimeError(f"Authentification France Travail impossible : {detail}") from exc
         payload = response.json()
     token = str(payload.get("access_token") or "").strip()
     if not token:
-        raise RuntimeError("France Travail token response did not include access_token")
+        raise RuntimeError("La réponse France Travail ne contient pas de jeton d'accès")
     _TOKEN_CACHE["value"] = token
     _TOKEN_CACHE["expires_at"] = now + int(payload.get("expires_in") or 1500)
     return token
@@ -73,7 +80,7 @@ def _oauth_error_detail(response: httpx.Response) -> str:
     description = str(payload.get("error_description") or "").strip()
     if error == "invalid_client":
         return (
-            "invalid_client - vérifiez FRANCE_TRAVAIL_CLIENT_ID / "
+            "identifiants invalides - vérifiez FRANCE_TRAVAIL_CLIENT_ID / "
             "FRANCE_TRAVAIL_CLIENT_SECRET et l'activation de l'API Offres d'emploi"
         )
     if error or description:
@@ -118,6 +125,11 @@ def _search_params(target: str) -> dict[str, str]:
         if parsed.get(src):
             params[dest] = parsed[src]
     return params
+
+
+def _fallback_search_params(params: dict[str, str]) -> dict[str, str]:
+    """Keep the stable search core if France Travail rejects optional filters."""
+    return {key: value for key, value in params.items() if key in {"motsCles", "range", "lieu"}}
 
 
 async def _json_search(params: dict[str, str]) -> dict:
@@ -189,7 +201,14 @@ async def scrape_target(target: str) -> list[dict]:
     now = monotonic()
     if cached and cached[0] > now:
         return list(cached[1])
-    payload = await _json_search(params)
+    try:
+        payload = await _json_search(params)
+    except httpx.HTTPStatusError as exc:
+        fallback = _fallback_search_params(params)
+        if exc.response.status_code != 400 or fallback == params:
+            raise
+        payload = await _json_search(fallback)
+        cache_key = repr(sorted(fallback.items()))
     rows = payload.get("resultats") if isinstance(payload, dict) else []
     leads = [
         offer_to_lead(offer)

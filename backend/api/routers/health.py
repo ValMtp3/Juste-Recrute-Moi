@@ -58,7 +58,7 @@ def _check_vector(repo: Repository) -> dict:
             runtime = vector_runtime_status()
             if runtime.get("ready"):
                 return {"status": "ok", "tables": [], "mode": "not_loaded"}
-            return {"status": "disabled", "tables": [], "error": "LanceDB runtime is not installed"}
+            return {"status": "disabled", "tables": [], "error": "Le runtime LanceDB n'est pas installé"}
 
         status_fn = getattr(module, "vector_status", None)
         if callable(status_fn):

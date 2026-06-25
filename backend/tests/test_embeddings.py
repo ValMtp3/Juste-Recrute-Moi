@@ -85,6 +85,32 @@ def test_configured_provider_openai_with_key(monkeypatch):
     assert provider == "openai"
 
 
+def test_openai_embedding_key_prefers_dedicated_setting(monkeypatch):
+    from data.vector import embeddings
+
+    values = {
+        "embedding_openai_api_key": "sk-embedding",
+        "openai_api_key": "sk-chat",
+    }
+
+    monkeypatch.setattr("data.sqlite.settings.get_setting", lambda key, default="": values.get(key, default))
+
+    assert embeddings._openai_api_key() == "sk-embedding"
+
+
+def test_openai_embedding_key_falls_back_to_global_openai_setting(monkeypatch):
+    from data.vector import embeddings
+
+    values = {
+        "embedding_openai_api_key": "",
+        "openai_api_key": "sk-chat",
+    }
+
+    monkeypatch.setattr("data.sqlite.settings.get_setting", lambda key, default="": values.get(key, default))
+
+    assert embeddings._openai_api_key() == "sk-chat"
+
+
 def test_configured_provider_hash(monkeypatch):
     from data.vector import embeddings
 

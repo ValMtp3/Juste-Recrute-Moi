@@ -60,9 +60,15 @@ def _scrape_sync(params: dict[str, Any]) -> list[dict]:
     try:
         from jobspy import scrape_jobs
     except ImportError as exc:
-        raise RuntimeError("JobSpy is not installed. Install python-jobspy to enable the jobspy connector.") from exc
+        raise RuntimeError("JobSpy n'est pas installé ; connecteur optionnel ignoré.") from exc
 
-    rows = _rows_from_dataframe(scrape_jobs(**params, verbose=0))
+    try:
+        rows = _rows_from_dataframe(scrape_jobs(**params, verbose=0))
+    except Exception as exc:
+        detail = str(exc).lower()
+        if "tls_client" in detail or "dlopen" in detail or "dylib" in detail:
+            raise RuntimeError("JobSpy est installé mais sa bibliothèque native est incompatible sur cette machine.") from exc
+        raise
     leads: list[dict] = []
     for row in rows:
         site = str(_row_get(row, "site", _row_get(row, "SITE", "jobspy")) or "jobspy").lower()

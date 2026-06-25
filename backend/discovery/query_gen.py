@@ -188,7 +188,11 @@ def _enrich_passthrough_targets(urls: list[str], profile: dict) -> list[str]:
 
 def _market_focus(value) -> str:
     focus = str(value or "global").strip().lower()
-    return "india" if focus in {"india", "in", "indian", "indian_startups"} else "global"
+    if focus in {"india", "in", "indian", "indian_startups"}:
+        return "india"
+    if focus in {"france", "fr", "french", "marche_francais", "marché_français"}:
+        return "france"
+    return "global"
 
 
 def _india_clause(query: str) -> str:
@@ -221,6 +225,55 @@ def _location_clause(query: str, location: str, remote_pref: str = "any") -> str
     return f'{query} ("{location}" OR remote OR hybrid)'
 
 
+def _france_clause(query: str, location: str, remote_pref: str = "any", contract: str = "") -> str:
+    lower = query.lower()
+    clauses: list[str] = []
+    location = str(location or "").strip() or "France"
+    remote_pref = str(remote_pref or "any").strip().lower()
+    contract = str(contract or "").strip().upper()
+
+    if "france" not in lower:
+        clauses.append("France")
+    if location and location.lower() != "france" and location.lower() not in lower:
+        clauses.append(f'"{location}"')
+
+    if remote_pref == "remote":
+        if not any(term in lower for term in ("remote", "télétravail", "teletravail")):
+            clauses.append('("télétravail" OR teletravail OR remote)')
+    elif remote_pref in {"any", "hybrid"}:
+        if not any(term in lower for term in ("remote", "télétravail", "teletravail", "hybride", "hybrid")):
+            clauses.append('("télétravail" OR teletravail OR remote OR hybride OR hybrid)')
+
+    contract_terms = {
+        "CDI": "CDI",
+        "CDD": "CDD",
+        "APP": "(alternance OR apprentissage)",
+        "MIS": "(stage OR internship)",
+        "LIB": "(freelance OR indépendant)",
+    }
+    contract_presence = {
+        "CDI": ("cdi",),
+        "CDD": ("cdd",),
+        "APP": ("alternance", "apprentissage"),
+        "MIS": ("stage", "internship"),
+        "LIB": ("freelance", "indépendant", "independant"),
+    }
+    contract_clause = contract_terms.get(contract, "")
+    if contract_clause and not any(term in lower for term in contract_presence.get(contract, ())):
+        clauses.append(contract_clause)
+
+    return f"{query} {' '.join(clauses)}".strip() if clauses else query
+
+
+def _fallback_site_queries(profile: dict, site_domains: list[str], seniority_hint: str) -> list[str]:
+    target_role = (profile.get("s") or "General job seeker").strip()
+    skills = [s["n"] for s in profile.get("skills", []) if s.get("n")]
+    role_terms = _role_terms(profile)
+    top_terms = _profile_search_terms(profile)[:3] or skills[:3] or role_terms[:3] or [target_role]
+    top = " OR ".join(f'"{s}"' for s in top_terms)
+    return [f"site:{d} ({top}) ({seniority_hint})" for d in site_domains]
+
+
 def generate(profile: dict, urls: list[str], market_focus: str = "global") -> list[str]:
     """
     Main entry point.  Returns a new URL list where every 'site:' entry has
@@ -234,6 +287,7 @@ def generate(profile: dict, urls: list[str], market_focus: str = "global") -> li
     # setting or the profile's own identity, so any region on Earth works.
     location = str(profile.get("_discovery_location") or "").strip()
     remote_pref = str(profile.get("_remote_preference") or "any").strip().lower()
+    contract = str(profile.get("_discovery_contract") or "").strip().upper()
     preferences = str(profile.get("_job_preferences") or "").strip()[:600]
     site_domains, passthrough = _extract_domains(urls)
     passthrough = _enrich_passthrough_targets(passthrough, profile)
@@ -315,6 +369,15 @@ n'ajoute pas de compétence, séniorité ou localisation absente du profil au se
 - Privilégie des termes compatibles Inde : India, Indian, Bengaluru, Bangalore, Mumbai, Pune, Hyderabad, Delhi, "Indian startup".
 - Ne produis pas de requêtes global remote larges dans ce mode.
 </location_targeting>"""
+    elif focus == "france":
+        system += f"""
+
+<location_targeting>
+- Ce scan est limité au marché FRANCE. Ajoute une intention France à chaque requête.
+- Cible la localisation du candidat ({location or 'France'}) et respecte la préférence remote ({remote_pref}).
+- Utilise des termes compatibles France : France, télétravail, remote, hybride, CDI, CDD, alternance.
+- Si un contrat est détecté ({contract or 'aucun'}), utilise-le comme préférence souple, pas comme filtre dur.
+</location_targeting>"""
     elif location:
         system += f"""
 
@@ -331,6 +394,9 @@ n'ajoute pas de compétence, séniorité ou localisation absente du profil au se
 
     if focus == "india":
         market_line = "INDIA ONLY - Indian startups and India-based roles"
+    elif focus == "france":
+        contract_line = f", contract preference: {contract}" if contract else ""
+        market_line = f"FRANCE ONLY - French job market ({location or 'France'}, remote preference: {remote_pref}{contract_line})"
     elif location:
         market_line = f"{location} (remote preference: {remote_pref})"
     else:
@@ -357,21 +423,27 @@ Generate the queries now."""
     try:
         result = call_llm(system, user, _Plan, step="query_gen")
         smart = [q.strip() for q in result.queries if q.strip()]
+        if len(smart) != len(site_domains):
+            _log.warning(
+                "Le LLM a renvoyé %s requêtes pour %s domaines ; utilisation des requêtes locales",
+                len(smart),
+                len(site_domains),
+            )
+            smart = _fallback_site_queries(profile, site_domains, seniority_hint)
     except Exception as exc:
-        _log.warning("LLM failed (%s), falling back to default queries", exc)
-        # Fallback: build simple queries from top skills or inferred role themes.
-        top_terms = _profile_search_terms(profile)[:3] or skills[:3] or role_terms[:3] or [target_role]
-        top = " OR ".join(f'"{s}"' for s in top_terms)
-        smart = [f"site:{d} ({top}) ({seniority_hint})" for d in site_domains]
+        _log.warning("Le LLM n'a pas répondu (%s) ; utilisation des requêtes locales", exc)
+        smart = _fallback_site_queries(profile, site_domains, seniority_hint)
 
     if focus == "india":
         smart = [_india_clause(q) for q in smart]
+    elif focus == "france":
+        smart = [_france_clause(q, location or "France", remote_pref, contract) for q in smart]
     elif location or remote_pref == "remote":
         # Deterministically guarantee region/remote intent even if the LLM
         # omitted it (the fallback queries never include it).
         smart = [_location_clause(q, location, remote_pref) for q in smart]
 
-    _log.info("Generated %s queries for %s domains", len(smart), len(site_domains))
+    _log.info("%s requêtes générées pour %s domaines", len(smart), len(site_domains))
     for q in smart:
         _log.debug("  → %s", q)
 

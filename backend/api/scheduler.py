@@ -59,7 +59,12 @@ def create_ghost_tick(manager):
             job_store.update(ghost_job.job_id, status="cancelled", progress=100, error=msg)
             return
 
-        boards = job_targets(cfg.get("job_boards", ""), cfg.get("job_market_focus", "global"))
+        boards = job_targets(
+            cfg.get("job_boards", ""),
+            cfg.get("job_market_focus", "global"),
+            search_text=str(profile.get("_discovery_search_text") or profile.get("desired_position") or profile.get("s") or ""),
+            location=str(profile.get("_discovery_location") or ""),
+        )
         has_x = has_x_token(cfg)
         has_free = free_sources_enabled(cfg)
         if has_x:

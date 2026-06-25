@@ -158,7 +158,7 @@ def test_run_scan_continues_when_board_scan_batch_fails():
     service.scan_free_sources.assert_not_called()
     messages = [payload["msg"] for payload in broadcasts if payload.get("event") in {"scout_source_detail", "eval_done"}]
     assert any("discovery service timed out" in msg for msg in messages)
-    assert messages[-1] == "Evaluation cycle complete"
+    assert messages[-1] == "Cycle d'évaluation terminé"
 
 
 def test_run_scan_only_scores_unscored_leads():

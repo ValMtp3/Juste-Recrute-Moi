@@ -17,7 +17,7 @@ _log = get_logger(__name__)
 
 
 def _h(t: str) -> str:
-    return hashlib.md5(t.encode()).hexdigest()[:12]
+    return hashlib.blake2s(t.encode(), digest_size=12).hexdigest()[:12]
 
 
 def _emb(texts: list[str]) -> list:

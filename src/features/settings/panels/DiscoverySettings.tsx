@@ -1,16 +1,28 @@
 import { useState, type ChangeEvent } from "react";
 import type { Cfg } from "./shared";
-import { BigToggle, FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, LabelledField, SectionLabel } from "./shared";
+import { BigToggle, FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, LabelledField, SECRET_MASKS, SectionLabel } from "./shared";
 
 export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: keyof Cfg) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void }) {
   const [siteDraft, setSiteDraft] = useState("");
+
+  const atsHosts = new Set(["greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com", "teamtailor.com"]);
+  const isKnownAtsHost = (raw: string) => {
+    const candidate = raw.startsWith("site:") ? raw.slice(5).split(/\s+/)[0] : raw;
+    try {
+      const url = new URL(/^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`);
+      const host = url.hostname.toLowerCase().replace(/^www\./, "");
+      return [...atsHosts].some(allowed => host === allowed || host.endsWith(`.${allowed}`));
+    } catch {
+      return false;
+    }
+  };
 
   const sourceTargetFromSite = (raw: string) => {
     const value = raw.trim().replace(/,$/, "");
     if (!value) return "";
     const lower = value.toLowerCase();
     if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|france_travail:|jobspy:|import:|https?:\/\/)/i.test(value)) {
-      if (lower.includes("greenhouse.io") || lower.includes("lever.co") || lower.includes("ashbyhq.com") || lower.includes("workable.com") || lower.includes("smartrecruiters.com") || lower.includes("teamtailor.com")) {
+      if (isKnownAtsHost(lower)) {
         return value;
       }
       return value;
@@ -137,6 +149,16 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                   sub="Activé par défaut ; enregistre les offres et classe leur niveau pour le filtrage"
                   tone="green"
                 />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <LabelledField label="Client ID France Travail" hint="API Offres d'emploi">
+                    <input type="password" placeholder="client_id" value={SECRET_MASKS.has(cfg.france_travail_client_id) ? "" : cfg.france_travail_client_id} onChange={set("france_travail_client_id")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                  <LabelledField label="Secret France Travail" hint="conservé masqué après sauvegarde">
+                    <input type="password" placeholder="client_secret" value={SECRET_MASKS.has(cfg.france_travail_client_secret) ? "" : cfg.france_travail_client_secret} onChange={set("france_travail_client_secret")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                </div>
                 <LabelledField label="Entreprises à surveiller" hint="fournisseur,slug par ligne : greenhouse,<slug-entreprise>">
                   <textarea value={cfg.company_watchlist} onChange={set("company_watchlist")} rows={4} className="mono field-input"
                     placeholder={[
@@ -276,6 +298,11 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                       { label: "France Travail", url: "france_travail:developpeur;lieu=France;range=0-49" },
                       { label: "WTTJ", url: "site:welcometothejungle.com/fr/jobs France" },
                       { label: "HelloWork", url: "site:hellowork.com/fr-fr/emplois France" },
+                      { label: "Apec", url: "site:apec.fr/candidat/recherche-emploi.html/emploi France" },
+                      { label: "Cadremploi", url: "site:cadremploi.fr/emploi France" },
+                      { label: "Meteojob", url: "site:meteojob.com/jobs France" },
+                      { label: "LesJeudis", url: "site:lesjeudis.com/jobs France" },
+                      { label: "Indeed FR", url: "site:fr.indeed.com/emplois France" },
                       { label: "SmartRecruiters", url: "site:jobs.smartrecruiters.com France" },
                       { label: "Teamtailor", url: "site:teamtailor.com/jobs France" },
                       { label: "Naukri", url: "site:naukri.com jobs India" },

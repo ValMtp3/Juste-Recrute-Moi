@@ -86,6 +86,36 @@ class RegressionTests(unittest.TestCase):
         self.assertIn("SEO", queries[0])
         self.assertNotIn("software engineer", queries[0].lower())
 
+    def test_query_generation_empty_llm_plan_uses_fallback(self):
+        from discovery import query_gen
+
+        class EmptyPlan:
+            queries = []
+
+        profile = {
+            "s": "Developpeur IA",
+            "skills": [{"n": "Python"}],
+            "projects": [],
+            "_discovery_location": "Montpellier",
+            "_remote_preference": "remote",
+            "_discovery_contract": "APP",
+        }
+
+        with mock.patch("llm.call_llm", return_value=EmptyPlan()):
+            queries = query_gen.generate(
+                profile,
+                ["site:jobs.lever.co", "site:jobs.ashbyhq.com"],
+                "france",
+            )
+
+        self.assertEqual(len(queries), 2)
+        self.assertTrue(all(query.startswith("site:") for query in queries))
+        self.assertTrue(all("Developpeur IA" in query for query in queries))
+        self.assertTrue(all("France" in query for query in queries))
+        self.assertTrue(all("Montpellier" in query for query in queries))
+        self.assertTrue(all("télétravail" in query for query in queries))
+        self.assertTrue(all("alternance" in query for query in queries))
+
     def test_desired_position_is_merged_into_discovery_profile(self):
         from discovery.targets import profile_for_discovery
 
@@ -135,6 +165,26 @@ class RegressionTests(unittest.TestCase):
             "https://remotive.com/api/remote-jobs?search=Growth+Marketing+Manager",
             "https://jobicy.com/api/v2/remote-jobs?count=50&tag=Growth+Marketing+Manager",
         ])
+
+    def test_google_search_results_are_extracted_without_llm(self):
+        from discovery.sources import web
+
+        md = """
+        [Développeur IA Python - Montpellier](https://jobs.lever.co/acme/123)
+        Snippet court.
+        [Google Help](https://www.google.com/preferences)
+        [Data Analyst Junior](https://boards.greenhouse.io/dataco/jobs/456)
+        """
+        src = "https://www.google.com/search?q=site:jobs.lever.co+Developpeur+IA&tbs=qdr:w"
+
+        with mock.patch("llm.call_llm", side_effect=AssertionError("LLM should not be called")):
+            leads = web.parse(md, src)
+
+        self.assertEqual(len(leads), 2)
+        self.assertEqual(leads[0]["platform"], "google_search")
+        self.assertEqual(leads[0]["_fresh_source"], "google_past_week")
+        self.assertIn("jobs.lever.co", leads[0]["source_meta"]["host"])
+        self.assertIn("site:jobs.lever.co", leads[0]["source_meta"]["query"])
 
     def test_profile_free_source_targets_are_profile_derived(self):
         from discovery.targets import has_profile_discovery_signal, profile_free_source_targets

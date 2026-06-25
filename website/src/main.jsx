@@ -1219,7 +1219,7 @@ function App() {
           <a href="/legal/terms-of-use.html">Conditions</a>
           <a href="/legal/privacy-policy.html">Confidentialite</a>
         </span>
-        <span>Cree par Valentin Fiess</span>
+        <span>Cree par Valentin Fiess 🦞🇫🇷</span>
       </footer>
     </>
   );
