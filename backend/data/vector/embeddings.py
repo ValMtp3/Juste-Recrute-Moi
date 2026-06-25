@@ -15,6 +15,7 @@ automatically: onnx → hash, openai → hash.
 from __future__ import annotations
 
 import hashlib
+import gc
 import math
 import os
 import re
@@ -315,6 +316,7 @@ def active_provider() -> str:
     pref = _configured_provider()
     if pref == "openai":
         if _openai_api_key():
+            unload_onnx_session()
             return "openai"
         _log.info("OpenAI embedding requested but no API key; falling back")
         # Try ONNX as intermediate fallback
@@ -421,3 +423,17 @@ def reset_onnx_session() -> None:
         _onnx_error = ""
         _onnx_loaded = False
         _last_onnx_fallback_error = None
+
+
+def unload_onnx_session() -> None:
+    """Release the local ONNX embedder when a remote embedding provider is active."""
+    global _onnx_session, _onnx_tokenizer, _onnx_error, _onnx_loaded, _last_onnx_fallback_error
+    with _lock:
+        if _onnx_session is None and _onnx_tokenizer is None and not _onnx_loaded:
+            return
+        _onnx_session = None
+        _onnx_tokenizer = None
+        _onnx_error = ""
+        _onnx_loaded = False
+        _last_onnx_fallback_error = None
+    gc.collect()
