@@ -5,12 +5,24 @@ import { BigToggle, FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRE
 export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: keyof Cfg) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void }) {
   const [siteDraft, setSiteDraft] = useState("");
 
+  const atsHosts = new Set(["greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com", "teamtailor.com"]);
+  const isKnownAtsHost = (raw: string) => {
+    const candidate = raw.startsWith("site:") ? raw.slice(5).split(/\s+/)[0] : raw;
+    try {
+      const url = new URL(/^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`);
+      const host = url.hostname.toLowerCase().replace(/^www\./, "");
+      return [...atsHosts].some(allowed => host === allowed || host.endsWith(`.${allowed}`));
+    } catch {
+      return false;
+    }
+  };
+
   const sourceTargetFromSite = (raw: string) => {
     const value = raw.trim().replace(/,$/, "");
     if (!value) return "";
     const lower = value.toLowerCase();
     if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|france_travail:|jobspy:|import:|https?:\/\/)/i.test(value)) {
-      if (lower.includes("greenhouse.io") || lower.includes("lever.co") || lower.includes("ashbyhq.com") || lower.includes("workable.com") || lower.includes("smartrecruiters.com") || lower.includes("teamtailor.com")) {
+      if (isKnownAtsHost(lower)) {
         return value;
       }
       return value;

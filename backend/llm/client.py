@@ -420,8 +420,8 @@ def _subscription_call(provider, attempt, fallback, *, step):
         except _sub.CliTimeout:
             _log.warning("%s CLI d'abonnement trop lent (étape=%s) ; nouvel essai", provider, step)
             return attempt()
-    except _sub.CliError as exc:
-        _log.warning("%s CLI d'abonnement indisponible (étape=%s) : %s", provider, step, exc)
+    except _sub.CliError:
+        _log.warning("%s CLI d'abonnement indisponible (étape=%s)", provider, step)
         return fallback()
 
 
@@ -530,8 +530,8 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
                 return _parse_fallback(u, m)
         try:
             client = _client_openai_compat(p, k)
-        except ValueError as exc:
-            _log.warning("%s : configuration invalide (étape=%s) : %s", p, step, exc)
+        except ValueError:
+            _log.warning("%s : configuration invalide (étape=%s)", p, step)
             return _parse_fallback(u, m)
         compat_client = instructor.from_openai(
             client,
@@ -653,8 +653,8 @@ def _call_raw_once(s: str, u: str, step: str | None = None) -> str:
             return ""
         try:
             compat_raw_client = _client_openai_compat(p, k)
-        except ValueError as exc:
-            _log.warning("%s : configuration invalide (étape=%s) : %s", p, step, exc)
+        except ValueError:
+            _log.warning("%s : configuration invalide (étape=%s)", p, step)
             return ""
         # Perplexity included: it serves only the OpenAI-compatible
         # chat-completions API (no Responses API).

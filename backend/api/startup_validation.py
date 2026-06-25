@@ -4,12 +4,45 @@ import os
 from urllib.parse import urlparse
 
 from data.repository import Repository
-from gateway.discovery_config import has_x_token, job_targets, truthy
+from gateway.discovery_config import has_x_token, job_market_focus, job_targets, truthy
 
 
-def startup_warnings(repo: Repository) -> list[str]:
-    cfg = repo.settings.get_settings()
+FRANCE_TRAVAIL_CREDENTIAL_WARNING = (
+    "France Travail est activé pour le marché français mais les identifiants "
+    "france_travail_client_id / france_travail_client_secret sont manquants. "
+    "Les autres jobboards France restent scannés en best effort, mais la source "
+    "stable France Travail ne pourra pas récupérer d'offres."
+)
+
+
+def france_travail_credentials_missing(cfg: dict) -> bool:
+    raw_targets = "\n".join([
+        str(cfg.get("job_boards") or ""),
+        str(cfg.get("free_source_targets") or ""),
+    ]).lower()
+    france_travail_enabled = (
+        job_market_focus(cfg.get("job_market_focus", "global")) == "france"
+        or "france_travail:" in raw_targets
+    )
+    if not france_travail_enabled:
+        return False
+
+    client_id = str(
+        cfg.get("france_travail_client_id")
+        or os.environ.get("FRANCE_TRAVAIL_CLIENT_ID", "")
+    ).strip()
+    client_secret = str(
+        cfg.get("france_travail_client_secret")
+        or os.environ.get("FRANCE_TRAVAIL_CLIENT_SECRET", "")
+    ).strip()
+    return not (client_id and client_secret)
+
+
+def configuration_warnings(cfg: dict) -> list[str]:
     warnings: list[str] = []
+
+    if france_travail_credentials_missing(cfg):
+        warnings.append(FRANCE_TRAVAIL_CREDENTIAL_WARNING)
 
     if truthy(cfg.get("x_enabled", "false")) and not has_x_token(cfg):
         warnings.append("Le scan X est activé mais x_bearer_token est manquant.")
@@ -45,6 +78,10 @@ def startup_warnings(repo: Repository) -> list[str]:
                 warnings.append(f"Cible d'offres possiblement invalide ou trop large : {target}")
 
     return warnings
+
+
+def startup_warnings(repo: Repository) -> list[str]:
+    return configuration_warnings(repo.settings.get_settings())
 
 
 def log_startup_warnings(repo: Repository, logger) -> list[str]:
