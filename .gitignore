@@ -127,3 +127,4 @@ backend/.pytest-basetemp/
 
 # Reference-only: external job-scraper used for study, never shipped/committed (US-portal-specific; JustHireMe stays field/location-agnostic)
 AgentRosterJobScraper/
+Dev.md

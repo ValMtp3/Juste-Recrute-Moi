@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import platform
+import stat
 from pathlib import Path
 
 from data.vector.runtime import browser_runtime_dir, browser_runtime_ready, install_vector_runtime, system_browser_executable
@@ -30,24 +31,94 @@ def browser_runtime_url() -> str:
     )
 
 
-def _runtime_chromium_executable() -> str | None:
+def _runtime_headless_shell_executable(root: Path) -> str | None:
+    patterns = [
+        "chromium_headless_shell-*/chrome-headless-shell-*/chrome-headless-shell",
+        "chromium_headless_shell-*/chrome-headless-shell",
+    ]
+    for pattern in patterns:
+        for candidate in sorted(root.glob(pattern)):
+            if candidate.exists():
+                _ensure_executable(candidate)
+                return str(candidate)
+    return None
+
+
+def _runtime_chromium_executable(*, headless: bool = False) -> str | None:
     root = browser_runtime_dir()
     if not root.exists():
         return None
+
+    if headless:
+        headless_shell = _runtime_headless_shell_executable(root)
+        if headless_shell:
+            return headless_shell
 
     system = sys_platform()
     if system == "windows":
         patterns = ["chromium-*/chrome-win*/chrome.exe", "chromium-*/chrome.exe"]
     elif system == "darwin":
-        patterns = ["chromium-*/chrome-mac*/Chromium.app/Contents/MacOS/Chromium"]
+        patterns = [
+            "chromium-*/chrome-mac*/Chromium.app/Contents/MacOS/Chromium",
+            "chromium-*/chrome-mac*/*.app/Contents/MacOS/*",
+        ]
     else:
         patterns = ["chromium-*/chrome-linux*/chrome", "chromium-*/chrome"]
 
     for pattern in patterns:
         for candidate in sorted(root.glob(pattern)):
             if candidate.exists():
+                _ensure_executable(candidate)
                 return str(candidate)
     return None
+
+
+def _ensure_executable(path: Path) -> None:
+    if sys_platform() == "windows":
+        return
+    if sys_platform() == "darwin":
+        _ensure_macos_app_executables(path)
+    try:
+        mode = path.stat().st_mode
+        path.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    except OSError:
+        return
+
+
+def _ensure_macos_app_executables(path: Path) -> None:
+    parts = path.parts
+    app_index = next((idx for idx, part in enumerate(parts) if part.endswith(".app")), None)
+    if app_index is None:
+        return
+    app_root = Path(*parts[: app_index + 1])
+    _clear_macos_extended_attrs(app_root)
+    for subdir in (app_root / "Contents" / "MacOS", app_root / "Contents" / "Frameworks"):
+        if not subdir.exists():
+            continue
+        for candidate in subdir.rglob("*"):
+            if not candidate.is_file():
+                continue
+            try:
+                mode = candidate.stat().st_mode
+                candidate.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            except OSError:
+                continue
+
+
+def _clear_macos_extended_attrs(path: Path) -> None:
+    if not hasattr(os, "listxattr"):
+        return
+    for candidate in (path, *path.rglob("*")):
+        try:
+            attrs = os.listxattr(candidate)
+        except OSError:
+            continue
+        for attr in attrs:
+            if attr.startswith("com.apple."):
+                try:
+                    os.removexattr(candidate, attr)
+                except OSError:
+                    continue
 
 
 def _system_browser_candidates() -> list[str]:
@@ -70,6 +141,8 @@ def _system_browser_candidates() -> list[str]:
             "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
             os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
             os.path.expanduser("~/Applications/Chromium.app/Contents/MacOS/Chromium"),
+            os.path.expanduser("~/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"),
+            os.path.expanduser("~/Applications/Brave Browser.app/Contents/MacOS/Brave Browser"),
         ]
     # Linux
     return [
@@ -107,14 +180,14 @@ def ensure_browser_runtime() -> Path:
     install_vector_runtime()
 
     if not (browser_runtime_ready(runtime_dir) or system_browser_executable()):
-        raise RuntimeError("Required runtime pack installation finished, but Playwright Chromium or a system Chrome/Edge/Brave browser was not found.")
+        raise RuntimeError("L'installation du pack runtime est terminée, mais aucun navigateur Chromium intégré ou navigateur système Chrome/Edge/Brave n'a été trouvé.")
     return runtime_dir
 
 
 async def launch_chromium(playwright, *, headless: bool = True, **kwargs):
     runtime_launch_error: Exception | None = None
     if "executable_path" not in kwargs:
-        executable = _runtime_chromium_executable() or system_browser_executable()
+        executable = _runtime_chromium_executable(headless=headless) or system_browser_executable()
         if executable:
             try:
                 return await playwright.chromium.launch(

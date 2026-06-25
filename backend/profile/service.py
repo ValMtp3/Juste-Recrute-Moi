@@ -15,6 +15,27 @@ class ProfileService:
     def get_profile(self) -> dict:
         return graph_profile.get_profile()
 
+    def cleanup_profile(self) -> dict:
+        current = graph_profile.get_profile()
+        cleaned, stats = _cleanup_profile_snapshot(current)
+        stats["purged_graph"] = _purge_duplicate_profile_graph_nodes()
+        graph_profile.save_profile_snapshot(cleaned, allow_empty=True)
+        materialized: dict[str, Any] = {"status": "skipped"}
+        if graph_profile.profile_has_data(cleaned):
+            try:
+                materialized = graph_profile.materialize_profile_snapshot(cleaned)
+            except Exception as exc:
+                logging.getLogger(__name__).warning("profile cleanup materialize skipped: %s", exc)
+                materialized = {"status": "skipped", "error": str(exc)}
+            try:
+                sync_status = graph_profile.rebuild_profile_correlations()
+            except Exception as exc:
+                logging.getLogger(__name__).warning("profile cleanup sync skipped: %s", exc)
+                sync_status = {"status": "skipped", "error": str(exc)}
+            stats["sync_status"] = sync_status
+            graph_profile.save_profile_snapshot(cleaned, allow_empty=True)
+        return {"status": "ok", "profile": cleaned, "stats": stats, "materialized": materialized}
+
     def refresh_profile_snapshot(self) -> None:
         graph_profile.refresh_profile_snapshot()
 
@@ -360,6 +381,136 @@ def _entry_title(value: Any) -> str:
     if isinstance(value, str):
         return value
     return str(_as_dict(value).get("title", ""))
+
+
+def _cleanup_profile_snapshot(profile: dict | None) -> tuple[dict, dict]:
+    source = graph_profile.normal_profile(profile)
+    stats = {"removed": 0, "deduplicated": 0, "corrected": 0}
+
+    def mark(raw: Any, cleaned: Any) -> Any:
+        if raw != cleaned:
+            stats["corrected"] += 1
+        return cleaned
+
+    def dedupe(rows: list[Any], key_fn) -> list[Any]:
+        seen: set[str] = set()
+        out: list[Any] = []
+        for row in rows:
+            key = key_fn(row)
+            if not key:
+                stats["removed"] += 1
+                continue
+            if key in seen:
+                stats["deduplicated"] += 1
+                continue
+            seen.add(key)
+            out.append(row)
+        return out
+
+    skills = []
+    for raw in source.get("skills", []) or []:
+        item = _as_dict(raw)
+        name = str(raw if isinstance(raw, str) else item.get("n") or item.get("name") or item.get("title") or "").strip()
+        if not name:
+            stats["removed"] += 1
+            continue
+        skill = {
+            "id": str(item.get("id") or graph_profile.hash_id(name)).strip(),
+            "n": name,
+            "cat": str(item.get("cat") or item.get("category") or "general").strip() or "general",
+        }
+        skills.append(mark(raw, skill))
+
+    projects = []
+    for raw in source.get("projects", []) or []:
+        item = _as_dict(raw)
+        title = str(item.get("title") or item.get("name") or "").strip()
+        if not title:
+            stats["removed"] += 1
+            continue
+        project = {
+            "id": str(item.get("id") or graph_profile.hash_id(title)).strip(),
+            "title": title,
+            "stack": graph_profile.project_stack_list(item),
+            "repo": str(item.get("repo") or item.get("url") or "").strip(),
+            "impact": str(item.get("impact") or item.get("description") or item.get("text") or "").strip(),
+        }
+        projects.append(mark(raw, project))
+
+    experiences = []
+    for raw in source.get("exp", []) or []:
+        item = _as_dict(raw)
+        role = str(item.get("role") or item.get("title") or "").strip()
+        company = str(item.get("co") or item.get("company") or item.get("org") or "").strip()
+        if not role and not company:
+            stats["removed"] += 1
+            continue
+        experience = {
+            "id": str(item.get("id") or graph_profile.hash_id(role + company)).strip(),
+            "role": role,
+            "co": company,
+            "period": str(item.get("period") or item.get("dates") or "").strip(),
+            "d": str(item.get("d") or item.get("description") or item.get("text") or "").strip(),
+        }
+        experiences.append(mark(raw, experience))
+
+    def clean_text_list(key: str) -> list[str]:
+        values = []
+        for raw in source.get(key, []) or []:
+            text = _entry_title(raw).strip()
+            if not text:
+                stats["removed"] += 1
+                continue
+            values.append(mark(raw, text))
+        return dedupe(values, graph_profile._norm_key)
+
+    identity = {
+        key: str((source.get("identity") or {}).get(key) or "").strip()
+        for key in graph_profile.IDENTITY_KEYS
+    }
+
+    return graph_profile.normal_profile({
+        "n": str(source.get("n") or "").strip(),
+        "s": graph_profile.clean_profile_summary(str(source.get("s") or "")),
+        "skills": dedupe(skills, lambda item: graph_profile._norm_key(_as_dict(item).get("n"))),
+        "projects": dedupe(projects, lambda item: graph_profile._norm_key(_as_dict(item).get("title"))),
+        "exp": dedupe(experiences, lambda item: graph_profile._norm_key(f"{_as_dict(item).get('role')} {_as_dict(item).get('co')}")),
+        "education": clean_text_list("education"),
+        "certifications": clean_text_list("certifications"),
+        "achievements": clean_text_list("achievements"),
+        "identity": identity,
+    }), stats
+
+
+def _purge_duplicate_profile_graph_nodes() -> int:
+    purged = 0
+
+    def purge_node(label: str, node_id: str) -> None:
+        nonlocal purged
+        node_id = str(node_id or "").strip()
+        if not node_id:
+            return
+        graph_profile.delete_vec_id_from_all(node_id)
+        graph_profile._safe_execute(f"MATCH (n:{label}) WHERE n.id = $id DETACH DELETE n", {"id": node_id})
+        purged += 1
+
+    def purge_rows(label: str, query: str, key_fn) -> None:
+        seen: set[str] = set()
+        for row in graph_profile._query_rows(query):
+            key = graph_profile._norm_key(key_fn(row))
+            node_id = str(row[0] or "").strip()
+            if not key or key in seen:
+                purge_node(label, node_id)
+                continue
+            seen.add(key)
+
+    purge_rows("Skill", "MATCH (n:Skill) RETURN n.id, n.n", lambda row: row[1])
+    purge_rows("Project", "MATCH (n:Project) RETURN n.id, n.title", lambda row: row[1])
+    purge_rows("Experience", "MATCH (n:Experience) RETURN n.id, n.role, n.co", lambda row: f"{row[1]} {row[2]}")
+    purge_rows("Education", "MATCH (n:Education) RETURN n.id, n.title", lambda row: row[1])
+    purge_rows("Certification", "MATCH (n:Certification) RETURN n.id, n.title", lambda row: row[1])
+    purge_rows("Achievement", "MATCH (n:Achievement) RETURN n.id, n.title", lambda row: row[1])
+    return purged
 
 
 def _profile_snapshot_from_import(data: dict, existing: dict | None = None) -> dict:

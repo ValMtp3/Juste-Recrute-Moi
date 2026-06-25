@@ -22,8 +22,20 @@ describe("Settings UI contracts", () => {
     expect(globalPanel).toContain("openai");
   });
 
+  it("keeps embeddings independent from the chat provider", () => {
+    expect(modal).toContain("EmbeddingSettings");
+    expect(modal).toContain("embedding_provider");
+    expect(modal).toContain("embedding_openai_api_key");
+    expect(modal).toContain("text-embedding-3-small");
+  });
+
   it("validates provider keys against the current form values", () => {
     expect(globalPanel).toContain("settingsApi.validate(api, cfg)");
+  });
+
+  it("surfaces configuration warnings from settings validation", () => {
+    expect(globalPanel).toContain("_warnings");
+    expect(globalPanel).toContain("validationWarnings");
   });
 
   it("auto-loads the model catalog in the picker (no manual button)", () => {

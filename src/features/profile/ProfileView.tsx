@@ -16,6 +16,7 @@ const profileList = (value: unknown): unknown[] => Array.isArray(value) ? value 
 export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (v: View) => void; stats?: GraphStats }) {
   const [profile, setProfile] = useState<any>(null);
   const [profileErr, setProfileErr] = useState<string | null>(null);
+  const [profileNotice, setProfileNotice] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editData, setEditData] = useState<any>(null);
   const [editingCandidate, setEditingCandidate] = useState(false);
@@ -25,6 +26,8 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
   const [activeProfileTab, setActiveProfileTab] = useState<"skills" | "experience" | "projects" | "education" | "certifications" | "achievements">("skills");
   const [expandedProfileList, setExpandedProfileList] = useState(false);
   const [deletingItem, setDeletingItem] = useState<{ key: string; label: string } | null>(null);
+  const [cleaningProfile, setCleaningProfile] = useState(false);
+  const [confirmCleanupOpen, setConfirmCleanupOpen] = useState(false);
   const deleteMarkersRef = useRef<ProfileDeleteMarker[]>([]);
   const deleteInFlightRef = useRef(false);
 
@@ -62,6 +65,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       const data = await r.json();
       setProfile(applyLocalDeletes(mergeProfileWithGraphFallback(data, stats), true));
       setProfileErr(null);
+      setProfileNotice(null);
       return true;
     } catch (err: any) {
       console.error("Chargement du profil échoué :", err);
@@ -201,6 +205,39 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
     }
   };
 
+  const cleanupProfile = async () => {
+    setCleaningProfile(true);
+    setConfirmCleanupOpen(false);
+    setProfileErr(null);
+    setProfileNotice(null);
+    try {
+      const res = await api(`/api/v1/profile/cleanup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: "CLEAN" }),
+        timeoutMs: 120000,
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.status === 404) {
+        throw new Error("Le backend actif ne connaît pas encore le nettoyage du profil. Relance l'application ou le backend local pour charger la nouvelle route.");
+      }
+      if (!res.ok) throw new Error(body.detail || `Nettoyage échoué (${res.status})`);
+      const cleanedProfile = body.profile ? mergeProfileWithGraphFallback(body.profile, stats, { fillEmptyBuckets: false }) : profile;
+      setProfile(applyLocalDeletes(cleanedProfile, true));
+      const cleanupStats = body.stats || {};
+      const removed = Number(cleanupStats.removed || 0) + Number(cleanupStats.deduplicated || 0);
+      const corrected = Number(cleanupStats.corrected || 0);
+      const purged = Number(cleanupStats.purged_graph || 0);
+      await fetchProfile({ suppressError: true });
+      setProfileNotice(`Nettoyage terminé : ${removed} doublon(s)/ligne(s) vide(s) retiré(s), ${corrected} correction(s) appliquée(s), ${purged} noeud(s) graphe purgé(s).`);
+      emitAppEvent("graph-refresh");
+    } catch (err: any) {
+      setProfileErr(err?.message || "Le nettoyage du profil a échoué");
+    } finally {
+      setCleaningProfile(false);
+    }
+  };
+
   const skills = useMemo(() => profileList(profile?.skills), [profile?.skills]);
   const exp = useMemo(() => profileList(profile?.exp), [profile?.exp]);
   const projects = useMemo(() => profileList(profile?.projects), [profile?.projects]);
@@ -269,6 +306,11 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
         {profileErr && (
           <div style={{ marginBottom: 16, padding: "12px 14px", borderRadius: 8, background: "var(--bad-soft)", border: "1px solid var(--bad)", color: "var(--bad)", fontSize: 13 }}>
             {profileErr}
+          </div>
+        )}
+        {profileNotice && (
+          <div style={{ marginBottom: 16, padding: "12px 14px", borderRadius: 8, background: "var(--ok-soft)", border: "1px solid var(--ok)", color: "var(--ok)", fontSize: 13 }}>
+            {profileNotice}
           </div>
         )}
         <div className="profile-workspace">
@@ -366,10 +408,31 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                   <span className="eyebrow">Aperçu du profil</span>
                   <h3>Données candidat structurées</h3>
                 </div>
-                <button className="btn btn-ghost" onClick={() => setView("ingestion")}>
-                  <Icon name="plus" size={14} /> Ajouter du contexte
-                </button>
+                <div className="row gap-2">
+                  <button className="btn btn-ghost" onClick={() => setConfirmCleanupOpen(true)} disabled={cleaningProfile}>
+                    {cleaningProfile ? <span className="spinner-sm profile-delete-spinner" aria-hidden="true" /> : <Icon name="spark" size={14} />}
+                    {cleaningProfile ? "Nettoyage..." : "Nettoyer"}
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setView("ingestion")}>
+                    <Icon name="plus" size={14} /> Ajouter du contexte
+                  </button>
+                </div>
               </div>
+              {confirmCleanupOpen && (
+                <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 8, background: "var(--bad-soft)", border: "1px solid var(--bad)", color: "var(--ink-1)", fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 6 }}>Confirmer le nettoyage du profil ?</div>
+                  <div style={{ color: "var(--ink-2)", lineHeight: 1.5 }}>
+                    Cette action supprime les doublons, retire les lignes vides et normalise les champs malformés. Vérifiez le profil après nettoyage.
+                  </div>
+                  <div className="row gap-2" style={{ marginTop: 12 }}>
+                    <button className="btn danger-soft" onClick={cleanupProfile} disabled={cleaningProfile}>
+                      {cleaningProfile ? <span className="spinner-sm profile-delete-spinner" aria-hidden="true" /> : <Icon name="spark" size={14} />}
+                      Confirmer le nettoyage
+                    </button>
+                    <button className="btn btn-ghost" onClick={() => setConfirmCleanupOpen(false)} disabled={cleaningProfile}>Annuler</button>
+                  </div>
+                </div>
+              )}
               <div className="profile-overview-grid">
                 {tabNodes.map(node => (
                   <button key={node.id} className={`profile-overview-stat profile-overview-stat-${node.tone} ${activeProfileTab === node.id ? "active" : ""}`} onClick={() => { setActiveProfileTab(node.id); setEditId(null); }}>

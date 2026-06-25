@@ -100,7 +100,7 @@ async def ingest_portfolio_url(url: str) -> dict:
             "achievements": len(result.get("achievements") or []),
             "llm_used": llm_used,
         },
-        "error": None if (result.get("candidate") or result.get("skills") or result.get("projects")) else "No structured portfolio data was extracted",
+        "error": None if (result.get("candidate") or result.get("skills") or result.get("projects")) else "Aucune donnée structurée n'a été extraite du portfolio",
     })
     return result
 
@@ -133,13 +133,21 @@ def _normalize_url(url: str) -> str:
 
 
 def _portfolio_fetch_failure_message(fetch_error: str) -> str:
+    if "Le pack runtime Juste Recrute Moi est nécessaire" in fetch_error:
+        return (
+            f"{fetch_error} Le navigateur intégré n'a donc pas pu analyser ce portfolio. "
+            "La récupération HTTP de secours n'a pas non plus trouvé de contenu exploitable."
+        )
     if _is_missing_playwright_error(fetch_error):
         return (
-            "This portfolio appears to require JavaScript rendering, but browser-based "
-            "portfolio scanning is not available in this build. Update or rebuild "
-            "Juste Recrute Moi with the browser feature enabled, then retry."
+            "Ce portfolio semble nécessiter un rendu JavaScript, mais l'analyse par "
+            "navigateur n'est pas disponible dans cette version. Mettez à jour ou "
+            "recompilez Juste Recrute Moi avec le navigateur intégré, puis réessayez."
         )
-    return f"{fetch_error} HTTP fallback also could not fetch portfolio content."
+    return (
+        f"{fetch_error} La récupération HTTP de secours n'a pas non plus trouvé "
+        "de contenu exploitable dans le portfolio."
+    )
 
 
 def _is_missing_playwright_error(fetch_error: str) -> bool:

@@ -126,9 +126,9 @@ def run(raw: str = "", pdf: str | None = None) -> C:
         return result
     except Exception as exc:
         if p != "ollama":
-            _log.error("LLM call failed (%s): %s", p, exc)
-            raise RuntimeError(f"{p} extraction failed: {exc}") from exc
-        _log.warning("LLM call failed (%s): %s - falling back to local parser", p, exc)
+            _log.error("LLM call failed (%s)", p)
+            raise RuntimeError(f"{p} extraction failed") from exc
+        _log.warning("LLM call failed (%s) - falling back to local parser", p)
         return _parse_local(txt)
 
 

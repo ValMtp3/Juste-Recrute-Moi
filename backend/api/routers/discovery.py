@@ -28,6 +28,19 @@ _log = get_logger(__name__)
 REEVALUATION_STATUS_LOCKS = {"approved", "applied", "interviewing", "rejected", "accepted", "discarded"}
 
 
+def _target_label(target: str) -> str:
+    value = str(target or "").strip()
+    lower = value.lower()
+    if lower.startswith("site:"):
+        domain = value[5:].split()[0].strip().strip('"') or "site"
+        return f"site:{domain}"
+    if lower.startswith(("france_travail:", "jobspy:", "ats:", "import:")):
+        return value.split(";", 1)[0]
+    if len(value) > 120:
+        return value[:117] + "..."
+    return value
+
+
 class TaskRegistry:
     def __init__(self) -> None:
         self._lock = asyncio.Lock()
@@ -106,9 +119,9 @@ async def broadcast_x_source_errors(manager, errors: list[str]) -> None:
     if not errors:
         return
     for msg in errors[:3]:
-        await manager.broadcast({"type": "agent", "event": "x_source_error", "msg": f"X source skipped: {msg}"})
+        await manager.broadcast({"type": "agent", "event": "x_source_error", "msg": f"Source X ignorée : {msg}"})
     if len(errors) > 3:
-        await manager.broadcast({"type": "agent", "event": "x_source_error", "msg": f"{len(errors) - 3} more X queries were skipped"})
+        await manager.broadcast({"type": "agent", "event": "x_source_error", "msg": f"{len(errors) - 3} requête(s) X supplémentaire(s) ignorée(s)"})
 
 
 async def run_x_signal_scan(
@@ -123,17 +136,17 @@ async def run_x_signal_scan(
 
     discovery_service = discovery_service or get_discovery_service()
     kind_filter = "job"
-    label = "job leads"
-    await manager.broadcast({"type": "agent", "event": "x_scout_start", "msg": f"Scanning X for {label}..."})
+    label = "offres"
+    await manager.broadcast({"type": "agent", "event": "x_scout_start", "msg": f"Scan X pour les {label}..."})
     result = await discovery_service.scan_x(cfg, kind_filter=kind_filter, profile=profile)
     leads = result.leads
     usage = result.usage
-    await manager.broadcast({"type": "agent", "event": "x_scout_done", "msg": f"X scout - {len(leads)} {label} found"})
+    await manager.broadcast({"type": "agent", "event": "x_scout_done", "msg": f"Scan X : {len(leads)} {label} trouvée(s)"})
     if usage.get("executed_queries"):
         await manager.broadcast({
             "type": "agent",
             "event": "x_scout_usage",
-            "msg": f"X usage - {usage.get('executed_queries', 0)} requests, {usage.get('tweets_seen', 0)} posts checked, {usage.get('filtered', 0)} filtered",
+            "msg": f"Usage X : {usage.get('executed_queries', 0)} requête(s), {usage.get('tweets_seen', 0)} post(s) vérifié(s), {usage.get('filtered', 0)} filtré(s)",
         })
     if not leads:
         await broadcast_x_source_errors(manager, result.errors)
@@ -144,7 +157,7 @@ async def run_x_signal_scan(
         if (lead.get("signal_score") or 0) >= hot_threshold:
             await manager.broadcast({"type": "HOT_X_LEAD", "data": lead})
             if notify_hot:
-                await manager.broadcast({"type": "agent", "event": "x_hot_lead", "msg": f"Hot X lead: {lead.get('title','?')} @ {lead.get('company','?')}"})
+                await manager.broadcast({"type": "agent", "event": "x_hot_lead", "msg": f"Offre X prioritaire : {lead.get('title','?')} @ {lead.get('company','?')}"})
     return leads
 
 
@@ -161,14 +174,14 @@ async def run_free_source_scan(
 
     discovery_service = discovery_service or get_discovery_service()
     kind_filter = "job"
-    label = "job leads"
-    await manager.broadcast({"type": "agent", "event": "free_scout_start", "msg": f"Scanning free sources for {label}..."})
+    label = "offres"
+    await manager.broadcast({"type": "agent", "event": "free_scout_start", "msg": f"Scan des sources gratuites pour les {label}..."})
     try:
         result = await discovery_service.scan_free_sources(cfg, kind_filter=kind_filter, profile=profile, force=force)
     except Exception as exc:
-        # Close the websocket activity entry before propagating, so listeners
-        # don't sit on "Scanning free sources..." with no terminal event.
-        await manager.broadcast({"type": "agent", "event": "free_scout_done", "msg": f"Free scout failed: {exc}"})
+        # Ferme l'entrée d'activité websocket avant de propager l'erreur, pour
+        # éviter qu'un libellé de scan reste affiché sans événement terminal.
+        await manager.broadcast({"type": "agent", "event": "free_scout_done", "msg": f"Scan des sources gratuites échoué : {exc}"})
         raise
     leads = result.leads
     usage = result.usage
@@ -176,14 +189,14 @@ async def run_free_source_scan(
         "type": "agent",
         "event": "free_scout_done",
         "msg": (
-            f"Free scout - {len(leads)} new {label} "
-            f"({usage.get('candidates', 0)} candidates, {usage.get('duplicates', 0)} duplicates, "
-            f"{usage.get('filtered', 0)} filtered, {usage.get('executed', 0)} sources checked)"
+            f"Sources gratuites : {len(leads)} nouvelle(s) {label} "
+            f"({usage.get('candidates', 0)} candidat(s), {usage.get('duplicates', 0)} doublon(s), "
+            f"{usage.get('filtered', 0)} filtrée(s), {usage.get('executed', 0)} source(s) vérifiée(s))"
         ),
     })
     for msg in result.errors[:4]:
         record_error("free_source_fetch_failed", msg, "api.discovery")
-        await manager.broadcast({"type": "agent", "event": "free_source_error", "msg": f"Free source detail: {msg}"})
+        await manager.broadcast({"type": "agent", "event": "free_source_error", "msg": f"Détail source gratuite : {msg}"})
     for lead in leads:
         await manager.broadcast({"type": "LEAD_UPDATED", "data": lead})
     return leads, usage, result.errors
@@ -251,27 +264,32 @@ async def _run_scan_inner(
     cfg = await asyncio.to_thread(repo.settings.get_settings)
     profile = profile_for_discovery(await asyncio.to_thread(repo.profile.get_profile), cfg)
     if not has_profile_discovery_signal(profile) and not has_explicit_discovery_targets(cfg):
-        msg = "Scan skipped: add a target role, profile skills, work history, or explicit job source first."
+        msg = "Scan ignoré : ajoutez un poste cible, des compétences, une expérience ou une source d'offres explicite."
         await manager.broadcast({"type": "agent", "event": "scan_skipped", "msg": msg})
         job_store.update(job.job_id, status="cancelled", progress=100, error=msg)
         return
 
     market_focus = cfg.get("job_market_focus", "global")
-    raw_urls = job_targets(cfg.get("job_boards", ""), market_focus)
+    raw_urls = job_targets(
+        cfg.get("job_boards", ""),
+        market_focus,
+        search_text=str(profile.get("_discovery_search_text") or profile.get("desired_position") or profile.get("s") or ""),
+        location=str(profile.get("_discovery_location") or ""),
+    )
     await run_x_signal_scan(manager, cfg, "job", profile, discovery_service=discovery_service)
     await run_free_source_scan(manager, cfg, "job", profile, discovery_service=discovery_service)
 
-    await manager.broadcast({"type": "agent", "event": "query_gen_start", "msg": "Generating profile-tailored search queries..."})
+    await manager.broadcast({"type": "agent", "event": "query_gen_start", "msg": "Préparation des requêtes adaptées au profil..."})
     try:
         urls = await discovery_service.plan_board_targets(profile, raw_urls, market_focus)
-        await manager.broadcast({"type": "agent", "event": "query_gen_done", "msg": f"Search plan ready - {len(urls)} targets"})
+        await manager.broadcast({"type": "agent", "event": "query_gen_done", "msg": f"Plan de recherche prêt : {len(urls)} cible(s)"})
         for url in urls:
-            await manager.broadcast({"type": "agent", "event": "query_gen_target", "msg": url})
+            await manager.broadcast({"type": "agent", "event": "query_gen_target", "msg": _target_label(url)})
     except Exception as exc:
         urls = raw_urls
-        await manager.broadcast({"type": "agent", "event": "query_gen_error", "msg": f"Query generation failed ({exc}), using raw URLs"})
+        await manager.broadcast({"type": "agent", "event": "query_gen_error", "msg": f"Génération des requêtes échouée ({exc}) ; sources brutes utilisées"})
 
-    await manager.broadcast({"type": "agent", "event": "scout_start", "msg": f"Launching scan for {len(urls)} targets..."})
+    await manager.broadcast({"type": "agent", "event": "scout_start", "msg": f"Lancement du scan sur {len(urls)} cible(s)..."})
     leads: list[dict] = []
     scout_usage: dict = {"configured": 0, "executed": 0, "candidates": 0, "saved": 0, "duplicates": 0, "filtered": 0, "missing_url": 0, "errors": 0, "by_source": {}}
     scout_errors: list[str] = []
@@ -289,24 +307,24 @@ async def _run_scan_inner(
             scout_usage["configured"] += len(batch)
             scout_usage["errors"] += len(batch)
             detail = str(exc).strip() or type(exc).__name__
-            scout_errors.append(f"board batch {batch_index}/{len(batches)} skipped ({len(batch)} targets): {detail}")
+            scout_errors.append(f"lot jobboard {batch_index}/{len(batches)} ignoré ({len(batch)} cible(s)) : {detail}")
             record_error("source_fetch_failed", detail, "api.discovery")
 
     await manager.broadcast({
         "type": "agent",
         "event": "scout_done",
         "msg": (
-            f"Scout finished - {len(leads)} new leads found "
-            f"({scout_usage.get('candidates', 0)} candidates, {scout_usage.get('duplicates', 0)} duplicates, "
-            f"{scout_usage.get('filtered', 0)} filtered, {scout_usage.get('errors', 0)} source errors)"
+            f"Scan terminé : {len(leads)} nouvelle(s) offre(s) "
+            f"({scout_usage.get('candidates', 0)} candidat(s), {scout_usage.get('duplicates', 0)} doublon(s), "
+            f"{scout_usage.get('filtered', 0)} filtrée(s), {scout_usage.get('errors', 0)} erreur(s) source)"
         ),
     })
     for msg in scout_errors[:5]:
         record_error("source_fetch_failed", msg, "api.discovery")
-        await manager.broadcast({"type": "agent", "event": "scout_source_detail", "msg": f"Scout source detail: {msg}"})
+        await manager.broadcast({"type": "agent", "event": "scout_source_detail", "msg": f"Détail source jobboard : {msg}"})
 
     if stop_event.is_set():
-        await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Scan stopped after scouting."})
+        await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Scan arrêté après la collecte."})
         return
 
     discovered = await asyncio.to_thread(repo.leads.get_discovered_leads)
@@ -315,13 +333,13 @@ async def _run_scan_inner(
     # re-evaluate action — re-scoring the whole backlog on every scan is an O(N)
     # LLM cost that grows unboundedly as matched leads accumulate.
     to_score = [lead for lead in discovered if (lead.get("status") or "discovered") == "discovered"]
-    await manager.broadcast({"type": "agent", "event": "eval_start", "msg": f"Evaluating {len(to_score)} new leads via {cfg.get('llm_provider', 'ollama')}"})
+    await manager.broadcast({"type": "agent", "event": "eval_start", "msg": f"Évaluation de {len(to_score)} nouvelle(s) offre(s) via {cfg.get('llm_provider', 'ollama')}"})
 
     fallback_count = 0
     prefiltered_count = 0
     for lead in to_score:
         if stop_event.is_set():
-            await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Scan stopped during evaluation."})
+            await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Scan arrêté pendant l'évaluation."})
             return
         try:
             result = await ranking_service.evaluate_lead(lead, profile)
@@ -336,23 +354,23 @@ async def _run_scan_inner(
             if result.get("scored_by") == "prefiltered_off_field":
                 prefiltered_count += 1
             await manager.broadcast({"type": "LEAD_UPDATED", "data": {**lead, **result}})
-            await manager.broadcast({"type": "agent", "event": "eval_scored", "msg": f"Scored {lead.get('title','')} = {result['score']}/100"})
+            await manager.broadcast({"type": "agent", "event": "eval_scored", "msg": f"Score {lead.get('title','')} = {result['score']}/100"})
         except Exception as exc:
-            await manager.broadcast({"type": "agent", "event": "eval_error", "msg": f"Eval failed for {lead.get('title','')}: {exc}"})
+            await manager.broadcast({"type": "agent", "event": "eval_error", "msg": f"Évaluation échouée pour {lead.get('title','')} : {exc}"})
 
     if prefiltered_count > 0:
         await manager.broadcast({
             "type": "agent",
             "event": "eval_prefilter_summary",
-            "msg": f"{prefiltered_count}/{len(to_score)} leads skipped as off-field (no LLM tokens spent)",
+            "msg": f"{prefiltered_count}/{len(to_score)} offre(s) ignorée(s) hors cible (aucun token LLM utilisé)",
         })
     if fallback_count > 0:
         await manager.broadcast({
             "type": "agent",
             "event": "eval_fallback_summary",
-            "msg": f"{fallback_count}/{len(to_score)} leads scored by fallback (LLM unavailable)",
+            "msg": f"{fallback_count}/{len(to_score)} offre(s) scorée(s) par repli local (LLM indisponible)",
         })
-    await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Evaluation cycle complete"})
+    await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Cycle d'évaluation terminé"})
     await asyncio.to_thread(repo.settings.save_settings, {"last_scan_finished_at": datetime.now(timezone.utc).isoformat()})
     job_store.update(job.job_id, status="succeeded", progress=100)
 
@@ -552,7 +570,7 @@ def create_router(
         )
         if not started:
             status = await TASKS.status()
-            detail = "Scan already running" if status["scanning"] else "Re-evaluation already running"
+            detail = "Scan déjà en cours" if status["scanning"] else "Réévaluation déjà en cours"
             raise HTTPException(status_code=409, detail=detail)
         return {"status": "reevaluating"}
 
@@ -560,7 +578,7 @@ def create_router(
     async def stop_reevaluate_jobs():
         if not await TASKS.stop("reevaluate"):
             return {"status": "idle"}
-        await manager.broadcast({"type": "agent", "event": "reeval_done", "msg": "Re-evaluation stopped by user."})
+        await manager.broadcast({"type": "agent", "event": "reeval_done", "msg": "Réévaluation arrêtée par l'utilisateur."})
         return {"status": "stopping"}
 
     @router.post("/leads/cleanup")
@@ -572,7 +590,7 @@ def create_router(
         await manager.broadcast({
             "type": "agent",
             "event": "cleanup_start",
-            "msg": f"Scanning up to {limit} leads for bad data...",
+            "msg": f"Scan de {limit} offre(s) maximum pour détecter les données invalides...",
         })
         result = await asyncio.to_thread(repo.leads.cleanup_bad_leads, limit, dry_run)
 
@@ -582,11 +600,11 @@ def create_router(
                 if lead:
                     await manager.broadcast({"type": "LEAD_UPDATED", "data": lead})
 
-        action = "would discard" if dry_run else "discarded"
+        action = "seraient écartée(s)" if dry_run else "écartée(s)"
         await manager.broadcast({
             "type": "agent",
             "event": "cleanup_done",
-            "msg": f"Cleanup scanned {result['scanned']} leads and {action} {result['candidates']} bad rows.",
+            "msg": f"Nettoyage : {result['scanned']} offre(s) vérifiée(s), {result['candidates']} ligne(s) invalide(s) {action}.",
         })
         return result
 

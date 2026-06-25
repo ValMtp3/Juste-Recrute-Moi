@@ -252,12 +252,12 @@ def create_router(manager, logger) -> APIRouter:
     async def ingest_portfolio_endpoint(body: PortfolioIngestBody):
         require_rate_limit(ingest_limiter)
         if not body.url.startswith(("http://", "https://")):
-            raise HTTPException(400, "url must start with http:// or https://")
+            raise HTTPException(400, "L'URL doit commencer par http:// ou https://")
         try:
             result = await get_profile_service().ingest_portfolio(body.url, auto_import=body.auto_import)
         except Exception as exc:
             logger.error("portfolio ingest failed: %s", exc)
-            raise HTTPException(502, f"could not ingest portfolio: {exc}") from exc
+            raise HTTPException(502, f"Impossible d'analyser le portfolio : {exc}") from exc
         if result.get("error") and not result.get("screenshot_b64"):
             raise HTTPException(int(result.get("status_code") or 422), result["error"])
         if result.get("imported"):

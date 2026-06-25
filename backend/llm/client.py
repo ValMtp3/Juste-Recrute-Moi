@@ -15,6 +15,9 @@ from data.repository import Repository, create_repository
 from core.logging import get_logger
 
 _log = get_logger(__name__)
+for _noisy_logger in ("openai", "openai._base_client"):
+    logging.getLogger(_noisy_logger).setLevel(logging.ERROR)
+    logging.getLogger(_noisy_logger).propagate = False
 
 # 120s — a single LLM call taking longer than this is hung, not slow. (H5)
 _TIMEOUT = httpx.Timeout(120.0, connect=10.0)
@@ -125,7 +128,7 @@ def _retry_llm_call(fn, *, max_retries: int = _MAX_LLM_RETRIES):
             if attempt >= max_retries or not _is_retryable_llm_error(exc):
                 raise
             _log.warning(
-                "transient LLM error (attempt %d/%d) — retrying in %.0fs: %s",
+                "Erreur LLM temporaire (tentative %d/%d) ; nouvel essai dans %.0fs : %s",
                 attempt + 1,
                 max_retries,
                 delay,
@@ -358,8 +361,8 @@ def assert_llm_configured(step: str | None = None) -> None:
     provider, key, _model = _resolve(step)
     if provider_needs_key(provider) and not key:
         raise MissingKeyError(
-            f"No API key configured for provider {provider!r}. "
-            "Add your key in Settings, or switch to a local provider."
+            f"Aucune clé API configurée pour le fournisseur {provider!r}. "
+            "Ajoutez la clé dans les réglages, ou utilisez un fournisseur local."
         )
 
 
@@ -415,10 +418,10 @@ def _subscription_call(provider, attempt, fallback, *, step):
         try:
             return attempt()
         except _sub.CliTimeout:
-            _log.warning("%s subscription CLI timed out (step=%s) — retrying once", provider, step)
+            _log.warning("%s CLI d'abonnement trop lent (étape=%s) ; nouvel essai", provider, step)
             return attempt()
-    except _sub.CliError as exc:
-        _log.warning("%s subscription CLI failed (step=%s): %s", provider, step, exc)
+    except _sub.CliError:
+        _log.warning("%s CLI d'abonnement indisponible (étape=%s)", provider, step)
         return fallback()
 
 
@@ -427,7 +430,7 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
 
     if p == "anthropic":
         if not k:
-            _log.warning("anthropic — no key (step=%s) — falling back", step)
+            _log.warning("anthropic : aucune clé configurée (étape=%s) ; repli local", step)
             return _parse_fallback(u, m)
         anthropic_client = _anthropic(api_key=k, timeout=120.0, max_retries=0)
         r = anthropic_client.messages.parse(
@@ -441,7 +444,7 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
 
     elif p == "groq":
         if not k:
-            _log.warning("groq — no key (step=%s) — falling back", step)
+            _log.warning("groq : aucune clé configurée (étape=%s) ; repli local", step)
             return _parse_fallback(u, m)
         groq_client = instructor.from_openai(
             _openai(base_url="https://api.groq.com/openai/v1", api_key=k,
@@ -456,7 +459,7 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
 
     elif p == "gemini":
         if not k:
-            _log.warning("gemini: no key (step=%s); falling back", step)
+            _log.warning("gemini : aucune clé configurée (étape=%s) ; repli local", step)
             return _parse_fallback(u, m)
         gemini_client = instructor.from_openai(_client_gemini(k), mode=instructor.Mode.JSON)
         return gemini_client.chat.completions.create(
@@ -468,7 +471,7 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
 
     elif p == "nvidia":
         if not k:
-            _log.warning("nvidia — no key (step=%s) — falling back", step)
+            _log.warning("nvidia : aucune clé configurée (étape=%s) ; repli local", step)
             return _parse_fallback(u, m)
         nvidia_client = _client_nvidia(k)
         return nvidia_client.chat.completions.create(
@@ -482,7 +485,7 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
 
     elif p == "openai":
         if not k:
-            _log.warning("openai — no key (step=%s)", step)
+            _log.warning("openai : aucune clé configurée (étape=%s) ; repli local", step)
             return _parse_fallback(u, m)
         openai_client = instructor.from_openai(_openai(api_key=k, timeout=_TIMEOUT, max_retries=0))
         return openai_client.chat.completions.create(
@@ -493,7 +496,7 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
 
     elif p == "deepseek":
         if not k:
-            _log.warning("deepseek — no key (step=%s)", step)
+            _log.warning("deepseek : aucune clé configurée (étape=%s) ; repli local", step)
             return _parse_fallback(u, m)
         # deepseek-reasoner does not support tool_choice — use JSON mode instead
         mode = instructor.Mode.JSON if "reasoner" in model else instructor.Mode.TOOLS
@@ -509,7 +512,7 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
 
     elif p in _OPENAI_COMPAT_PROVIDERS:
         if not k:
-            _log.warning("%s — no key (step=%s)", p, step)
+            _log.warning("%s : aucune clé configurée (étape=%s) ; repli local", p, step)
             return _parse_fallback(u, m)
         if p == "perplexity":
             schema = m.model_json_schema()
@@ -523,12 +526,12 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
             try:
                 return m.model_validate_json(raw)
             except Exception:
-                _log.warning("perplexity structured parse failed (step=%s)", step)
+                _log.warning("perplexity : réponse structurée illisible (étape=%s)", step)
                 return _parse_fallback(u, m)
         try:
             client = _client_openai_compat(p, k)
-        except ValueError as exc:
-            _log.warning("%s configuration invalid (step=%s): %s", p, step, exc)
+        except ValueError:
+            _log.warning("%s : configuration invalide (étape=%s)", p, step)
             return _parse_fallback(u, m)
         compat_client = instructor.from_openai(
             client,
@@ -650,8 +653,8 @@ def _call_raw_once(s: str, u: str, step: str | None = None) -> str:
             return ""
         try:
             compat_raw_client = _client_openai_compat(p, k)
-        except ValueError as exc:
-            _log.warning("%s configuration invalid (step=%s): %s", p, step, exc)
+        except ValueError:
+            _log.warning("%s : configuration invalide (étape=%s)", p, step)
             return ""
         # Perplexity included: it serves only the OpenAI-compatible
         # chat-completions API (no Responses API).
