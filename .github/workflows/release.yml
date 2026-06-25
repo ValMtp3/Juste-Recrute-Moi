@@ -514,6 +514,7 @@ jobs:
         shell: pwsh
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
+          JHM_SMOKE_PREINSTALL_RUNTIME: "1"
           JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste-Recrute-Moi-runtime-pack-windows.zip
         run: |
           $ErrorActionPreference = "Stop"
@@ -689,6 +690,7 @@ jobs:
         shell: bash
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
+          JHM_SMOKE_PREINSTALL_RUNTIME: "1"
           JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets/Juste-Recrute-Moi-runtime-pack-macos.zip
         run: |
           set -euo pipefail
