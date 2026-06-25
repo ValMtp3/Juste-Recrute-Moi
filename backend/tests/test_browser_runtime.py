@@ -64,6 +64,7 @@ def test_chromium_executable_finds_linux_chrome(monkeypatch, tmp_path):
     monkeypatch.setattr(browser_runtime, "sys_platform", lambda: "linux")
     monkeypatch.setenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE", "")
     monkeypatch.setattr(browser_runtime, "_runtime_chromium_executable", lambda: None)
+    monkeypatch.setattr(browser_runtime, "system_browser_executable", lambda: None)
     monkeypatch.setattr(
         browser_runtime,
         "_system_browser_candidates",
@@ -83,6 +84,7 @@ def test_chromium_executable_finds_macos_chrome(monkeypatch, tmp_path):
     monkeypatch.setattr(browser_runtime, "sys_platform", lambda: "darwin")
     monkeypatch.setenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE", "")
     monkeypatch.setattr(browser_runtime, "_runtime_chromium_executable", lambda: None)
+    monkeypatch.setattr(browser_runtime, "system_browser_executable", lambda: None)
     monkeypatch.setattr(
         browser_runtime,
         "_system_browser_candidates",
@@ -169,6 +171,7 @@ def test_chromium_executable_returns_none_when_nothing_exists(monkeypatch):
     monkeypatch.setattr(browser_runtime, "sys_platform", lambda: "linux")
     monkeypatch.setenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE", "")
     monkeypatch.setattr(browser_runtime, "_runtime_chromium_executable", lambda: None)
+    monkeypatch.setattr(browser_runtime, "system_browser_executable", lambda: None)
     monkeypatch.setattr(
         browser_runtime,
         "_system_browser_candidates",
@@ -190,6 +193,7 @@ def test_chromium_executable_prefers_env_var_over_system(monkeypatch, tmp_path):
     monkeypatch.setattr(browser_runtime, "sys_platform", lambda: "linux")
     monkeypatch.setenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE", str(env_chrome))
     monkeypatch.setattr(browser_runtime, "_runtime_chromium_executable", lambda: None)
+    monkeypatch.setattr(browser_runtime, "system_browser_executable", lambda: None)
     monkeypatch.setattr(
         browser_runtime,
         "_system_browser_candidates",
