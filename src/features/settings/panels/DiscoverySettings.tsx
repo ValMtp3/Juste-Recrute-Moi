@@ -1,16 +1,28 @@
 import { useState, type ChangeEvent } from "react";
 import type { Cfg } from "./shared";
-import { BigToggle, FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, LabelledField, SectionLabel } from "./shared";
+import { BigToggle, FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, LabelledField, SECRET_MASKS, SectionLabel } from "./shared";
 
 export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: keyof Cfg) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void }) {
   const [siteDraft, setSiteDraft] = useState("");
+
+  const atsHosts = new Set(["greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com", "teamtailor.com"]);
+  const isKnownAtsHost = (raw: string) => {
+    const candidate = raw.startsWith("site:") ? raw.slice(5).split(/\s+/)[0] : raw;
+    try {
+      const url = new URL(/^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`);
+      const host = url.hostname.toLowerCase().replace(/^www\./, "");
+      return [...atsHosts].some(allowed => host === allowed || host.endsWith(`.${allowed}`));
+    } catch {
+      return false;
+    }
+  };
 
   const sourceTargetFromSite = (raw: string) => {
     const value = raw.trim().replace(/,$/, "");
     if (!value) return "";
     const lower = value.toLowerCase();
     if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|france_travail:|jobspy:|import:|https?:\/\/)/i.test(value)) {
-      if (lower.includes("greenhouse.io") || lower.includes("lever.co") || lower.includes("ashbyhq.com") || lower.includes("workable.com") || lower.includes("smartrecruiters.com") || lower.includes("teamtailor.com")) {
+      if (isKnownAtsHost(lower)) {
         return value;
       }
       return value;
@@ -127,7 +139,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                 />
               </div>
               <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
-                <SectionLabel label="Sources gratuites" sub="France Travail, JobSpy, ATS, GitHub, HN et Reddit" />
+                <SectionLabel label="Sources gratuites" sub="France Travail, ATS, GitHub, HN et Reddit" />
                 <BigToggle
                   active={cfg.free_sources_enabled !== "false"}
                   onToggle={() => onChange("free_sources_enabled", cfg.free_sources_enabled === "false" ? "true" : "false")}
@@ -137,6 +149,16 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                   sub="Activé par défaut ; enregistre les offres et classe leur niveau pour le filtrage"
                   tone="green"
                 />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <LabelledField label="Client ID France Travail" hint="API Offres d'emploi">
+                    <input type="password" placeholder="client_id" value={SECRET_MASKS.has(cfg.france_travail_client_id) ? "" : cfg.france_travail_client_id} onChange={set("france_travail_client_id")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                  <LabelledField label="Secret France Travail" hint="conservé masqué après sauvegarde">
+                    <input type="password" placeholder="client_secret" value={SECRET_MASKS.has(cfg.france_travail_client_secret) ? "" : cfg.france_travail_client_secret} onChange={set("france_travail_client_secret")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                </div>
                 <LabelledField label="Entreprises à surveiller" hint="fournisseur,slug par ligne : greenhouse,<slug-entreprise>">
                   <textarea value={cfg.company_watchlist} onChange={set("company_watchlist")} rows={4} className="mono field-input"
                     placeholder={[
@@ -148,7 +170,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                     ].join("\n")}
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
                 </LabelledField>
-                <LabelledField label="Cibles de sources gratuites" hint="france_travail:, jobspy:, import:, github:, hn:, reddit: ou ats:">
+                <LabelledField label="Cibles de sources gratuites" hint="france_travail:, import:, github:, hn:, reddit: ou ats:">
                   <textarea value={cfg.free_source_targets} onChange={set("free_source_targets")} rows={5} className="mono field-input"
                     placeholder={[
                       "github:<target role> hiring help wanted",
@@ -220,7 +242,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Marché ciblé</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                     {[
-                      { id: "france", label: "Marché français", sub: "France Travail, Indeed France via JobSpy, ATS et jobboards français" },
+                      { id: "france", label: "Marché français", sub: "France Travail, ATS et jobboards français" },
                       { id: "global", label: "International", sub: "Jobboards mondiaux, ATS, flux remote et sources généralistes" },
                       { id: "india", label: "Marché indien", sub: "Jobboards indiens, startups locales, ATS et offres remote India" },
                     ].map(mode => {
@@ -274,9 +296,13 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                       { label: "LinkedIn", url: "site:linkedin.com/jobs" },
                       { label: "Indeed", url: "site:indeed.com/jobs" },
                       { label: "France Travail", url: "france_travail:developpeur;lieu=France;range=0-49" },
-                      { label: "JobSpy FR", url: "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168" },
                       { label: "WTTJ", url: "site:welcometothejungle.com/fr/jobs France" },
                       { label: "HelloWork", url: "site:hellowork.com/fr-fr/emplois France" },
+                      { label: "Apec", url: "site:apec.fr/candidat/recherche-emploi.html/emploi France" },
+                      { label: "Cadremploi", url: "site:cadremploi.fr/emploi France" },
+                      { label: "Meteojob", url: "site:meteojob.com/jobs France" },
+                      { label: "LesJeudis", url: "site:lesjeudis.com/jobs France" },
+                      { label: "Indeed FR", url: "site:fr.indeed.com/emplois France" },
                       { label: "SmartRecruiters", url: "site:jobs.smartrecruiters.com France" },
                       { label: "Teamtailor", url: "site:teamtailor.com/jobs France" },
                       { label: "Naukri", url: "site:naukri.com jobs India" },
@@ -321,7 +347,6 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                   placeholder={[
                     "# Sources France stables / best effort",
                     "france_travail:developpeur;lieu=France;range=0-49,",
-                    "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168,",
                     "# Hacker News Who is Hiring (Algolia API)",
                     "hn-hiring,",
                     "# APIs directes / flux RSS",

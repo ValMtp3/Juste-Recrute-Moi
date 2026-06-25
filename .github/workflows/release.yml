@@ -192,14 +192,6 @@ jobs:
       - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
-      - name: Installer le runtime Playwright Chromium
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $env:PLAYWRIGHT_BROWSERS_PATH = "..\src-tauri\resources\bin\ms-playwright"
-          cd backend
-          uv run python -m playwright install chromium
-
       - name: Compiler le sidecar avec le script canonique
         run: npm run build:sidecar
 
@@ -216,12 +208,14 @@ jobs:
           $backendTotal = (Get-ChildItem -Path src-tauri\resources\backend\ -Recurse -File |
             Measure-Object -Property Length -Sum).Sum / 1MB
           Write-Host "Sidecar backend size: $([math]::Round($backendTotal, 1)) MB"
-          Write-Host "Installer sidecar is onefile; heavy runtime stays in the OTA runtime pack."
+          Write-Host "Installer sidecar is onefile; heavy vector runtime stays in the OTA runtime pack."
           Get-Content src-tauri\resources\backend\sidecar-manifest.json
 
       - name: Smoke sidecar startup
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
+          JHM_SMOKE_PREINSTALL_RUNTIME: "1"
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: release-assets\Juste-Recrute-Moi-runtime-pack-windows.zip
         run: npm run smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
@@ -266,14 +260,6 @@ jobs:
       - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
-      - name: Installer le runtime Playwright Chromium
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PLAYWRIGHT_BROWSERS_PATH="../src-tauri/resources/bin/ms-playwright"
-          cd backend
-          uv run python -m playwright install chromium
-
       - name: Compiler le sidecar avec le script canonique
         run: npm run build:sidecar
 
@@ -287,12 +273,16 @@ jobs:
           find src-tauri/resources/backend -maxdepth 3 -type f -print
           backend_kb="$(du -sk src-tauri/resources/backend | awk '{print $1}')"
           echo "Sidecar backend size: $((backend_kb / 1024)) MB"
-          echo "Installer sidecar is onefile; heavy runtime stays in the OTA runtime pack."
+          echo "Installer sidecar is onefile; heavy vector runtime stays in the OTA runtime pack."
           cat src-tauri/resources/backend/sidecar-manifest.json
 
       - name: Smoke sidecar startup
+        # The raw macOS sidecar is not codesigned with library-validation
+        # entitlements yet. The packaged macOS smoke below verifies the vector
+        # runtime strictly after codesign.
         env:
-          JHM_VECTOR_RUNTIME_REQUIRED: "1"
+          JHM_SMOKE_PREINSTALL_RUNTIME: "1"
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: release-assets/Juste-Recrute-Moi-runtime-pack-macos.zip
         run: npm run smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
@@ -337,14 +327,6 @@ jobs:
       - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
-      - name: Installer le runtime Playwright Chromium
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PLAYWRIGHT_BROWSERS_PATH="../src-tauri/resources/bin/ms-playwright"
-          cd backend
-          uv run python -m playwright install chromium
-
       - name: Compiler le sidecar avec le script canonique
         run: npm run build:sidecar
 
@@ -358,12 +340,14 @@ jobs:
           find src-tauri/resources/backend -maxdepth 3 -type f -print
           backend_kb="$(du -sk src-tauri/resources/backend | awk '{print $1}')"
           echo "Sidecar backend size: $((backend_kb / 1024)) MB"
-          echo "Installer sidecar is onefile; heavy runtime stays in the OTA runtime pack."
+          echo "Installer sidecar is onefile; heavy vector runtime stays in the OTA runtime pack."
           cat src-tauri/resources/backend/sidecar-manifest.json
 
       - name: Smoke sidecar startup
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
+          JHM_SMOKE_PREINSTALL_RUNTIME: "1"
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: release-assets/Juste-Recrute-Moi-runtime-pack-linux.zip
         run: npm run smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
@@ -436,13 +420,13 @@ jobs:
           $triple = (rustc -vV | Select-String "host:").ToString().Split()[1].Trim()
           $sidecar = "src-tauri\resources\backend\jhm-sidecar-next-$triple.exe"
           if (-not (Test-Path $sidecar)) {
-            throw "Sidecar not found at $sidecar"
+            throw "Sidecar introuvable : $sidecar"
           }
           if (-not (Test-Path "src-tauri\resources\backend\sidecar-manifest.json")) {
-            throw "Sidecar manifest not found."
+            throw "Manifeste sidecar introuvable."
           }
           Write-Host "Sidecar verified: $sidecar ($(( Get-Item $sidecar ).Length / 1MB) MB)"
-          Write-Host "The mandatory runtime pack is bundled into the installer and also published as an OTA recovery asset."
+          Write-Host "The mandatory vector runtime pack is published as an OTA recovery asset."
 
       - name: Verify updater signing secrets
         env:
@@ -452,7 +436,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ] || [ -z "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" ]; then
-            echo "Missing Tauri updater signing secrets." >&2
+            echo "Secrets de signature Tauri updater manquants." >&2
             exit 1
           fi
 
@@ -467,7 +451,7 @@ jobs:
       - name: Smoke installed Windows package
         shell: pwsh
         env:
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste Recrute Moi-runtime-pack-windows.zip
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste-Recrute-Moi-runtime-pack-windows.zip
         run: |
           $ErrorActionPreference = "Stop"
           $installer = Get-ChildItem -Path "src-tauri\target\release\bundle\nsis" -Filter "*.exe" -File -Recurse |
@@ -484,7 +468,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste Recrute Moi-runtime-pack-windows.zip
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste-Recrute-Moi-runtime-pack-windows.zip
         run: |
           $ErrorActionPreference = "Stop"
           $currentTag = "${{ github.ref_name }}"
@@ -530,13 +514,14 @@ jobs:
         shell: pwsh
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste Recrute Moi-runtime-pack-windows.zip
+          JHM_SMOKE_PREINSTALL_RUNTIME: "1"
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets\Juste-Recrute-Moi-runtime-pack-windows.zip
         run: |
           $ErrorActionPreference = "Stop"
           $triple = (rustc -vV | Select-String "host:").ToString().Split(" ")[1].Trim()
           $sidecarPath = "src-tauri\resources\backend\jhm-sidecar-next-$triple.exe"
           if (-not (Test-Path $sidecarPath)) {
-            throw "Packaged Windows sidecar resource not found at $sidecarPath"
+            throw "Ressource sidecar Windows packagée introuvable : $sidecarPath"
           }
           npm run smoke:sidecar
 
@@ -550,13 +535,22 @@ jobs:
             Sort-Object Name
           $installers = $assets | Where-Object { $_.Extension -in ".exe", ".msi" }
           if (-not $installers) {
-            throw "No Windows installer artifacts were produced."
+            throw "Aucun artefact d'installation Windows n'a été produit."
           }
 
           $lines = foreach ($asset in $assets) {
             Copy-Item $asset.FullName -Destination $releaseDir -Force
             $hash = (Get-FileHash -Algorithm SHA256 -Path $asset.FullName).Hash.ToLowerInvariant()
             "$hash  $($asset.Name)"
+          }
+          Get-ChildItem -Path "runtime-assets" -Filter "*.zip" -File | ForEach-Object {
+            Copy-Item $_.FullName -Destination $releaseDir -Force
+            $hash = (Get-FileHash -Algorithm SHA256 -Path $_.FullName).Hash.ToLowerInvariant()
+            $lines += "$hash  $($_.Name)"
+          }
+          $runtimePack = Join-Path $releaseDir "Juste-Recrute-Moi-runtime-pack-windows.zip"
+          if (-not (Test-Path $runtimePack)) {
+            throw "Pack runtime Windows manquant dans les artefacts de release."
           }
           $lines | Set-Content -Path "$releaseDir\SHA256SUMS-windows.txt" -Encoding utf8
 
@@ -572,6 +566,8 @@ jobs:
     needs: [backend-macos, build-frontend]
     runs-on: macos-latest
     timeout-minutes: 40
+    env:
+      CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER: clang
     permissions:
       contents: read
     steps:
@@ -619,7 +615,7 @@ jobs:
           sidecar="src-tauri/resources/backend/jhm-sidecar-next-${triple}"
           if [ ! -f "$sidecar" ]; then
             find src-tauri/resources -maxdepth 3 -type f -print
-            echo "Sidecar not found at $sidecar" >&2
+            echo "Sidecar introuvable : $sidecar" >&2
             exit 1
           fi
           chmod +x "$sidecar"
@@ -634,16 +630,16 @@ jobs:
           triple="$(rustc -vV | awk '/host:/ {print $2}')"
           sidecar="src-tauri/resources/backend/jhm-sidecar-next-${triple}"
           if [ ! -f "$sidecar" ]; then
-            echo "Sidecar not found at $sidecar" >&2
+            echo "Sidecar introuvable : $sidecar" >&2
             exit 1
           fi
           if [ ! -f "src-tauri/resources/backend/sidecar-manifest.json" ]; then
-            echo "Sidecar manifest not found." >&2
+            echo "Manifeste sidecar introuvable." >&2
             exit 1
           fi
           chmod +x "$sidecar"
           echo "Sidecar verified: $sidecar ($(du -h "$sidecar" | awk '{print $1}'))"
-          echo "The mandatory runtime pack is bundled into the installer and also published as an OTA recovery asset."
+          echo "The mandatory vector runtime pack is published as an OTA recovery asset."
 
       - name: Préparer les permissions du sidecar macOS
         shell: bash
@@ -678,7 +674,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ] || [ -z "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" ]; then
-            echo "Missing Tauri updater signing secrets." >&2
+            echo "Secrets de signature Tauri updater manquants." >&2
             exit 1
           fi
 
@@ -694,12 +690,13 @@ jobs:
         shell: bash
         env:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
-          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets/Juste Recrute Moi-runtime-pack-macos.zip
+          JHM_SMOKE_PREINSTALL_RUNTIME: "1"
+          JHM_SMOKE_RUNTIME_PACK_ARCHIVE: runtime-assets/Juste-Recrute-Moi-runtime-pack-macos.zip
         run: |
           set -euo pipefail
           app_path="$(find src-tauri/target/release/bundle/macos -maxdepth 1 -name "*.app" -type d -print -quit)"
           if [ -z "$app_path" ]; then
-            echo "Packaged .app not found." >&2
+            echo ".app packagée introuvable." >&2
             exit 1
           fi
           app_path="$(cd "$app_path" && pwd -P)"
@@ -710,7 +707,7 @@ jobs:
             sidecar_path="$(find "$app_path/Contents" -type f -name "jhm-sidecar-next*" -print -quit)"
           fi
           if [ -z "$sidecar_path" ] || [ ! -f "$sidecar_path" ]; then
-            echo "Packaged sidecar not found in $app_path." >&2
+            echo "Sidecar packagé introuvable dans $app_path." >&2
             exit 1
           fi
           codesign -d --entitlements :- "$sidecar_path" 2>&1 | tee packaged-sidecar-entitlements.txt
@@ -731,7 +728,7 @@ jobs:
           find src-tauri/target/release/bundle -type f \( -name "*.dmg" -o -name "*.tar.gz" -o -name "*.sig" \) | sort > "$asset_list"
 
           if [ ! -s "$asset_list" ]; then
-            echo "No macOS installer artifacts were produced." >&2
+            echo "Aucun artefact d'installation macOS n'a été produit." >&2
             exit 1
           fi
 
@@ -741,6 +738,14 @@ jobs:
             cp "$asset" "$release_dir/"
             shasum -a 256 "$asset" | awk -v name="$(basename "$asset")" '{print $1 "  " name}' >> "$checksum_file"
           done < "$asset_list"
+          find runtime-assets -maxdepth 1 -type f -name "*.zip" | sort | while IFS= read -r asset; do
+            cp "$asset" "$release_dir/"
+            shasum -a 256 "$asset" | awk -v name="$(basename "$asset")" '{print $1 "  " name}' >> "$checksum_file"
+          done
+          if [ ! -f "$release_dir/Juste-Recrute-Moi-runtime-pack-macos.zip" ]; then
+            echo "Pack runtime macOS manquant dans les artefacts de release." >&2
+            exit 1
+          fi
           rm "$asset_list"
 
       - name: Publier les artefacts de release
@@ -820,7 +825,7 @@ jobs:
           sidecar="src-tauri/resources/backend/jhm-sidecar-next-${triple}"
           if [ ! -f "$sidecar" ]; then
             find src-tauri/resources -maxdepth 3 -type f -print
-            echo "Sidecar not found at $sidecar" >&2
+            echo "Sidecar introuvable : $sidecar" >&2
             exit 1
           fi
           chmod +x "$sidecar"
@@ -835,16 +840,16 @@ jobs:
           triple="$(rustc -vV | awk '/host:/ {print $2}')"
           sidecar="src-tauri/resources/backend/jhm-sidecar-next-${triple}"
           if [ ! -f "$sidecar" ]; then
-            echo "Sidecar not found at $sidecar" >&2
+            echo "Sidecar introuvable : $sidecar" >&2
             exit 1
           fi
           if [ ! -f "src-tauri/resources/backend/sidecar-manifest.json" ]; then
-            echo "Sidecar manifest not found." >&2
+            echo "Manifeste sidecar introuvable." >&2
             exit 1
           fi
           chmod +x "$sidecar"
           echo "Sidecar verified: $sidecar ($(du -h "$sidecar" | awk '{print $1}'))"
-          echo "The mandatory runtime pack is bundled into the installer and also published as an OTA recovery asset."
+          echo "The mandatory vector runtime pack is published as an OTA recovery asset."
 
       - name: Verify updater signing secrets
         env:
@@ -854,7 +859,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ] || [ -z "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}" ]; then
-            echo "Missing Tauri updater signing secrets." >&2
+            echo "Secrets de signature Tauri updater manquants." >&2
             exit 1
           fi
 
@@ -876,7 +881,7 @@ jobs:
           find src-tauri/target/release/bundle -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.sig" \) | sort > "$asset_list"
 
           if [ ! -s "$asset_list" ]; then
-            echo "No Linux installer artifacts were produced." >&2
+            echo "Aucun artefact d'installation Linux n'a été produit." >&2
             exit 1
           fi
 
@@ -886,6 +891,14 @@ jobs:
             cp "$asset" "$release_dir/"
             shasum -a 256 "$asset" | awk -v name="$(basename "$asset")" '{print $1 "  " name}' >> "$checksum_file"
           done < "$asset_list"
+          find runtime-assets -maxdepth 1 -type f -name "*.zip" | sort | while IFS= read -r asset; do
+            cp "$asset" "$release_dir/"
+            shasum -a 256 "$asset" | awk -v name="$(basename "$asset")" '{print $1 "  " name}' >> "$checksum_file"
+          done
+          if [ ! -f "$release_dir/Juste-Recrute-Moi-runtime-pack-linux.zip" ]; then
+            echo "Pack runtime Linux manquant dans les artefacts de release." >&2
+            exit 1
+          fi
           rm "$asset_list"
 
       - name: Publier les artefacts de release
@@ -921,6 +934,13 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           version="${tag#v}"
           cd release-assets
+          for platform in windows macos linux; do
+            runtime_pack="Juste-Recrute-Moi-runtime-pack-${platform}.zip"
+            if [ ! -f "$runtime_pack" ]; then
+              echo "Pack runtime manquant dans la release: $runtime_pack" >&2
+              exit 1
+            fi
+          done
 
           find . -type f ! -name "SHA256SUMS*.txt" ! -name "ASSET-SIZES.txt" -printf "%P\n" | sort | while read -r asset; do
             sha256sum "$asset"
@@ -971,7 +991,7 @@ jobs:
                   "url": f"{release_url}/{asset}",
               }
           if not platforms:
-              raise SystemExit("No updater platforms found. Missing signed updater artifacts.")
+              raise SystemExit("Aucune plateforme updater trouvée. Artefacts signés manquants.")
           pathlib.Path("latest.json").write_text(json.dumps({
               "version": version,
               "notes": f"Juste Recrute Moi {tag}: signed desktop update.",
@@ -988,38 +1008,39 @@ jobs:
             echo
             echo "### Installation"
             if find release-assets -maxdepth 1 -type f -name "*.exe" | grep -q .; then
-              echo "- Windows: download Juste Recrute Moi_${version}_x64-setup.exe, run it, and use More info -> Run anyway if SmartScreen appears."
+              echo "- Windows : telechargez Juste Recrute Moi_${version}_x64-setup.exe, lancez-le, puis utilisez Informations complementaires -> Executer quand meme si SmartScreen apparait."
             fi
             if find release-assets -maxdepth 1 -type f \( -name "*.AppImage" -o -name "*.deb" \) | grep -q .; then
-              echo "- Linux: download the .AppImage, run chmod a+x on it, then launch it; or install the .deb on Debian/Ubuntu-based systems."
+              echo "- Linux : telechargez le .AppImage, lancez chmod a+x dessus, puis ouvrez-le ; ou installez le .deb sur Debian/Ubuntu."
             fi
             if find release-assets -maxdepth 1 -type f -name "*.dmg" | grep -q .; then
-              echo "- macOS: download the .dmg and drag Juste Recrute Moi into Applications. If the build is not notarized, macOS may require Privacy & Security -> Open Anyway."
+              echo "- macOS : telechargez le .dmg et glissez Juste Recrute Moi dans Applications. Si la build n'est pas notarisee, macOS peut demander Confidentialite et securite -> Ouvrir quand meme."
             fi
             echo
-            echo "> **Your data stays on your machine.** Juste Recrute Moi is local-first: no hosted backend, no tracking, and no app data leaves your computer by default."
+            echo "> **Vos donnees restent sur votre machine.** Juste Recrute Moi fonctionne en local : pas de backend heberge, pas de tracking, et aucune donnee applicative ne quitte votre ordinateur par defaut."
             echo
-            echo "### SHA256 checksums"
+            echo "### Empreintes SHA256"
             echo
             sed 's/^/    /' release-assets/SHA256SUMS.txt
             echo
-            echo "### Asset sizes"
+            echo "### Taille des fichiers"
             echo
             sed 's/^/    /' release-assets/ASSET-SIZES.txt
             echo
-            echo "### What's inside"
-            echo "- Local-first job intelligence workbench"
-            echo "- Source adapters, quality gates, and transparent ranking"
-            echo "- Built-in CRM for your job pipeline"
-            echo "- Profile-aware graph and vector matching"
-            echo "- Resume, cover letter, and outreach draft generation"
-            echo "- Bundled backend sidecar"
-            echo "- Mandatory runtime pack as one first-run OTA download"
-            echo "- Runtime pack includes LanceDB, PyArrow, vector support, the local embedder path, and Playwright Chromium"
-            echo "- Signed in-app updates for future releases"
+            echo "### Contenu"
+            echo "- Espace de recherche d'emploi local d'abord"
+            echo "- Connecteurs de sources, controles qualite et classement transparent"
+            echo "- CRM integre pour suivre vos candidatures"
+            echo "- Matching par profil, graphe et recherche vectorielle"
+            echo "- Generation de CV, lettres de motivation et messages d'approche"
+            echo "- Backend sidecar inclus"
+            echo "- Pack runtime obligatoire telecharge au premier lancement"
+            echo "- Le pack runtime inclut LanceDB, PyArrow, le support vectoriel, les embeddings locaux et Playwright Chromium/headless shell"
+            echo "- L'automatisation navigateur utilise d'abord le navigateur headless embarque, puis Chrome, Edge ou Brave installes en secours"
+            echo "- Mises a jour signees integrees pour les futures releases"
             echo
             echo "---"
-            echo "_This installer set was built by GitHub Actions from tag ${tag}. Having issues? [Open an issue](https://github.com/${GITHUB_REPOSITORY}/issues) or check the [README](https://github.com/${GITHUB_REPOSITORY}#readme)._"
+            echo "_Cet ensemble d'installation a ete construit par GitHub Actions depuis le tag ${tag}. En cas de probleme, [ouvrez une issue](https://github.com/${GITHUB_REPOSITORY}/issues) ou consultez le [README](https://github.com/${GITHUB_REPOSITORY}#readme)._"
           } > release-notes.md
 
       - name: Publier la release GitHub

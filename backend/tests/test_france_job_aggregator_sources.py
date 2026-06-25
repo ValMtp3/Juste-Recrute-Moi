@@ -3,7 +3,7 @@ import sys
 from types import SimpleNamespace
 from unittest import mock
 
-from core.config import job_market_focus, job_targets
+from core.config import job_market_focus, job_targets, parse_search_intent, profile_for_discovery
 from discovery.service import DiscoveryService
 from discovery.sources import ats, france_travail, jobspy, url_import
 
@@ -13,8 +13,94 @@ def test_france_market_targets_prioritize_stable_and_best_effort_sources():
 
     assert job_market_focus("fr") == "france"
     assert targets[0].startswith("france_travail:")
-    assert any(target.startswith("jobspy:") for target in targets)
+    assert not any(target.startswith("jobspy:") for target in targets)
+    assert "https://remotive.com/api/remote-jobs" in targets
+    assert "https://jobicy.com/api/v2/remote-jobs?count=50" in targets
+    assert "https://weworkremotely.com/remote-jobs.rss" in targets
     assert any("welcometothejungle" in target for target in targets)
+    assert "site:apec.fr/candidat/recherche-emploi.html/emploi France" in targets
+    assert "site:cadremploi.fr/emploi France" in targets
+    assert "site:meteojob.com/jobs France" in targets
+    assert "site:lesjeudis.com/jobs France" in targets
+    assert "site:linkedin.com/jobs France" in targets
+    assert "site:fr.indeed.com/emplois France" in targets
+
+
+def test_france_market_plain_search_keeps_fallback_sources():
+    targets = job_targets("data, paris", "france")
+
+    assert targets[0] == "france_travail:data;lieu=paris;range=0-49"
+    assert "https://remotive.com/api/remote-jobs" in targets
+    assert "https://jobicy.com/api/v2/remote-jobs?count=50" in targets
+    assert any("welcometothejungle" in target for target in targets)
+
+
+def test_france_market_plain_search_detects_role_location_and_contract():
+    targets = job_targets("data Montpellier CDI", "france")
+
+    assert targets[0] == "france_travail:data;lieu=Montpellier;range=0-49;typeContrat=CDI"
+    assert any("hellowork" in target for target in targets)
+
+
+def test_france_search_intent_parses_role_location_contract_and_remote():
+    intent = parse_search_intent(["data Montpellier alternance télétravail"], "France")
+
+    assert intent is not None
+    assert intent.role == "data"
+    assert intent.location == "Montpellier"
+    assert intent.contract == "APP"
+    assert intent.remote is True
+
+
+def test_france_market_plain_search_ignores_location_prepositions():
+    targets = job_targets("data à Montpellier", "france")
+
+    assert targets[0] == "france_travail:data;lieu=Montpellier;range=0-49"
+
+
+def test_france_default_targets_use_profile_search_intent():
+    profile = profile_for_discovery({}, {
+        "job_market_focus": "france",
+        "desired_position": "IA Montpellier alternance remote",
+    })
+    targets = job_targets(
+        "",
+        "france",
+        search_text=profile["_discovery_search_text"],
+        location=profile["_discovery_location"],
+    )
+
+    assert profile["desired_position"] == "IA"
+    assert profile["_discovery_location"] == "Montpellier"
+    assert profile["_remote_preference"] == "remote"
+    assert targets[0] == "france_travail:IA;lieu=Montpellier;range=0-49;typeContrat=APP"
+
+
+def test_france_travail_search_params_keep_structured_filters():
+    params = france_travail._search_params("france_travail:data;lieu=Montpellier;range=0-49;typeContrat=CDI")
+
+    assert params == {
+        "motsCles": "data",
+        "range": "0-49",
+        "lieu": "Montpellier",
+        "typeContrat": "CDI",
+    }
+
+
+def test_france_travail_fallback_params_drop_optional_filters():
+    params = france_travail._fallback_search_params({
+        "motsCles": "data",
+        "range": "0-49",
+        "lieu": "Montpellier",
+        "typeContrat": "CDI",
+        "teletravail": "1",
+    })
+
+    assert params == {
+        "motsCles": "data",
+        "range": "0-49",
+        "lieu": "Montpellier",
+    }
 
 
 def test_france_travail_mapper_returns_stable_lead():
@@ -35,6 +121,22 @@ def test_france_travail_mapper_returns_stable_lead():
     assert lead["source_meta"]["source"] == "france_travail"
     assert lead["source_meta"]["source_reliability"] == "stable"
     assert lead["source_meta"]["contract_type"] == "CDI"
+
+
+def test_france_travail_credentials_can_come_from_settings(monkeypatch):
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_ID", raising=False)
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_SECRET", raising=False)
+    fake_repo = SimpleNamespace(
+        settings=SimpleNamespace(
+            get_settings=lambda: {
+                "france_travail_client_id": "saved-client",
+                "france_travail_client_secret": "saved-secret",
+            }
+        )
+    )
+
+    with mock.patch("data.repository.create_repository", return_value=fake_repo):
+        assert france_travail._env_client() == ("saved-client", "saved-secret")
 
 
 def test_url_import_prefers_jsonld_jobposting():

@@ -143,19 +143,19 @@ fn macos_update_block_reason(
 
     if app_path.contains("/AppTranslocation/") {
         return Some(
-            "Juste Recrute Moi fonctionne from macOS Gatekeeper App Translocation. Move Juste Recrute Moi.app to /Applications or ~/Applications, open it from there, then run the update again.".into(),
+            "Juste Recrute Moi est lance depuis App Translocation de macOS Gatekeeper. Deplacez Juste Recrute Moi.app vers /Applications ou ~/Applications, ouvrez cette copie, puis relancez la mise a jour.".into(),
         );
     }
 
     if app_path.starts_with("/Volumes/") || install_path.starts_with("/Volumes/") {
         return Some(
-            "Juste Recrute Moi fonctionne from a mounted disk image, which macOS exposes as read-only. Drag Juste Recrute Moi.app into /Applications or ~/Applications, open the installed copy, then run the update again.".into(),
+            "Juste Recrute Moi est lance depuis une image disque montee, que macOS expose en lecture seule. Glissez Juste Recrute Moi.app dans /Applications ou ~/Applications, ouvrez la copie installee, puis relancez la mise a jour.".into(),
         );
     }
 
     if let Err(error) = writable_result {
         return Some(format!(
-            "Juste Recrute Moi ne peut pas ecrire to its install folder ({install_path}). Install the latest DMG manually into a writable Applications folder, then future in-app updates can continue. Details: {error}"
+            "Juste Recrute Moi ne peut pas ecrire dans son dossier d'installation ({install_path}). Installez manuellement le dernier DMG dans un dossier Applications modifiable ; les prochaines mises a jour integrees pourront ensuite reprendre. Details : {error}"
         ));
     }
 
@@ -184,8 +184,8 @@ mod tests {
         )
         .expect("blocked reason");
 
-        assert!(reason.contains("mounted disk image"));
-        assert!(reason.contains("read-only"));
+        assert!(reason.contains("image disque"));
+        assert!(reason.contains("lecture seule"));
     }
 
     #[test]
@@ -209,7 +209,7 @@ mod tests {
         )
         .expect("blocked reason");
 
-        assert!(reason.contains("cannot write"));
+        assert!(reason.contains("ne peut pas ecrire"));
         assert!(reason.contains("Permission denied"));
     }
 
@@ -237,7 +237,7 @@ fn get_update_install_status() -> UpdateInstallStatus {
                     can_update: false,
                     needs_manual_install: true,
                     reason: format!(
-                        "Juste Recrute Moi n a pas pu determiner its app location before updating: {error}"
+                        "Juste Recrute Moi n'a pas pu determiner l'emplacement de l'app avant la mise a jour : {error}"
                     ),
                     install_dir: None,
                     app_bundle: None,
@@ -252,7 +252,7 @@ fn get_update_install_status() -> UpdateInstallStatus {
                     platform: "macos".into(),
                     can_update: true,
                     needs_manual_install: false,
-                    reason: "Juste Recrute Moi ne fonctionne pas from a macOS app bundle.".into(),
+                    reason: "Juste Recrute Moi n'est pas lance depuis un bundle macOS.".into(),
                     install_dir: exe.parent().map(display_path),
                     app_bundle: None,
                 };
@@ -267,7 +267,7 @@ fn get_update_install_status() -> UpdateInstallStatus {
                     can_update: false,
                     needs_manual_install: true,
                     reason:
-                        "Juste Recrute Moi n a pas pu determiner the folder that contains the app bundle."
+                        "Juste Recrute Moi n'a pas pu determiner le dossier qui contient le bundle de l'app."
                             .into(),
                     install_dir: None,
                     app_bundle: Some(display_path(&app_bundle)),
@@ -285,7 +285,7 @@ fn get_update_install_status() -> UpdateInstallStatus {
             can_update: reason.is_none(),
             needs_manual_install: reason.is_some(),
             reason: reason.unwrap_or_else(|| {
-                "Juste Recrute Moi est installe in a writable location and can use in-app updates.".into()
+                "Juste Recrute Moi est installe dans un emplacement modifiable et peut utiliser les mises a jour integrees.".into()
             }),
             install_dir: Some(display_path(&install_dir)),
             app_bundle: Some(display_path(&app_bundle)),
@@ -298,7 +298,7 @@ fn get_update_install_status() -> UpdateInstallStatus {
             platform: std::env::consts::OS.into(),
             can_update: true,
             needs_manual_install: false,
-            reason: "In-app updates are available on this platform.".into(),
+            reason: "Les mises a jour integrees sont disponibles sur cette plateforme.".into(),
             install_dir: None,
             app_bundle: None,
         }
@@ -415,7 +415,7 @@ fn packaged_sidecar_path(app: &AppHandle) -> Result<PathBuf, String> {
         .collect::<Vec<_>>()
         .join("; ");
     Err(format!(
-        "Bundled backend sidecar was not found. Checked: {checked}. Reinstallez Juste Recrute Moi or rebuild the package with `npm run build:sidecar` before `tauri build`."
+        "Le sidecar backend integre est introuvable. Chemins verifies : {checked}. Reinstallez Juste Recrute Moi ou reconstruisez le paquet avec `npm run build:sidecar` avant `tauri build`."
     ))
 }
 
@@ -542,10 +542,10 @@ fn cleanup_stale_sidecar(app: &AppHandle) {
         return;
     }
     if is_jhm_process(pid) {
-        eprintln!("[tauri] Cleaning stale sidecar process tree from pid file: {pid}");
+        eprintln!("[tauri] Nettoyage de l'ancien arbre de processus sidecar depuis le fichier pid : {pid}");
         kill_process_tree(pid);
     } else {
-        eprintln!("[tauri] Ignoring stale sidecar pid file for processus qui n appartient pas a Juste Recrute Moi: {pid}");
+        eprintln!("[tauri] Fichier pid sidecar obsolète ignoré : le processus {pid} n'appartient pas à Juste Recrute Moi");
     }
     let _ = std::fs::remove_file(pid_path);
 }
@@ -616,7 +616,7 @@ fn shutdown_sidecar(app: &AppHandle) {
             let _ = child.kill();
         }
         if !wait_for_process_exit(pid, std::time::Duration::from_secs(3)) {
-            eprintln!("[tauri] Sidecar did not stop cleanly; killing process tree: {pid}");
+            eprintln!("[tauri] Le sidecar ne s'est pas arrete proprement ; arret de l'arbre de processus : {pid}");
             kill_process_tree(pid);
         }
     }
@@ -657,11 +657,11 @@ fn spawn_sidecar(handle: AppHandle, restart_count: u8) -> Result<(), String> {
         let local_venv = local_venv_python_path(&backend_dir);
 
         if let Some(ref py) = bundled {
-            eprintln!("[tauri] Using bundled runtime: {}", py.display());
+            eprintln!("[tauri] Runtime integre utilise : {}", py.display());
         } else if let Some(ref py) = local_venv {
-            eprintln!("[tauri] Using backend virtualenv: {}", py.display());
+            eprintln!("[tauri] Environnement virtuel backend utilise : {}", py.display());
         } else {
-            eprintln!("[tauri] No bundled or virtualenv runtime found - falling back to `uv`");
+            eprintln!("[tauri] Aucun runtime integre ni virtualenv trouve ; repli sur `uv`");
         }
 
         if let Some(py) = bundled {
@@ -689,7 +689,7 @@ fn spawn_sidecar(handle: AppHandle, restart_count: u8) -> Result<(), String> {
     let sidecar_cmd = {
         let sidecar_path = packaged_sidecar_path(&handle)?;
         eprintln!(
-            "[tauri] Using bundled backend sidecar: {}",
+            "[tauri] Sidecar backend integre utilise : {}",
             sidecar_path.display()
         );
         handle
@@ -778,7 +778,7 @@ fn spawn_sidecar(handle: AppHandle, restart_count: u8) -> Result<(), String> {
     let (mut rx, child) = match sidecar_cmd.spawn() {
         Ok(result) => result,
         Err(err) => {
-            let msg = format!("Failed to spawn Python sidecar: {err}");
+            let msg = format!("Impossible de lancer le sidecar Python : {err}");
             eprintln!("[tauri] {msg}");
             if let Ok(mut guard) = handle.state::<SidecarError>().0.lock() {
                 *guard = Some(msg.clone());
@@ -848,7 +848,7 @@ fn spawn_sidecar(handle: AppHandle, restart_count: u8) -> Result<(), String> {
                     }
                 }
                 CommandEvent::Terminated(s) => {
-                    eprintln!("[tauri] Sidecar terminated: {:?}", s.code);
+                    eprintln!("[tauri] Sidecar termine : {:?}", s.code);
                     if let Ok(mut guard) = app_handle.state::<SidecarChild>().0.lock() {
                         let _ = guard.take();
                     }
@@ -863,7 +863,7 @@ fn spawn_sidecar(handle: AppHandle, restart_count: u8) -> Result<(), String> {
                     }
 
                     let clean_exit = matches!(s.code, Some(0));
-                    let base = format!("Sidecar terminated before startup: {:?}", s.code);
+                    let base = format!("Sidecar termine avant le demarrage : {:?}", s.code);
                     let detail = app_handle
                         .state::<SidecarError>()
                         .0
@@ -880,7 +880,7 @@ fn spawn_sidecar(handle: AppHandle, restart_count: u8) -> Result<(), String> {
                         });
                     let msg = detail
                         .filter(|line| !line.trim().is_empty())
-                        .map(|line| format!("{base}. Last backend output: {line}"))
+                        .map(|line| format!("{base}. Derniere sortie backend : {line}"))
                         .unwrap_or(base);
                     if let Ok(mut guard) = app_handle.state::<SidecarError>().0.lock() {
                         *guard = Some(msg.clone());
@@ -891,7 +891,7 @@ fn spawn_sidecar(handle: AppHandle, restart_count: u8) -> Result<(), String> {
                     if !clean_exit && restart_count < 3 {
                         let delay = std::time::Duration::from_secs(2_u64.pow(restart_count as u32));
                         eprintln!(
-                            "[tauri] Auto-restarting sidecar in {:?} (attempt {}/3)",
+                            "[tauri] Redemarrage automatique du sidecar dans {:?} (tentative {}/3)",
                             delay,
                             restart_count + 1
                         );
@@ -940,11 +940,11 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error building tauri application");
+        .expect("erreur pendant la construction de l'application Tauri");
 
     app.run(|app_handle, event| match event {
         RunEvent::WindowEvent { label, event, .. } => {
-            eprintln!("[tauri] Window event on {label}: {event:?}");
+            eprintln!("[tauri] Evenement fenetre sur {label} : {event:?}");
             if matches!(
                 event,
                 WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed
@@ -953,11 +953,11 @@ pub fn run() {
             }
         }
         RunEvent::ExitRequested { code, .. } => {
-            eprintln!("[tauri] Exit requested: {code:?}");
+            eprintln!("[tauri] Sortie demandee : {code:?}");
             shutdown_sidecar(app_handle);
         }
         RunEvent::Exit => {
-            eprintln!("[tauri] App exit");
+            eprintln!("[tauri] Sortie de l'app");
             shutdown_sidecar(app_handle);
         }
         _ => {}

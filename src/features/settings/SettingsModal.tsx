@@ -6,7 +6,7 @@ import { GlobalSettings } from "./panels/GlobalSettings";
 import { ResumeTemplatesPanel } from "./panels/ResumeTemplatesPanel";
 import { StepSettings } from "./panels/StepSettings";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { EMPTY, type Cfg } from "./panels/shared";
+import { EMPTY, SECRET_MASKS, type Cfg } from "./panels/shared";
 import { SectionLabel } from "./panels/shared";
 import { useTheme, type ThemePref } from "../../shared/lib/theme";
 import { settingsApi } from "../../api/settings";
@@ -68,6 +68,55 @@ function AppearanceSettings() {
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+const EMBEDDING_OPTIONS = [
+  { value: "onnx", label: "Local", sub: "MiniLM, hors ligne" },
+  { value: "openai", label: "OpenAI API", sub: "text-embedding-3-small" },
+  { value: "hash", label: "Fallback", sub: "léger, non sémantique" },
+];
+
+function EmbeddingSettings({ cfg, onChange }: { cfg: Cfg; onChange: (k: keyof Cfg, v: string) => void }) {
+  const provider = cfg.embedding_provider || "onnx";
+
+  return (
+    <div>
+      <SectionLabel label="Embeddings" sub="indépendant du provider chat : utilisé pour le matching sémantique" />
+      <div style={{ padding: 16, borderRadius: 14, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+          {EMBEDDING_OPTIONS.map(opt => {
+            const active = provider === opt.value;
+            return (
+              <button key={opt.value} type="button" onClick={() => onChange("embedding_provider", opt.value)}
+                aria-pressed={active}
+                style={{
+                  textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+                  border: `1px solid ${active ? "var(--accent)" : "var(--line)"}`,
+                  background: active ? "var(--accent-soft)" : "var(--card)",
+                  color: active ? "var(--accent)" : "var(--ink-2)",
+                }}>
+                <div style={{ fontSize: 13, fontWeight: 800 }}>{opt.label}</div>
+                <div style={{ fontSize: 11, color: active ? "var(--accent)" : "var(--ink-3)", marginTop: 2 }}>{opt.sub}</div>
+              </button>
+            );
+          })}
+        </div>
+        {provider === "openai" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-3)", textTransform: "uppercase" }}>Clé OpenAI embeddings</div>
+            <input type="password" value={SECRET_MASKS.has(cfg.embedding_openai_api_key) ? "" : cfg.embedding_openai_api_key}
+              onChange={e => onChange("embedding_openai_api_key", e.target.value)}
+              placeholder="sk-..."
+              className="mono field-input"
+              style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+            <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
+              Le chat peut rester sur Custom. Cette clé sert seulement à générer les vecteurs avec text-embedding-3-small.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -200,6 +249,7 @@ export default function SettingsModal({ api, onClose }: Props) {
         <div className="scroll" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 22 }}>
           <AppearanceSettings />
           <GlobalSettings cfg={cfg} set={set} onChange={onChange} prov={prov} api={api} />
+          <EmbeddingSettings cfg={cfg} onChange={onChange} />
           <ResumeTemplatesPanel api={api} />
           <StepSettings cfg={cfg} onChange={onChange} api={api} />
           <DiscoverySettings cfg={cfg} set={set} onChange={onChange} />

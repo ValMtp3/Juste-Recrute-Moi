@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import re
+from urllib.parse import parse_qs, unquote, urlparse
 
 from pydantic import BaseModel, Field
 
@@ -156,6 +158,76 @@ def google_past_week_url(target: str) -> str:
     return f"https://www.google.com/search?q={query}&tbs=qdr:w"
 
 
+def _source_host(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    return host.removeprefix("www.")
+
+
+def _clean_google_url(url: str) -> str:
+    value = unquote(str(url or "").strip())
+    if value.startswith("/url?"):
+        params = parse_qs(urlparse(value).query)
+        value = (params.get("q") or [""])[0]
+    if value.startswith("https://www.google.") or value.startswith("http://www.google."):
+        parsed = urlparse(value)
+        params = parse_qs(parsed.query)
+        value = (params.get("q") or [""])[0] or value
+    return value
+
+
+def _query_from_google_url(src: str) -> str:
+    query = parse_qs(urlparse(src).query).get("q") or [""]
+    return unquote(query[0]).replace("+", " ").strip()
+
+
+def parse_google_results(md: str, src: str) -> list[dict]:
+    """Extract usable search-result leads without an LLM call.
+
+    Google `site:` scans are already recency-constrained with `tbs=qdr:w`.
+    Returning the visible result links directly is less rich than an LLM page
+    extraction, but it keeps discovery useful when the LLM provider times out.
+    """
+    query = _query_from_google_url(src)
+    results: list[dict] = []
+    seen: set[str] = set()
+    for title, raw_url in re.findall(r"\[([^\]\n]{4,180})\]\(([^)\s]+)\)", md):
+        url = _clean_google_url(raw_url)
+        if not url.startswith(("http://", "https://")):
+            continue
+        host = _source_host(url)
+        if not host or "google." in host or host in {"webcache.googleusercontent.com"}:
+            continue
+        if url in seen:
+            continue
+        seen.add(url)
+        clean_title = re.sub(r"\s+", " ", title).strip(" -|")
+        if not clean_title:
+            continue
+        company = host.split(".")[0].replace("-", " ").title() or "Jobboard"
+        description = (
+            f"Résultat de recherche récent pour {query}. "
+            f"Titre visible : {clean_title}. Source : {host}."
+        )
+        results.append({
+            "title": clean_title,
+            "company": company,
+            "url": url,
+            "platform": "google_search",
+            "description": description,
+            "posted_date": "",
+            "_fresh_source": "google_past_week",
+            "source_meta": {
+                "source": "google_search",
+                "fresh_source": "google_past_week",
+                "query": query,
+                "host": host,
+            },
+        })
+        if len(results) >= 12:
+            break
+    return results
+
+
 def to_markdown(html: str) -> str:
     import html2text
 
@@ -193,6 +265,11 @@ async def crawl(u: str, headed: bool = False) -> str:
 
 
 def parse(md: str, src: str) -> list:
+    if "google." in _source_host(src) and "tbs=qdr:w" in src.lower():
+        google_results = parse_google_results(md, src)
+        if google_results:
+            return google_results
+
     from llm import call_llm
 
     user = (
@@ -229,7 +306,7 @@ def parse(md: str, src: str) -> list:
         if d.get("_fresh_source") or is_recent(d.get("posted_date", "")):
             results.append(d)
         else:
-            _log.debug("Skipping old listing (%s): %s", d.get("posted_date", ""), d.get("title", ""))
+            _log.debug("Offre ancienne ignorée (%s) : %s", d.get("posted_date", ""), d.get("title", ""))
     return results
 
 

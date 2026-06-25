@@ -5,17 +5,30 @@ import logging
 import os
 import sys
 import threading
+import warnings
 
 from core.logging import get_logger
 from core.paths import app_data_dir
-from data.vector.runtime import add_vector_runtime_to_path, vector_runtime_files_complete, vector_runtime_ready
+from data.vector.runtime import (
+    add_vector_runtime_to_path,
+    clear_vector_runtime_modules,
+    vector_runtime_files_complete,
+    vector_runtime_ready,
+)
 
 _log = get_logger(__name__)
 lancedb = None
 _LANCEDB_IMPORT_ERROR = ""
 _LANCEDB_RESTART_REQUIRED = False
 _LANCEDB_PYO3_DEGRADED = False
-PYO3_RESTART_MESSAGE = "Native vector search is temporarily unavailable; Juste Recrute Moi will continue with deterministic matching."
+PYO3_RESTART_MESSAGE = "La recherche vectorielle native est temporairement indisponible ; Juste Recrute Moi continue avec le rapprochement déterministe."
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"The NumPy module was reloaded.*",
+    category=UserWarning,
+    module=r"lancedb\.common",
+)
 
 
 def default_base_dir() -> str:
@@ -46,29 +59,29 @@ class NullVectorStore:
         self.reason = reason
 
     def list_tables(self):
-        self._null_log.warning("NullVectorStore.list_tables called — vector store unavailable (%s)", self.reason)
+        self._null_log.warning("Stockage vectoriel indisponible : list_tables ignoré (%s)", self.reason)
         return []
 
     def create_table(self, *_args, **_kwargs):
         name = _args[0] if _args else _kwargs.get("name", "?")
-        self._null_log.warning("NullVectorStore.create_table(%s) — data dropped, vector store unavailable (%s)", name, self.reason)
+        self._null_log.warning("create_table(%s) - stockage vectoriel indisponible, création ignorée (%s)", name, self.reason)
         return None
 
     def open_table(self, *_args, **_kwargs):
         name = _args[0] if _args else _kwargs.get("name", "?")
-        self._null_log.warning("NullVectorStore.open_table(%s) — returning null table, vector store unavailable (%s)", name, self.reason)
+        self._null_log.warning("open_table(%s) - stockage vectoriel indisponible, table neutre renvoyée (%s)", name, self.reason)
         return self
 
     def add(self, *_args, **_kwargs):
-        self._null_log.warning("NullVectorStore.add() — data dropped, vector store unavailable (%s)", self.reason)
+        self._null_log.warning("add() - stockage vectoriel indisponible, ajout ignoré (%s)", self.reason)
         return None
 
     def delete(self, *_args, **_kwargs):
-        self._null_log.warning("NullVectorStore.delete() — no-op, vector store unavailable (%s)", self.reason)
+        self._null_log.warning("delete() - stockage vectoriel indisponible, suppression ignorée (%s)", self.reason)
         return None
 
     def search(self, *_args, **_kwargs):
-        self._null_log.warning("NullVectorStore.search() — returning empty results, vector store unavailable (%s)", self.reason)
+        self._null_log.warning("Stockage vectoriel indisponible : résultats vides renvoyés (%s)", self.reason)
         return self
 
     def metric(self, *_args, **_kwargs):
@@ -92,7 +105,7 @@ class NullVectorStore:
 
     def drop_table(self, *_args, **_kwargs):
         name = _args[0] if _args else _kwargs.get("name", "?")
-        self._null_log.warning("NullVectorStore.drop_table(%s) — no-op, vector store unavailable (%s)", name, self.reason)
+        self._null_log.warning("Stockage vectoriel indisponible : suppression de table ignorée pour %s (%s)", name, self.reason)
         return None
 
 
@@ -134,11 +147,15 @@ def _try_import_lancedb(*, log_warning: bool = True):
     if _LANCEDB_PYO3_DEGRADED:
         return None
     add_vector_runtime_to_path()
+    cached = sys.modules.get("lancedb")
+    if _usable_lancedb_module(cached):
+        return _set_lancedb_module(cached)
+    clear_vector_runtime_modules()
     importlib.invalidate_caches()
     if getattr(sys, "frozen", False) and not _runtime_package_installed():
         _clear_lancedb_modules()
         lancedb = None
-        _LANCEDB_IMPORT_ERROR = "LanceDB runtime is not installed"
+        _LANCEDB_IMPORT_ERROR = "Le runtime LanceDB n'est pas installé"
         _LANCEDB_RESTART_REQUIRED = False
         _LANCEDB_PYO3_DEGRADED = False
         return None
@@ -175,7 +192,7 @@ def _try_import_lancedb(*, log_warning: bool = True):
         location = getattr(module, "__file__", "") or ",".join(map(str, getattr(module, "__path__", []))) or "unknown location"
         _clear_lancedb_modules()
         lancedb = None
-        _LANCEDB_IMPORT_ERROR = f"LanceDB runtime is incomplete at {location}"
+        _LANCEDB_IMPORT_ERROR = f"Le runtime LanceDB est incomplet dans {location}"
         _LANCEDB_RESTART_REQUIRED = False
         _LANCEDB_PYO3_DEGRADED = False
         return None
@@ -190,7 +207,7 @@ def _connect_vector_store():
         os.makedirs(VECTOR_DIR, exist_ok=True)
         module = lancedb if _usable_lancedb_module(lancedb) else _try_import_lancedb()
         if module is None:
-            raise RuntimeError(_LANCEDB_IMPORT_ERROR or "LanceDB is not available")
+            raise RuntimeError(_LANCEDB_IMPORT_ERROR or "LanceDB n'est pas disponible")
         return module.connect(VECTOR_DIR)
 
 
@@ -201,9 +218,9 @@ def refresh_vector_store() -> dict:
             vec = _connect_vector_store()
         except Exception as exc:
             if lancedb is None:
-                _log.info("vector store disabled: %s", exc)
+                _log.info("stockage vectoriel désactivé : %s", exc)
             else:
-                _log.warning("vector store disabled: %s", exc)
+                _log.warning("stockage vectoriel désactivé : %s", exc)
             vec = NullVectorStore(str(exc))
     return vector_status(refresh=False)
 
@@ -215,7 +232,7 @@ def vector_status(*, refresh: bool = True) -> dict:
                 return refresh_vector_store()
             status = {
                 "status": "disabled",
-                "error": getattr(vec, "reason", "") or "vector store is unavailable",
+            "error": getattr(vec, "reason", "") or "stockage vectoriel indisponible",
                 "tables": [],
             }
             if _LANCEDB_PYO3_DEGRADED:
@@ -230,6 +247,9 @@ def vector_status(*, refresh: bool = True) -> dict:
             return {"status": "degraded", "error": str(exc), "tables": []}
 
 
-_try_import_lancedb(log_warning=False)
-vec = NullVectorStore(_LANCEDB_IMPORT_ERROR or "LanceDB is not available")
-refresh_vector_store()
+if os.environ.get("JHM_SKIP_VECTOR_IMPORT") == "1":
+    vec = NullVectorStore("import LanceDB ignoré pendant l'empaquetage du sidecar")
+else:
+    _try_import_lancedb(log_warning=False)
+    vec = NullVectorStore(_LANCEDB_IMPORT_ERROR or "LanceDB n'est pas disponible")
+    refresh_vector_store()

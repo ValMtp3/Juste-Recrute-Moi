@@ -168,6 +168,11 @@ class ResetDataBody(StrictBody):
     clear_settings: bool = False
 
 
+class ProfileCleanupBody(StrictBody):
+    # Explicit confirmation: cleanup can remove duplicate/malformed profile rows.
+    confirm: Literal["CLEAN"]
+
+
 class CandidateBody(StrictBody):
     n: str = Field(default="", max_length=160)
     s: str = Field(default="", max_length=4000)

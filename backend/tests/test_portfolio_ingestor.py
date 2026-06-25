@@ -129,8 +129,32 @@ def test_portfolio_ingestor_hides_raw_missing_playwright_error(monkeypatch):
     result = asyncio.run(portfolio.ingest_portfolio_url("https://example.com"))
 
     assert result["status_code"] == 502
-    assert "browser-based portfolio scanning is not available" in result["error"]
+    assert "l'analyse par navigateur n'est pas disponible" in result["error"]
     assert "No module named" not in result["error"]
+
+
+def test_portfolio_ingestor_explains_runtime_pack_failure_in_french(monkeypatch):
+    import profile.portfolio_ingestor as portfolio
+
+    async def fake_browser(_url):
+        raise RuntimeError(
+            "Le pack runtime Juste Recrute Moi est nécessaire pour continuer. "
+            "Impossible de l'installer depuis https://example.test/runtime.zip. "
+            "Détails : HTTP Error 404: Not Found"
+        )
+
+    def fake_http(_url):
+        return []
+
+    monkeypatch.setattr(portfolio, "_crawl_portfolio_browser", fake_browser)
+    monkeypatch.setattr(portfolio, "_crawl_portfolio_http", fake_http)
+
+    result = asyncio.run(portfolio.ingest_portfolio_url("https://example.com"))
+
+    assert result["status_code"] == 502
+    assert "n'a donc pas pu analyser ce portfolio" in result["error"]
+    assert "récupération HTTP de secours" in result["error"]
+    assert "HTTP fallback" not in result["error"]
 
 
 def test_portfolio_ingestor_filters_noisy_projects(monkeypatch):

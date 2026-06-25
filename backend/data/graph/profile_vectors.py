@@ -25,21 +25,41 @@ from graph_service.helpers import is_bad_vector_label
 _log = get_logger(__name__)
 
 
+def _table_rows(table, limit: int = 500) -> list[dict]:
+    readers = (
+        lambda: table.to_arrow().to_pylist(),
+        lambda: table.to_pandas().to_dict("records"),
+    )
+    for read in readers:
+        try:
+            rows = read()
+            return [row for row in rows[:limit] if isinstance(row, dict)]
+        except Exception as exc:
+            if not _is_pyarrow_runtime_mismatch(exc):
+                _log.debug("lecture table vectorielle ignorée : %s", exc)
+    return []
+
+
+def _is_pyarrow_runtime_mismatch(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return (
+        "expected pyarrow.lib.schema" in text
+        or "got pyarrow.lib.schema" in text
+        or "datatype expected" in text
+        or "got <class 'pyarrow.lib.datatype'>" in text
+    )
+
+
 def _vector_rows(table_name: str, limit: int = 500) -> list[dict]:
     try:
         if table_name not in vec_table_names():
             return []
         table = _vec().open_table(table_name)
-        if hasattr(table, "to_arrow"):
-            rows = table.to_arrow().to_pylist()
-        elif hasattr(table, "to_pandas"):
-            rows = table.to_pandas().to_dict("records")
-        else:
-            rows = []
+        rows = _table_rows(table, limit)
     except Exception as log_exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/data/graph/profile.py:_vector_rows: %s', log_exc)
+        logging.getLogger(__name__).debug("exception ignorée dans _vector_rows : %s", log_exc)
         return []
-    return [row for row in rows[:limit] if isinstance(row, dict)]
+    return rows
 
 
 def _first_text(row: dict, *keys: str) -> str:
@@ -135,7 +155,7 @@ def delete_vec_rows(table_name: str, ids: list[str]) -> None:
             return
         _delete_vec_ids(_vec().open_table(table_name), ids)
     except Exception as log_exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/data/graph/profile.py:delete_vec_rows: %s', log_exc)
+        logging.getLogger(__name__).warning("suppression vectorielle ignorée pour %s : %s", table_name, log_exc)
         pass
 
 
@@ -160,12 +180,7 @@ def prune_bad_vector_rows() -> int:
             if table_name not in vec_table_names():
                 continue
             table = _vec().open_table(table_name)
-            if hasattr(table, "to_arrow"):
-                rows = table.to_arrow().to_pylist()
-            elif hasattr(table, "to_pandas"):
-                rows = table.to_pandas().to_dict("records")
-            else:
-                rows = []
+            rows = _table_rows(table)
             bad_ids = []
             for row in rows:
                 label = row.get("label") or row.get("title") or row.get("n") or row.get("role") or row.get("id")
@@ -178,7 +193,7 @@ def prune_bad_vector_rows() -> int:
                 delete_vec_rows(table_name, bad_ids)
                 deleted += len(set(bad_ids))
         except Exception as log_exc:
-            logging.getLogger(__name__).warning('suppressed exception in backend/data/graph/profile.py:prune_bad_vector_rows: %s', log_exc)
+            logging.getLogger(__name__).debug("exception ignorée dans prune_bad_vector_rows : %s", log_exc)
             continue
     return deleted
 
@@ -223,7 +238,7 @@ def _normalize_table_names(raw) -> list[str]:
         if tables:
             return _normalize_table_names(tables)
     except Exception as log_exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/data/graph/profile.py:vec_table_names: %s', log_exc)
+        logging.getLogger(__name__).debug("exception ignorée dans vec_table_names : %s", log_exc)
     try:
         return [str(item) for item in raw]
     except TypeError:
@@ -300,7 +315,17 @@ def put_vec_rows(table_name: str, rows: list[dict]) -> None:
                 rows = _rows_for_existing_table(table_name, rows)
                 _upsert_rows(store.open_table(table_name), ids, rows)
     except Exception as exc:
-        _log.warning("vector write failed for %s: %s", table_name, exc)
+        if _is_pyarrow_runtime_mismatch(exc):
+            try:
+                _log.info("table vectorielle %s recréée après incompatibilité PyArrow", table_name)
+                if table_name in vec_table_names():
+                    store.drop_table(table_name)
+                store.create_table(table_name, data=rows)
+                return
+            except Exception as recreate_exc:
+                _log.warning("écriture vectorielle impossible pour %s après recréation : %s", table_name, recreate_exc)
+                return
+        _log.warning("écriture vectorielle impossible pour %s : %s", table_name, exc)
 
 
 def _rows_for_existing_table(table_name: str, rows: list[dict]) -> list[dict]:
@@ -312,7 +337,7 @@ def _rows_for_existing_table(table_name: str, rows: list[dict]) -> list[dict]:
             return rows
         return [{key: value for key, value in row.items() if key in field_names} for row in rows]
     except Exception as log_exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/data/graph/profile.py:_rows_for_existing_table: %s', log_exc)
+        logging.getLogger(__name__).debug("exception ignorée dans _rows_for_existing_table : %s", log_exc)
         return rows
 
 
@@ -338,7 +363,7 @@ def embed_rows(table_name: str, rows: list[dict], texts: Iterable[str]) -> None:
             for row, text, vector in zip(clean_rows, clean_texts, vectors, strict=False)
         ])
     except Exception as exc:
-        _log.warning("embedding write failed for %s: %s", table_name, exc)
+        _log.warning("écriture embedding impossible pour %s : %s", table_name, exc)
 
 
 def profile_text(name: str, summary: str) -> str:
@@ -346,16 +371,16 @@ def profile_text(name: str, summary: str) -> str:
 
 
 def skill_text(name: str, category: str) -> str:
-    return f"Skill: {name}\nCategory: {category}".strip()
+    return f"Compétence : {name}\nCatégorie : {category}".strip()
 
 
 def project_text(title: str, stack: str | list, impact: str) -> str:
     stack_value = ", ".join(stack) if isinstance(stack, list) else str(stack or "")
-    return f"Project: {title}\nStack: {stack_value}\nImpact: {impact}".strip()
+    return f"Projet : {title}\nStack : {stack_value}\nImpact : {impact}".strip()
 
 
 def experience_text(role: str, company: str, period: str, description: str) -> str:
-    return f"Experience: {role}\nCompany: {company}\nPeriod: {period}\nDescription: {description}".strip()
+    return f"Expérience : {role}\nEntreprise : {company}\nPériode : {period}\nDescription : {description}".strip()
 
 
 def credential_text(title: str, kind: str) -> str:

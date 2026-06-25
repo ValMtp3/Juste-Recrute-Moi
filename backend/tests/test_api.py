@@ -149,6 +149,34 @@ class TestAuthGate(unittest.TestCase):
         self.assertNotEqual(resp.status_code, 401)
 
 
+class TestProfileEndpoints(unittest.TestCase):
+    def test_profile_cleanup_requires_confirmation(self):
+        resp = post("/api/v1/profile/cleanup", json={})
+        self.assertEqual(resp.status_code, 422)
+
+    def test_profile_cleanup_calls_service(self):
+        from api.routers import profile as profile_router
+
+        class FakeProfileService:
+            async def cleanup_profile(self):
+                return {
+                    "status": "ok",
+                    "profile": {"n": "Jane", "skills": [{"n": "Python", "cat": "general"}]},
+                    "stats": {"removed": 1, "deduplicated": 2, "corrected": 3},
+                }
+
+        app.dependency_overrides[profile_router.get_profile_service] = lambda: FakeProfileService()
+        try:
+            resp = post("/api/v1/profile/cleanup", json={"confirm": "CLEAN"})
+        finally:
+            app.dependency_overrides.pop(profile_router.get_profile_service, None)
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["stats"]["deduplicated"], 2)
+
+
 class TestGraphEndpoint(unittest.TestCase):
     def test_graph_endpoint_reads_snapshot_without_blocking_on_repairs(self):
         from api.routers.misc import graph_stats

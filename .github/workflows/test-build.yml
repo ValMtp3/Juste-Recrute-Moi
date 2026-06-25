@@ -1,20 +1,20 @@
-name: Test Build (Windows)
+name: Build de test (Windows)
 
-# A throwaway, NON-PRODUCTION Windows build you can download and run to validate
-# changes before they ship. It deliberately:
-#   - publishes NO GitHub release and NO `latest.json`
-#   - builds NO updater artifacts and needs NO signing secrets
-#   - is therefore INVISIBLE to the auto-updater (production users never see it)
-# The installer is unsigned, so Windows SmartScreen shows "Unknown publisher" —
-# click "More info" → "Run anyway" to install. The heavy first-run runtime pack
-# (browser + vector libs + embedding model) still downloads from the latest
-# production release on first launch, exactly like a normal install.
+# Build Windows jetable, HORS PRODUCTION, a telecharger et lancer pour valider
+# les changements avant publication. Il fait volontairement ceci :
+#   - ne publie AUCUNE release GitHub ni aucun `latest.json`
+#   - ne construit AUCUN artefact updater et ne demande AUCUN secret de signature
+#   - reste donc INVISIBLE pour l'auto-updater (les utilisateurs ne le voient jamais)
+# L'installateur n'est pas signe, donc Windows SmartScreen affiche "Editeur inconnu" :
+# cliquez sur "Informations complementaires" -> "Executer quand meme" pour installer.
+# Le gros pack runtime du premier lancement (navigateur + libs vectorielles + modele
+# d'embedding) se telecharge toujours depuis la derniere release de production.
 
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Branch or ref to build (blank = the branch you launch this from)"
+        description: "Branche ou ref a compiler (vide = branche de lancement)"
         required: false
         default: ""
   push:

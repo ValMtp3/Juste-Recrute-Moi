@@ -3,6 +3,7 @@ import logging
 
 import os
 import re
+from dataclasses import dataclass
 
 
 DEFAULT_JOB_TARGETS = [
@@ -45,9 +46,17 @@ INDIA_JOB_TARGETS = [
 
 FRANCE_JOB_TARGETS = [
     "france_travail:developpeur;lieu=France;range=0-49",
-    "jobspy:developpeur;location=France;sites=indeed,google;results=25;hours=168",
+    "https://remotive.com/api/remote-jobs",
+    "https://jobicy.com/api/v2/remote-jobs?count=50",
+    "https://weworkremotely.com/remote-jobs.rss",
     "site:welcometothejungle.com/fr/jobs France",
     "site:hellowork.com/fr-fr/emplois France",
+    "site:apec.fr/candidat/recherche-emploi.html/emploi France",
+    "site:cadremploi.fr/emploi France",
+    "site:meteojob.com/jobs France",
+    "site:lesjeudis.com/jobs France",
+    "site:linkedin.com/jobs France",
+    "site:fr.indeed.com/emplois France",
     "site:jobs.smartrecruiters.com France",
     "site:teamtailor.com/jobs France",
     "site:boards.greenhouse.io France",
@@ -55,6 +64,70 @@ FRANCE_JOB_TARGETS = [
     "site:jobs.ashbyhq.com France",
     "site:apply.workable.com France",
 ]
+
+CONFIGURED_TARGET_PREFIXES = (
+    "http://",
+    "https://",
+    "site:",
+    "ats:",
+    "france_travail:",
+    "jobspy:",
+    "import:",
+    "github:",
+    "hn:",
+    "reddit:",
+)
+
+FRANCE_LOCATION_HINTS = {
+    "france",
+    "paris",
+    "lyon",
+    "marseille",
+    "lille",
+    "nantes",
+    "bordeaux",
+    "toulouse",
+    "rennes",
+    "strasbourg",
+    "montpellier",
+    "nice",
+    "grenoble",
+    "rouen",
+    "reims",
+    "dijon",
+}
+
+FRANCE_CONTRACT_ALIASES = {
+    "cdi": "CDI",
+    "cdd": "CDD",
+    "stage": "MIS",
+    "internship": "MIS",
+    "alternance": "APP",
+    "apprentissage": "APP",
+    "freelance": "LIB",
+    "independant": "LIB",
+    "indépendant": "LIB",
+}
+
+REMOTE_TERMS = (
+    "full remote",
+    "100% remote",
+    "100 remote",
+    "télétravail",
+    "teletravail",
+    "remotely",
+    "remote",
+)
+
+SEARCH_STOPWORDS = {"a", "à", "au", "aux", "en", "in", "sur", "near", "around", "autour", "de", "d"}
+
+
+@dataclass(frozen=True)
+class SearchIntent:
+    role: str = ""
+    location: str = ""
+    contract: str = ""
+    remote: bool = False
 
 BLOCKED_JOB_TARGET_MARKERS = (
     "freelance",
@@ -94,6 +167,101 @@ def dedupe_targets(targets: list[str]) -> list[str]:
     return out
 
 
+def _is_configured_target(value: str) -> bool:
+    lower = value.strip().lower()
+    return lower.startswith(CONFIGURED_TARGET_PREFIXES)
+
+
+def _clean_france_travail_value(value: str, fallback: str) -> str:
+    cleaned = re.sub(r"[;|=]+", " ", str(value or "")).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned or fallback
+
+
+def _norm_token(value: str) -> str:
+    return re.sub(r"[^\w%]+", " ", str(value or "").lower(), flags=re.UNICODE).strip()
+
+
+def _extract_contract(chunks: list[str]) -> tuple[str, list[str]]:
+    for chunk in chunks:
+        norm = _norm_token(chunk)
+        for alias, value in FRANCE_CONTRACT_ALIASES.items():
+            if re.search(rf"\b{re.escape(alias)}\b", norm):
+                remaining = [
+                    re.sub(rf"\b{re.escape(alias)}\b", " ", item, flags=re.IGNORECASE).strip()
+                    for item in chunks
+                ]
+                return value, [item for item in remaining if item]
+    return "", chunks
+
+
+def _extract_remote(chunks: list[str]) -> tuple[bool, list[str]]:
+    out: list[str] = []
+    found = False
+    for chunk in chunks:
+        value = chunk
+        norm = _norm_token(value)
+        for term in REMOTE_TERMS:
+            if term in norm:
+                found = True
+                value = re.sub(re.escape(term), " ", value, flags=re.IGNORECASE)
+        value = re.sub(r"\s+", " ", value).strip()
+        if value:
+            out.append(value)
+    return found, out
+
+
+def parse_search_intent(parts: list[str], fallback_location: str = "France") -> SearchIntent | None:
+    """Parse a free-form France search into role/location/contract hints.
+
+    This is deliberately deterministic: the LLM still plans broad `site:`
+    queries, but France Travail needs explicit API parameters.
+    """
+    chunks: list[str] = []
+    for part in parts:
+        if _is_configured_target(part):
+            return None
+        chunks.extend(item.strip() for item in re.split(r"[,|;]", part) if item.strip())
+    if not chunks:
+        return None
+
+    contract, chunks = _extract_contract(chunks)
+    remote, chunks = _extract_remote(chunks)
+    location = fallback_location or "France"
+    role_chunks: list[str] = []
+    for chunk in chunks:
+        words = [w for w in re.split(r"\s+", chunk) if w]
+        kept: list[str] = []
+        for word in words:
+            key = _norm_token(word)
+            if key in FRANCE_LOCATION_HINTS:
+                location = word
+            elif key not in SEARCH_STOPWORDS:
+                kept.append(word)
+            else:
+                continue
+        if kept:
+            role_chunks.append(" ".join(kept))
+
+    role = _clean_france_travail_value(" ".join(role_chunks), "developpeur")
+    location = _clean_france_travail_value(location, "France")
+    return SearchIntent(role=role, location=location, contract=contract, remote=remote)
+
+
+def france_travail_target_from_plain(parts: list[str], fallback_location: str = "France") -> str | None:
+    """Convert simple France search text like "data, paris" into an API target."""
+    intent = parse_search_intent(parts, fallback_location)
+    if not intent:
+        return None
+    query = _clean_france_travail_value(intent.role, "developpeur")
+    location = _clean_france_travail_value(intent.location, "France")
+    suffix = ""
+    if intent.contract:
+        suffix += f";typeContrat={intent.contract}"
+    location = _clean_france_travail_value(location, "France")
+    return f"france_travail:{query};lieu={location};range=0-49{suffix}"
+
+
 def job_market_focus(value) -> str:
     focus = str(value or "global").strip().lower()
     if focus in {"india", "in", "indian", "indian_startups"}:
@@ -108,15 +276,35 @@ def is_hn_target(target: str) -> bool:
     return lower.startswith("hn:") or "hn-hiring" in lower or "hackernews" in lower or "news.ycombinator.com" in lower
 
 
-def job_targets(raw: str, market_focus: str = "global") -> list[str]:
+def _france_targets_from_intent(search_text: str, fallback_location: str = "France") -> list[str]:
+    target = france_travail_target_from_plain([search_text], fallback_location) if str(search_text or "").strip() else None
+    if target:
+        return [target, *FRANCE_JOB_TARGETS[1:]]
+    if fallback_location and fallback_location.lower() != "france":
+        return [f"france_travail:developpeur;lieu={_clean_france_travail_value(fallback_location, 'France')};range=0-49", *FRANCE_JOB_TARGETS[1:]]
+    return list(FRANCE_JOB_TARGETS)
+
+
+def job_targets(
+    raw: str,
+    market_focus: str = "global",
+    *,
+    search_text: str = "",
+    location: str = "",
+) -> list[str]:
     focus = job_market_focus(market_focus)
     targets = split_configured_targets(raw)
     if not targets:
         if focus == "india":
             return list(INDIA_JOB_TARGETS)
         if focus == "france":
-            return list(FRANCE_JOB_TARGETS)
+            return _france_targets_from_intent(search_text, location or "France")
         return list(DEFAULT_JOB_TARGETS)
+
+    if focus == "france":
+        plain_france_target = france_travail_target_from_plain(targets, location or "France")
+        if plain_france_target:
+            targets = [plain_france_target, *FRANCE_JOB_TARGETS[1:]]
 
     filtered: list[str] = []
     for target in targets:
@@ -163,9 +351,25 @@ def job_targets(raw: str, market_focus: str = "global") -> list[str]:
             "bordeaux",
             "toulouse",
             "rennes",
+            "strasbourg",
+            "montpellier",
+            "nice",
+            "grenoble",
+            "rouen",
+            "reims",
+            "dijon",
             "welcometothejungle",
             "hellowork",
+            "apec",
+            "cadremploi",
+            "meteojob",
+            "lesjeudis",
+            "linkedin",
             "indeed",
+            "remoteok",
+            "remotive",
+            "jobicy",
+            "weworkremotely",
             "smartrecruiters",
             "teamtailor",
             "greenhouse",
@@ -224,17 +428,23 @@ def remote_preference(cfg: dict | None) -> str:
 def profile_for_discovery(profile: dict | None, cfg: dict) -> dict:
     profile = dict(profile or {})
     desired = desired_position(cfg)
+    base_location = discovery_location(cfg, profile)
+    intent = parse_search_intent([desired], base_location) if job_market_focus(cfg.get("job_market_focus")) == "france" and desired else None
+    desired_for_profile = intent.role if intent else desired
     if desired:
         summary = str(profile.get("s") or "").strip()
-        if desired.lower() not in summary.lower():
-            profile["s"] = f"{desired}. {summary}".strip()
+        if desired_for_profile.lower() not in summary.lower():
+            profile["s"] = f"{desired_for_profile}. {summary}".strip()
         else:
-            profile["s"] = summary or desired
-        profile["desired_position"] = desired
+            profile["s"] = summary or desired_for_profile
+        profile["desired_position"] = desired_for_profile
+        profile["_discovery_search_text"] = desired
     # Carry resolved location + remote preference so the query planner can target
     # the user's region without every caller threading extra args.
-    profile["_discovery_location"] = discovery_location(cfg, profile)
-    profile["_remote_preference"] = remote_preference(cfg)
+    profile["_discovery_location"] = intent.location if intent else base_location
+    profile["_remote_preference"] = "remote" if intent and intent.remote else remote_preference(cfg)
+    if intent and intent.contract:
+        profile["_discovery_contract"] = intent.contract
     # The user's free-text "what I'm looking for" preferences steer the scan
     # toward roles they actually want (used by the query planner + evaluator).
     profile["_job_preferences"] = str((cfg or {}).get("job_preferences") or "").strip()

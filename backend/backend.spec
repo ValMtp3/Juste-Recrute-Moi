@@ -32,6 +32,8 @@ release_features = {
 include_browser = "browser" in release_features or "all" in release_features
 include_vector = "vector" in release_features or "all" in release_features
 include_graph = "graph" in release_features or "all" in release_features
+if not include_vector:
+    os.environ["JHM_SKIP_VECTOR_IMPORT"] = "1"
 
 hidden = [
     "uvicorn.logging", "uvicorn.loops", "uvicorn.loops.auto",

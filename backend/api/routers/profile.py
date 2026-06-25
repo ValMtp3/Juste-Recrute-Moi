@@ -5,7 +5,7 @@ import inspect
 from fastapi import APIRouter, Depends, HTTPException
 
 from api.dependencies import get_profile_service
-from core.types import CandidateBody, ExperienceBody, IdentityBody, ProfileEntryBody, ProjectBody, SkillBody
+from core.types import CandidateBody, ExperienceBody, IdentityBody, ProfileCleanupBody, ProfileEntryBody, ProjectBody, SkillBody
 from data.graph.connection import run_graph
 
 
@@ -27,6 +27,11 @@ async def update_candidate_endpoint(body: CandidateBody, service=Depends(get_pro
 @router.put("/profile/identity")
 async def update_identity_endpoint(body: IdentityBody, service=Depends(get_profile_service)):
     return await _call_service(service.update_identity, body.model_dump())
+
+
+@router.post("/profile/cleanup")
+async def cleanup_profile_endpoint(body: ProfileCleanupBody, service=Depends(get_profile_service)):
+    return await _call_service(service.cleanup_profile)
 
 
 @router.post("/profile/skill")

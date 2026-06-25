@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from core.config import france_travail_target_from_plain
 from discovery.lead_intel import canonical_lead_id
 from discovery.normalizer import (
     budget_from_text,
@@ -96,6 +97,9 @@ def split_lines(raw: str | None) -> list[str]:
 
 def targets_from_settings(raw_targets: str | None, raw_watchlist: str | None) -> list[str]:
     targets = split_lines(raw_targets)
+    plain_france_target = france_travail_target_from_plain(targets)
+    if plain_france_target:
+        targets = [plain_france_target]
     targets.extend(_ats_targets_from_watchlist(raw_watchlist))
     return targets or list(DEFAULT_TARGETS)
 
@@ -124,6 +128,8 @@ def _source_error_detail(exc: Exception) -> str:
         return "délai de requête dépassé"
     if isinstance(exc, httpx.ConnectError):
         return "connexion échouée"
+    if "timed out" in str(exc).lower() or "timeout" in type(exc).__name__.lower():
+        return "délai de requête dépassé"
     return str(exc).strip() or type(exc).__name__
 
 
@@ -349,7 +355,7 @@ def run(
             usage["candidates"] += len(batch)
             usage["by_source"][target] = len(batch)
         except Exception as exc:
-            logging.getLogger(__name__).warning('suppressed exception in backend/automation/free_scout.py:run: %s', exc)
+            logging.getLogger(__name__).warning("Source gratuite ignorée %s : %s", target, _source_error_detail(exc))
             usage["errors"] += 1
             errors.append(f"{target}: {_source_error_detail(exc)}")
             continue

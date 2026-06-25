@@ -140,6 +140,7 @@ class TestBrowserRuntimePackaging(unittest.TestCase):
             with (
                 mock.patch.object(browser_runtime, "browser_runtime_dir", return_value=runtime),
                 mock.patch.object(browser_runtime, "install_vector_runtime", side_effect=fake_install),
+                mock.patch.object(browser_runtime, "system_browser_executable", return_value=None),
             ):
                 self.assertEqual(browser_runtime.ensure_browser_runtime(), runtime)
 

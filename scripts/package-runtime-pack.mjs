@@ -21,6 +21,7 @@ const stageDir = join(stageRoot, "runtime-pack");
 const vectorStageDir = join(stageDir, "vector-runtime");
 const browserStageDir = join(stageDir, "browser-runtime", "ms-playwright");
 const releaseAssetsDir = join(repoRoot, "release-assets");
+const includeBrowserRuntime = process.env.JHM_RUNTIME_PACK_INCLUDE_BROWSER !== "0";
 
 const ONNX_MODEL_NAME = "all-MiniLM-L6-v2";
 const ONNX_HF_REPO = `sentence-transformers/${ONNX_MODEL_NAME}`;
@@ -252,9 +253,34 @@ function downloadOnnxModel() {
     console.log(`Downloading ONNX model file: ${local} from ${url}`);
     // Use Python urllib since Node fetch may not follow redirects cleanly for large files
     const code = `
-import urllib.request, sys
-urllib.request.urlretrieve(sys.argv[1], sys.argv[2])
-print(f"Downloaded {sys.argv[2]}")
+import time
+import urllib.error
+import urllib.request
+import sys
+
+url, target = sys.argv[1], sys.argv[2]
+last_error = None
+for attempt in range(1, 6):
+    try:
+        urllib.request.urlretrieve(url, target)
+        print(f"Downloaded {target}")
+        break
+    except urllib.error.HTTPError as exc:
+        last_error = exc
+        if exc.code not in {429, 500, 502, 503, 504} or attempt == 5:
+            raise
+        delay = min(60, 5 * attempt)
+        print(f"Download failed with HTTP {exc.code}; retrying in {delay}s ({attempt}/5)", file=sys.stderr)
+        time.sleep(delay)
+    except urllib.error.URLError as exc:
+        last_error = exc
+        if attempt == 5:
+            raise
+        delay = min(60, 5 * attempt)
+        print(f"Download failed: {exc}; retrying in {delay}s ({attempt}/5)", file=sys.stderr)
+        time.sleep(delay)
+else:
+    raise last_error or RuntimeError("download failed")
 `;
     run(python, ["-c", code, url, target], { cwd: repoRoot });
     if (!existsSync(target) || statSync(target).size === 0) {
@@ -268,11 +294,17 @@ if (!existsSync(sitePackages)) {
   throw new Error(`Python site-packages not found: ${sitePackages}`);
 }
 
-assertBrowserRuntimeReady();
+if (includeBrowserRuntime) {
+  assertBrowserRuntimeReady();
+} else {
+  console.log("Skipping bundled Playwright Chromium runtime; the app will use system Chrome/Edge/Brave when available.");
+}
 
 rmSync(stageRoot, { recursive: true, force: true });
 mkdirSync(vectorStageDir, { recursive: true });
-mkdirSync(browserStageDir, { recursive: true });
+if (includeBrowserRuntime) {
+  mkdirSync(browserStageDir, { recursive: true });
+}
 mkdirSync(releaseAssetsDir, { recursive: true });
 
 for (const entry of vectorEntries) {
@@ -295,17 +327,18 @@ for (const prefix of vectorDistInfoPrefixes) {
   }
 }
 
-cpSync(browserRuntimeSource, browserStageDir, {
-  recursive: true,
-  filter: (source) => {
-    const name = source.split(/[\\/]/).pop()?.toLowerCase() || "";
-    if (name === ".links" || name === "__pycache__") return false;
-    if (name.startsWith("chromium_headless_shell")) return false;
-    if (name.startsWith("ffmpeg-")) return false;
-    if (name.startsWith("winldd-")) return false;
-    return true;
-  },
-});
+if (includeBrowserRuntime) {
+  cpSync(browserRuntimeSource, browserStageDir, {
+    recursive: true,
+    filter: (source) => {
+      const name = source.split(/[\\/]/).pop()?.toLowerCase() || "";
+      if (name === ".links" || name === "__pycache__") return false;
+      if (name.startsWith("ffmpeg-")) return false;
+      if (name.startsWith("winldd-")) return false;
+      return true;
+    },
+  });
+}
 
 downloadOnnxModel();
 
@@ -333,9 +366,11 @@ writeFileSync(join(stageDir, "runtime-pack-manifest.json"), `${JSON.stringify({
       packages: vectorEntries,
     },
     browser: {
-      path: "browser-runtime/ms-playwright",
-      package: "Playwright Chromium",
-      optimization: "full Chromium executable only; Playwright headless-shell, ffmpeg, and install helpers are excluded",
+      path: includeBrowserRuntime ? "browser-runtime/ms-playwright" : "",
+      package: includeBrowserRuntime ? "Playwright Chromium" : "system Chrome/Edge/Brave",
+      optimization: includeBrowserRuntime
+        ? "full Chromium executable only; Playwright headless-shell, ffmpeg, and install helpers are excluded"
+        : "not bundled by default; set JHM_RUNTIME_PACK_INCLUDE_BROWSER=1 to ship Chromium in the runtime pack",
     },
     embeddings: {
       mode: "onnx-local",
@@ -354,10 +389,18 @@ const browserArchive = join(releaseAssetsDir, browserRuntimeAssetName());
 
 archiveDirectory(stageDir, runtimePackArchive);
 archiveDirectory(vectorStageDir, vectorArchive);
-archiveDirectory(join(repoRoot, "src-tauri", "resources", "bin"), browserArchive);
+if (includeBrowserRuntime) {
+  archiveDirectory(join(repoRoot, "src-tauri", "resources", "bin"), browserArchive);
+} else {
+  rmSync(browserArchive, { force: true });
+}
 
 console.log(`Runtime pack asset ready: ${runtimePackArchive}`);
 console.log(`Runtime pack uncompressed size: ${formatMb(bytes(stageDir))}`);
 console.log(`Runtime pack archive size: ${formatMb(bytes(runtimePackArchive))}`);
 console.log(`Legacy vector runtime asset ready: ${vectorArchive} (${formatMb(bytes(vectorArchive))})`);
-console.log(`Legacy browser runtime asset ready: ${browserArchive} (${formatMb(bytes(browserArchive))})`);
+if (includeBrowserRuntime) {
+  console.log(`Legacy browser runtime asset ready: ${browserArchive} (${formatMb(bytes(browserArchive))})`);
+} else {
+  console.log("Legacy browser runtime asset skipped (system browser mode).");
+}

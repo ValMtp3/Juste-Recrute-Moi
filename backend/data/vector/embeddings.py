@@ -15,6 +15,7 @@ automatically: onnx → hash, openai → hash.
 from __future__ import annotations
 
 import hashlib
+import gc
 import math
 import os
 import re
@@ -232,10 +233,16 @@ def _onnx_embed(texts: list[str]) -> list[list[float]]:
 # ── Tier 2: OpenAI API embedding ─────────────────────────────────────────
 
 def _openai_api_key() -> str | None:
-    """Read the OpenAI API key from settings."""
+    """Read the OpenAI API key used for embeddings.
+
+    ``embedding_openai_api_key`` keeps text-embedding-3-small independent from
+    the chat provider. ``openai_api_key`` remains a compatibility fallback for
+    existing installs that already configured OpenAI before the dedicated field
+    existed.
+    """
     try:
         from data.sqlite.settings import get_setting
-        key = get_setting("openai_api_key", "")
+        key = get_setting("embedding_openai_api_key", "") or get_setting("openai_api_key", "")
         return key if key else None
     except Exception:
         return os.environ.get("OPENAI_API_KEY")
@@ -309,6 +316,7 @@ def active_provider() -> str:
     pref = _configured_provider()
     if pref == "openai":
         if _openai_api_key():
+            unload_onnx_session()
             return "openai"
         _log.info("OpenAI embedding requested but no API key; falling back")
         # Try ONNX as intermediate fallback
@@ -415,3 +423,17 @@ def reset_onnx_session() -> None:
         _onnx_error = ""
         _onnx_loaded = False
         _last_onnx_fallback_error = None
+
+
+def unload_onnx_session() -> None:
+    """Release the local ONNX embedder when a remote embedding provider is active."""
+    global _onnx_session, _onnx_tokenizer, _onnx_error, _onnx_loaded, _last_onnx_fallback_error
+    with _lock:
+        if _onnx_session is None and _onnx_tokenizer is None and not _onnx_loaded:
+            return
+        _onnx_session = None
+        _onnx_tokenizer = None
+        _onnx_error = ""
+        _onnx_loaded = False
+        _last_onnx_fallback_error = None
+    gc.collect()

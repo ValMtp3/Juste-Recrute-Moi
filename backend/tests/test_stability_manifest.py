@@ -115,11 +115,12 @@ def test_ci_enforces_manifest_guardrails():
     assert "macos-latest" in ci
 
 
-def test_runtime_pack_installs_browser_runtime_for_clean_ci_checkout():
+def test_runtime_pack_keeps_browser_runtime_optional_by_default():
     runtime_pack = _read(ROOT / "scripts/package-runtime-pack.mjs")
-    assert "PLAYWRIGHT_BROWSERS_PATH" in runtime_pack
+    assert "JHM_RUNTIME_PACK_INCLUDE_BROWSER" in runtime_pack
+    assert "Skipping bundled Playwright Chromium runtime" in runtime_pack
     assert '"playwright", "install", "chromium"' in runtime_pack
-    assert "hasChromiumRuntime" in runtime_pack
+    assert "includeBrowserRuntime" in runtime_pack
 
 
 def test_tauri_relaunch_acl_is_granted():
@@ -136,6 +137,7 @@ def test_release_installer_stays_slim_and_runtime_pack_is_ota_only():
 
     backend_spec = _read(BACKEND / "backend.spec")
     assert "onedir_sidecar = False" in backend_spec
+    assert "JHM_SKIP_VECTOR_IMPORT" in backend_spec
 
     build_sidecar = _read(ROOT / "scripts/build-sidecar.mjs")
     assert "Release sidecars must be PyInstaller onefile builds" in build_sidecar
@@ -149,6 +151,10 @@ def test_release_installer_stays_slim_and_runtime_pack_is_ota_only():
     assert "python313.dll" not in release
     assert "base_library.zip" not in release
     assert release.count("path: src-tauri/resources/backend/") == 3
+    assert "PLAYWRIGHT_BROWSERS_PATH" not in release
+    assert "playwright install chromium" not in release
+    assert "The raw macOS sidecar is not codesigned" in release
+    assert "Smoke packaged macOS sidecar" in release
 
 
 def test_release_includes_frozen_backend_and_windows_smoke():
@@ -195,7 +201,8 @@ def test_degradation_status_is_exposed_to_api_and_frontend():
     assert "def embedding_status" in _read(BACKEND / "data/vector/embeddings.py")
 
     app = _read(ROOT / "src/App.tsx")
+    hook = _read(ROOT / "src/shared/hooks/useSubsystemHealth.ts")
     css = _read(ROOT / "src/index.css")
     assert "SubsystemBanner" in app
-    assert "/api/v1/health/subsystems" in app
+    assert "/api/v1/health/subsystems" in hook
     assert ".subsystem-banner" in css

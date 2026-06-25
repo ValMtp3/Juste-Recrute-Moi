@@ -156,3 +156,68 @@ def test_validate_provider_settings_uses_pending_deepseek_key(monkeypatch):
     assert calls["deepseek"] == "typed-deepseek-key"
     assert calls["gemini"] == "saved-gemini-key"
     assert result["deepseek"]["status"] == "ok"
+
+
+def test_validate_provider_settings_warns_for_pending_france_market_without_credentials(monkeypatch):
+    from api.startup_validation import FRANCE_TRAVAIL_CREDENTIAL_WARNING
+    from llm import _ENV_NAMES
+
+    for env_name in {*_ENV_NAMES.values(), "GOOGLE_API_KEY", "FRANCE_TRAVAIL_CLIENT_ID", "FRANCE_TRAVAIL_CLIENT_SECRET"}:
+        monkeypatch.delenv(env_name, raising=False)
+
+    class FakeSettings:
+        def get_settings(self):
+            return {}
+
+    class FakeRepo:
+        settings = FakeSettings()
+
+    result = asyncio.run(
+        settings_router.validate_provider_settings(
+            FakeRepo(),
+            {
+                "job_market_focus": "france",
+                "france_travail_client_id": "",
+                "france_travail_client_secret": "",
+            },
+        )
+    )
+
+    assert FRANCE_TRAVAIL_CREDENTIAL_WARNING in result["_warnings"]
+
+
+def test_validate_provider_settings_uses_pending_france_travail_credentials(monkeypatch):
+    from llm import _ENV_NAMES
+
+    for env_name in {*_ENV_NAMES.values(), "GOOGLE_API_KEY", "FRANCE_TRAVAIL_CLIENT_ID", "FRANCE_TRAVAIL_CLIENT_SECRET"}:
+        monkeypatch.delenv(env_name, raising=False)
+
+    class FakeSettings:
+        def get_settings(self):
+            return {}
+
+    class FakeRepo:
+        settings = FakeSettings()
+
+    result = asyncio.run(
+        settings_router.validate_provider_settings(
+            FakeRepo(),
+            {
+                "job_market_focus": "france",
+                "france_travail_client_id": "typed-client",
+                "france_travail_client_secret": "typed-secret",
+            },
+        )
+    )
+
+    assert "_warnings" not in result
+
+
+def test_france_travail_settings_are_sensitive():
+    keys = settings_router.sensitive_keys({
+        "france_travail_client_id": "id",
+        "france_travail_client_secret": "secret",
+    })
+
+    assert "france_travail_client_id" in keys
+    assert "france_travail_client_secret" in keys

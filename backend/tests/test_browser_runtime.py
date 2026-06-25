@@ -34,6 +34,11 @@ def test_system_browser_candidates_returns_macos_paths_on_darwin(monkeypatch):
     assert any("Brave Browser" in c for c in candidates)
     assert any("Chromium.app" in c for c in candidates)
     assert any("/Applications/" in c for c in candidates)
+    assert any(
+        c.endswith("/Applications/Brave Browser.app/Contents/MacOS/Brave Browser")
+        and not c.startswith("/Applications/")
+        for c in candidates
+    )
 
 
 def test_system_browser_candidates_returns_linux_paths_on_linux(monkeypatch):
@@ -86,6 +91,76 @@ def test_chromium_executable_finds_macos_chrome(monkeypatch, tmp_path):
 
     result = browser_runtime.chromium_executable()
     assert result == str(chrome)
+
+
+def test_runtime_chromium_executable_finds_chrome_for_testing_on_macos(monkeypatch, tmp_path):
+    from automation import browser_runtime
+
+    executable = (
+        tmp_path
+        / "ms-playwright"
+        / "chromium-1223"
+        / "chrome-mac-arm64"
+        / "Google Chrome for Testing.app"
+        / "Contents"
+        / "MacOS"
+        / "Google Chrome for Testing"
+    )
+    executable.parent.mkdir(parents=True)
+    executable.write_text("#!/bin/sh\n")
+
+    monkeypatch.setattr(browser_runtime, "sys_platform", lambda: "darwin")
+    monkeypatch.setattr(browser_runtime, "browser_runtime_dir", lambda: tmp_path / "ms-playwright")
+
+    assert browser_runtime._runtime_chromium_executable() == str(executable)
+
+
+def test_runtime_chromium_executable_prefers_headless_shell(monkeypatch, tmp_path):
+    from automation import browser_runtime
+
+    headless_shell = (
+        tmp_path
+        / "ms-playwright"
+        / "chromium_headless_shell-1223"
+        / "chrome-headless-shell-mac-arm64"
+        / "chrome-headless-shell"
+    )
+    headless_shell.parent.mkdir(parents=True)
+    headless_shell.write_text("#!/bin/sh\n")
+
+    chrome = (
+        tmp_path
+        / "ms-playwright"
+        / "chromium-1223"
+        / "chrome-mac-arm64"
+        / "Google Chrome for Testing.app"
+        / "Contents"
+        / "MacOS"
+        / "Google Chrome for Testing"
+    )
+    chrome.parent.mkdir(parents=True)
+    chrome.write_text("#!/bin/sh\n")
+
+    monkeypatch.setattr(browser_runtime, "sys_platform", lambda: "darwin")
+    monkeypatch.setattr(browser_runtime, "browser_runtime_dir", lambda: tmp_path / "ms-playwright")
+
+    assert browser_runtime._runtime_chromium_executable(headless=True) == str(headless_shell)
+    assert browser_runtime._runtime_chromium_executable(headless=False) == str(chrome)
+
+
+def test_ensure_browser_runtime_accepts_system_browser(monkeypatch, tmp_path):
+    from automation import browser_runtime
+
+    runtime = tmp_path / "ms-playwright"
+    calls = []
+
+    monkeypatch.setattr(browser_runtime, "browser_runtime_dir", lambda: runtime)
+    monkeypatch.setattr(browser_runtime, "browser_runtime_ready", lambda _path=None: False)
+    monkeypatch.setattr(browser_runtime, "system_browser_executable", lambda: "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser")
+    monkeypatch.setattr(browser_runtime, "install_vector_runtime", lambda: calls.append("install"))
+
+    assert browser_runtime.ensure_browser_runtime() == runtime
+    assert calls == []
 
 
 def test_chromium_executable_returns_none_when_nothing_exists(monkeypatch):
@@ -274,7 +349,7 @@ def test_null_vector_store_logs_create_table(caplog):
 
     assert result is None
     assert "create_table(skills)" in caplog.text
-    assert "data dropped" in caplog.text
+    assert "création ignorée" in caplog.text
     assert "not bundled" in caplog.text
 
 
@@ -288,7 +363,7 @@ def test_null_vector_store_logs_add(caplog):
 
     assert result is None
     assert "add()" in caplog.text
-    assert "data dropped" in caplog.text
+    assert "ajout ignoré" in caplog.text
 
 
 def test_null_vector_store_logs_open_table(caplog):
