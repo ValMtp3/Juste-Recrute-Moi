@@ -24,7 +24,7 @@ def _loaded_vector_status(runtime_ready: bool) -> dict:
     if module is None:
         if runtime_ready:
             return {"status": "initializing", "tables": []}
-        return {"status": "disabled", "tables": [], "error": "LanceDB runtime is not installed"}
+        return {"status": "disabled", "tables": [], "error": "Le runtime LanceDB n'est pas installé"}
 
     status_fn = getattr(module, "vector_status", None)
     if callable(status_fn):

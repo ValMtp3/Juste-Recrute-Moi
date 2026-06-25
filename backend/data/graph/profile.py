@@ -36,6 +36,7 @@ from data.graph.profile_base import (
     normal_profile as normal_profile,
     profile_has_data as profile_has_data,
     profile_has_structured_data as profile_has_structured_data,
+    project_stack_list as project_stack_list,
     stack_list as stack_list,
 )
 from data.graph.profile_deletions import (

@@ -93,7 +93,17 @@ def _source_error_detail(exc: Exception) -> str:
         return "délai de requête dépassé"
     if isinstance(exc, httpx.ConnectError):
         return "connexion échouée"
+    if "timed out" in str(exc).lower() or "timeout" in type(exc).__name__.lower():
+        return "délai de requête dépassé"
     return str(exc).strip() or type(exc).__name__
+
+
+def _target_label(target: str) -> str:
+    value = str(target or "").strip()
+    if value.lower().startswith("site:"):
+        domain = value[5:].split()[0].strip().strip('"') or "site"
+        return f"site:{domain}"
+    return value
 
 
 def _cutoff() -> datetime:
@@ -313,7 +323,7 @@ def _parse(md: str, src: str) -> list:
         if d.get("_fresh_source") or _is_recent(d.get("posted_date", "")):
             results.append(d)
         else:
-            _log.debug("Skipping old listing (%s): %s", d.get("posted_date", ""), d.get("title", ""))
+            _log.debug("Offre ancienne ignorée (%s) : %s", d.get("posted_date", ""), d.get("title", ""))
     return results
 
 
@@ -568,8 +578,9 @@ def run(
             usage["by_source"][target] = source_count
         except Exception as _e:
             usage["errors"] += 1
-            errors.append(f"{target}: {_source_error_detail(_e)}")
-            _log.warning("Skipping %s: %s", target, _e)
+            label = _target_label(target)
+            errors.append(f"{label}: {_source_error_detail(_e)}")
+            _log.warning("Cible ignorée %s : %s", label, _source_error_detail(_e))
 
     # Apify fallback (gated: requires apify_token + apify_actor). When configured,
     # hand the actor the search queries it needs. Previously `queries` was never

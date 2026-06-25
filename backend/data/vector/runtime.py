@@ -6,11 +6,13 @@ import os
 import platform
 import shutil
 import ssl
+import stat
 import sys
 import tempfile
 import threading
 import time
 import urllib.request
+import warnings
 import zipfile
 from pathlib import Path
 from urllib.parse import urlparse
@@ -33,6 +35,13 @@ _INSTALL_PROGRESS: dict = {
     "started_at": None,
     "updated_at": None,
 }
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"The NumPy module was reloaded.*",
+    category=UserWarning,
+    module=r"lancedb\.common",
+)
 
 
 def sys_platform() -> str:
@@ -215,6 +224,11 @@ def vector_runtime_url() -> str:
     )
 
 
+def _repo_runtime_pack_path() -> str:
+    candidate = Path(__file__).resolve().parents[3] / "release-assets" / runtime_pack_asset_name()
+    return str(candidate) if candidate.exists() else ""
+
+
 def _legacy_vector_runtime_override() -> bool:
     return bool(os.environ.get("JHM_VECTOR_RUNTIME_URL") and not os.environ.get("JHM_RUNTIME_PACK_URL"))
 
@@ -315,16 +329,16 @@ def _vector_runtime_import_error(path: Path | None = None) -> str:
     root = path or vector_runtime_dir()
     has_payload = _runtime_has_any_vector_payload(root)
     if has_payload and not vector_runtime_files_complete(root):
-        return "vector runtime files are incomplete"
+        return "les fichiers du runtime vectoriel sont incomplets"
     if getattr(sys, "frozen", False) and not vector_runtime_files_complete(root):
-        return "vector runtime files are incomplete"
+        return "les fichiers du runtime vectoriel sont incomplets"
     add_vector_runtime_to_path(root)
     clear_vector_runtime_modules()
     try:
         if not importlib.util.find_spec("lancedb"):
-            return "lancedb module was not found"
+            return "le module lancedb est introuvable"
         if not importlib.util.find_spec("pyarrow"):
-            return "pyarrow module was not found"
+            return "le module pyarrow est introuvable"
         for module_name in ("pyarrow", "lancedb"):
             try:
                 importlib.import_module(module_name)
@@ -346,8 +360,78 @@ def browser_runtime_ready(path: Path | None = None) -> bool:
     return any(candidate.name.lower().startswith("chromium") for candidate in root.iterdir() if candidate.is_dir())
 
 
+def _browser_runtime_has_headless_shell(path: Path | None = None) -> bool:
+    root = path or browser_runtime_dir()
+    if not root.exists():
+        return False
+    return any(
+        candidate.exists()
+        for pattern in (
+            "chromium_headless_shell-*/chrome-headless-shell-*/chrome-headless-shell",
+            "chromium_headless_shell-*/chrome-headless-shell",
+        )
+        for candidate in root.glob(pattern)
+    )
+
+
+def _ensure_browser_runtime_executable_permissions(path: Path | None = None) -> None:
+    if sys_platform() == "windows":
+        return
+    root = path or browser_runtime_dir()
+    if not root.exists():
+        return
+    if sys_platform() == "darwin":
+        for app_root in root.glob("chromium-*/chrome-mac*/*.app"):
+            _clear_macos_extended_attrs(app_root)
+            for subdir in (app_root / "Contents" / "MacOS", app_root / "Contents" / "Frameworks"):
+                if not subdir.exists():
+                    continue
+                for candidate in subdir.rglob("*"):
+                    if not candidate.is_file():
+                        continue
+                    try:
+                        mode = candidate.stat().st_mode
+                        candidate.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+                    except OSError:
+                        continue
+    for pattern in (
+        "chromium-*/chrome-mac*/*.app/Contents/MacOS/*",
+        "chromium_headless_shell-*/chrome-headless-shell-*/chrome-headless-shell",
+        "chromium_headless_shell-*/chrome-headless-shell",
+        "chromium-*/chrome-linux*/chrome",
+        "chromium-*/chrome",
+    ):
+        for candidate in root.glob(pattern):
+            if not candidate.is_file():
+                continue
+            try:
+                mode = candidate.stat().st_mode
+                candidate.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            except OSError:
+                continue
+
+
+def _clear_macos_extended_attrs(path: Path) -> None:
+    if sys_platform() != "darwin" or not hasattr(os, "listxattr"):
+        return
+    candidates = [path, *path.rglob("*")]
+    for candidate in candidates:
+        try:
+            attrs = os.listxattr(candidate)
+        except OSError:
+            continue
+        for attr in attrs:
+            if attr.startswith("com.apple."):
+                try:
+                    os.removexattr(candidate, attr)
+                except OSError:
+                    continue
+
+
 def runtime_pack_ready() -> bool:
-    return vector_runtime_ready(vector_runtime_dir())
+    return vector_runtime_ready(vector_runtime_dir()) and (
+        browser_runtime_ready(browser_runtime_dir()) or system_browser_ready()
+    )
 
 
 def _archive_payload_dir(extract_dir: Path) -> Path | None:
@@ -383,11 +467,11 @@ def _safe_extract(archive_path: Path, extract_dir: Path) -> None:
         for index, member in enumerate(members, start=1):
             target = (extract_dir / member.filename).resolve()
             if root != target and root not in target.parents:
-                raise RuntimeError("Downloaded vector runtime archive contains an unsafe path.")
+                raise RuntimeError("Le pack runtime téléchargé contient un chemin non sécurisé.")
             archive.extract(member, extract_dir)
             _set_progress(
                 status="extracting",
-                message="Unpacking Juste Recrute Moi runtime pack.",
+                message="Décompression du pack runtime Juste Recrute Moi.",
                 percent=min(84, 70 + round((index / total) * 14)),
             )
 
@@ -440,6 +524,7 @@ def _runtime_pack_sources() -> list[str]:
     for candidate in (
         os.environ.get("JHM_BUNDLED_RUNTIME_PACK_URL"),
         os.environ.get("JHM_RUNTIME_PACK_URL"),
+        _repo_runtime_pack_path(),
         release_runtime_pack_url(),
     ):
         if candidate and candidate not in sources:
@@ -458,7 +543,7 @@ def _stream_to_file(reader, writer, total: int) -> None:
     downloaded = 0
     _set_progress(
         status="downloading",
-        message="Downloading Juste Recrute Moi runtime pack.",
+        message="Téléchargement du pack runtime Juste Recrute Moi.",
         percent=1,
         downloaded=0,
         total=total,
@@ -473,7 +558,7 @@ def _stream_to_file(reader, writer, total: int) -> None:
         percent = min(70, max(1, round((downloaded / total) * 70))) if total else min(65, _INSTALL_PROGRESS.get("percent", 1) + 1)
         _set_progress(
             status="downloading",
-            message="Downloading Juste Recrute Moi runtime pack.",
+            message="Téléchargement du pack runtime Juste Recrute Moi.",
             percent=percent,
             downloaded=downloaded,
             total=total,
@@ -492,7 +577,7 @@ def _copy_payload(
     payload: Path,
     runtime_dir: Path,
     *,
-    message: str = "Installing Juste Recrute Moi runtime pack.",
+    message: str = "Installation du pack runtime Juste Recrute Moi.",
     start_percent: int = 84,
     end_percent: int = 94,
 ) -> None:
@@ -536,11 +621,13 @@ def install_vector_runtime() -> Path:
         stale = _runtime_pack_is_stale()
         vector_ready_before = vector_runtime_ready(runtime_dir) and not stale
         vector_files_complete_before = vector_runtime_files_complete(runtime_dir) and not stale
-        browser_ready_before = (browser_runtime_ready(browser_dir) or system_browser_ready()) and not stale
-        if vector_ready_before and vector_files_complete_before:
+        bundled_browser_ready = browser_runtime_ready(browser_dir) and _browser_runtime_has_headless_shell(browser_dir)
+        browser_ready_before = (bundled_browser_ready or system_browser_ready()) and not stale
+        if vector_ready_before and vector_files_complete_before and browser_ready_before:
+            _ensure_browser_runtime_executable_permissions(browser_dir)
             _set_progress(
                 status="installed",
-                message="Required runtime pack is installed.",
+                message="Le pack runtime requis est installé.",
                 percent=100,
                 downloaded=0,
                 total=0,
@@ -555,7 +642,7 @@ def install_vector_runtime() -> Path:
         url = sources[0]
         _set_progress(
             status="starting",
-            message="Preparing Juste Recrute Moi runtime pack install.",
+            message="Préparation de l'installation du pack runtime Juste Recrute Moi.",
             percent=0,
             downloaded=0,
             total=0,
@@ -584,7 +671,7 @@ def install_vector_runtime() -> Path:
                     extract_dir.mkdir(parents=True, exist_ok=True)
                     _set_progress(
                         status="extracting",
-                        message="Unpacking Juste Recrute Moi runtime pack.",
+                        message="Décompression du pack runtime Juste Recrute Moi.",
                         percent=70,
                     )
                     _safe_extract(archive_path, extract_dir)
@@ -598,45 +685,47 @@ def install_vector_runtime() -> Path:
 
                 vector_payload, browser_payload, models_payload = _runtime_pack_payloads(extract_dir)
                 if vector_payload is None:
-                    error = "Downloaded runtime pack did not contain LanceDB and PyArrow."
+                    error = "Le pack runtime téléchargé ne contient pas LanceDB et PyArrow."
                     _set_progress(status="error", message=error, error=error)
                     raise RuntimeError(error)
                 if vector_ready_before and vector_files_complete_before:
                     _set_progress(
                         status="copying",
-                        message="Keeping existing LanceDB vector runtime.",
+                        message="Conservation du runtime vectoriel LanceDB existant.",
                         percent=92,
                     )
                 else:
                     _set_progress(
                         status="copying",
-                        message="Installing LanceDB and vector search support.",
+                        message="Installation de LanceDB et de la recherche vectorielle.",
                         percent=84,
                     )
                     _copy_payload(
                         vector_payload,
                         runtime_dir,
-                        message="Installing LanceDB and vector search support.",
+                        message="Installation de LanceDB et de la recherche vectorielle.",
                         start_percent=84,
                         end_percent=92,
                     )
                 if browser_payload is not None and not browser_ready_before:
                     _set_progress(
                         status="copying",
-                        message="Installing Playwright Chromium browser support.",
+                        message="Installation du navigateur Chromium intégré.",
                         percent=92,
                     )
                     _copy_payload(
                         browser_payload,
                         browser_dir,
-                        message="Installing Playwright Chromium browser support.",
+                        message="Installation du navigateur Chromium intégré.",
                         start_percent=92,
                         end_percent=98,
                     )
+                    _ensure_browser_runtime_executable_permissions(browser_dir)
                 elif browser_ready_before:
+                    _ensure_browser_runtime_executable_permissions(browser_dir)
                     _set_progress(
                         status="copying",
-                        message="Keeping existing Playwright Chromium runtime.",
+                        message="Conservation du navigateur Chromium intégré existant.",
                         percent=98,
                     )
 
@@ -645,31 +734,31 @@ def install_vector_runtime() -> Path:
                     models_dest = _data_root() / "models"
                     _set_progress(
                         status="copying",
-                        message="Installing ONNX embedding model.",
+                        message="Installation du modèle d'embeddings ONNX.",
                         percent=98,
                     )
                     _copy_payload(
                         models_payload,
                         models_dest,
-                        message="Installing ONNX embedding model.",
+                        message="Installation du modèle d'embeddings ONNX.",
                         start_percent=98,
                         end_percent=99,
                     )
 
-            _set_progress(status="verifying", message="Verifying Juste Recrute Moi runtime pack.", percent=99)
+            _set_progress(status="verifying", message="Vérification du pack runtime Juste Recrute Moi.", percent=99)
             add_vector_runtime_to_path(runtime_dir)
             vector_import_error = _vector_runtime_import_error(runtime_dir)
             if vector_import_error:
                 error = (
-                    "Vector runtime installation finished, but LanceDB or PyArrow could not be imported. "
-                    f"Details: {vector_import_error}"
+                    "L'installation du runtime vectoriel est terminée, mais LanceDB ou PyArrow ne peut pas être importé. "
+                    f"Détails : {vector_import_error}"
                 )
                 _set_progress(status="error", message=error, error=error)
                 raise RuntimeError(error)
             _write_version_stamp()
             _set_progress(
                 status="installed",
-                message="Required Juste Recrute Moi runtime pack is ready.",
+                message="Le pack runtime Juste Recrute Moi requis est prêt.",
                 percent=100,
                 downloaded=0,
                 total=0,
@@ -689,8 +778,9 @@ def vector_runtime_status() -> dict:
     browser_dir = browser_runtime_dir()
     stale = _runtime_pack_is_stale()
     vector_ready = vector_runtime_ready(runtime_dir) and not stale
-    browser_ready = (browser_runtime_ready(browser_dir) or system_browser_ready()) and not stale
-    ready = vector_ready
+    bundled_browser_ready = browser_runtime_ready(browser_dir) and _browser_runtime_has_headless_shell(browser_dir)
+    browser_ready = (bundled_browser_ready or system_browser_ready()) and not stale
+    ready = vector_ready and browser_ready
     if ready and runtime_dir.exists():
         status = "installed"
     elif ready:

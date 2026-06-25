@@ -116,6 +116,9 @@ def test_put_vec_rows_falls_back_when_create_reports_existing_table(monkeypatch)
     class FakeSchema:
         names: ClassVar = ["id", "label", "vector"]
 
+        def field(self, _name):
+            return types.SimpleNamespace(type=types.SimpleNamespace(list_size=1))
+
     class FakeArrow:
         schema = FakeSchema()
 
@@ -148,6 +151,43 @@ def test_put_vec_rows_falls_back_when_create_reports_existing_table(monkeypatch)
 
     assert ("delete", "id IN ('python')") in calls
     assert ("add", [{"id": "python", "label": "Python", "vector": [0.1]}]) in calls
+
+
+def test_put_vec_rows_recreates_table_after_pyarrow_runtime_mismatch(monkeypatch):
+    from data.graph import profile_vectors
+
+    calls = []
+    rows = [{"id": "python", "label": "Python", "vector": [0.1]}]
+
+    class FakeTable:
+        def to_arrow(self):
+            raise TypeError("Argument 'schema' has incorrect type (expected pyarrow.lib.Schema, got pyarrow.lib.Schema)")
+
+        def merge_insert(self, _key):
+            raise TypeError("DataType expected, got <class 'pyarrow.lib.DataType'>")
+
+    class FakeVec:
+        available = True
+
+        def list_tables(self):
+            return ["skills"]
+
+        def open_table(self, table_name):
+            calls.append(("open", table_name))
+            return FakeTable()
+
+        def drop_table(self, table_name):
+            calls.append(("drop", table_name))
+
+        def create_table(self, table_name, data):
+            calls.append(("create", table_name, data))
+
+    monkeypatch.setattr(profile_vectors, "_vec", lambda: FakeVec())
+
+    profile_vectors.put_vec_rows("skills", rows)
+
+    assert ("drop", "skills") in calls
+    assert ("create", "skills", rows) in calls
 
 
 def test_vector_runtime_asset_name_is_platform_specific(monkeypatch):
@@ -299,7 +339,21 @@ def test_runtime_pack_install_skips_ready_vector_runtime(monkeypatch, tmp_path):
     monkeypatch.setattr(runtime, "_copy_payload", copy_payload)
 
     assert runtime.install_vector_runtime() == runtime_dir
-    assert copied == []
+    assert copied == [browser_dir]
+
+
+def test_runtime_pack_sources_prefer_local_release_asset(monkeypatch):
+    from data.vector import runtime
+
+    monkeypatch.delenv("JHM_BUNDLED_RUNTIME_PACK_URL", raising=False)
+    monkeypatch.delenv("JHM_RUNTIME_PACK_URL", raising=False)
+    monkeypatch.setenv("JHM_RELEASE_RUNTIME_PACK_URL", "https://example.test/runtime-pack.zip")
+    monkeypatch.setattr(runtime, "_repo_runtime_pack_path", lambda: "/tmp/Juste-Recrute-Moi-runtime-pack-macos.zip")
+
+    assert runtime._runtime_pack_sources() == [
+        "/tmp/Juste-Recrute-Moi-runtime-pack-macos.zip",
+        "https://example.test/runtime-pack.zip",
+    ]
 
 
 def test_runtime_pack_install_succeeds_without_browser_payload(monkeypatch, tmp_path):

@@ -128,6 +128,8 @@ def _source_error_detail(exc: Exception) -> str:
         return "délai de requête dépassé"
     if isinstance(exc, httpx.ConnectError):
         return "connexion échouée"
+    if "timed out" in str(exc).lower() or "timeout" in type(exc).__name__.lower():
+        return "délai de requête dépassé"
     return str(exc).strip() or type(exc).__name__
 
 
@@ -353,7 +355,7 @@ def run(
             usage["candidates"] += len(batch)
             usage["by_source"][target] = len(batch)
         except Exception as exc:
-            logging.getLogger(__name__).warning('suppressed exception in backend/automation/free_scout.py:run: %s', exc)
+            logging.getLogger(__name__).warning("Source gratuite ignorée %s : %s", target, _source_error_detail(exc))
             usage["errors"] += 1
             errors.append(f"{target}: {_source_error_detail(exc)}")
             continue

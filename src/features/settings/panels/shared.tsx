@@ -5,6 +5,7 @@ import type { ApiFetch } from "../../../types";
 
 export interface Cfg {
   llm_provider: string;
+  embedding_provider: string; embedding_openai_api_key: string;
   anthropic_key: string; anthropic_model: string; openai_api_key: string; openai_model: string;
   deepseek_api_key: string; deepseek_model: string; gemini_api_key: string; gemini_model: string;
   groq_api_key: string; groq_model: string; nvidia_api_key: string;
@@ -23,7 +24,7 @@ export interface Cfg {
   generator_provider: string; generator_api_key: string; generator_model: string;
   ingestor_provider: string;  ingestor_api_key: string;  ingestor_model: string;
   actuator_provider: string;  actuator_api_key: string;  actuator_model: string;
-  apify_token: string; apify_actor: string; linkedin_cookie: string; x_bearer_token: string; x_search_queries: string; x_watchlist: string;
+  apify_token: string; apify_actor: string; linkedin_cookie: string; france_travail_client_id: string; france_travail_client_secret: string; x_bearer_token: string; x_search_queries: string; x_watchlist: string;
   hunter_api_key: string; proxycurl_api_key: string; contact_lookup_enabled: string;
   x_max_requests_per_scan: string; x_max_results_per_query: string; x_min_signal_score: string; x_hot_lead_threshold: string; x_enable_notifications: string;
   free_sources_enabled: string; free_source_targets: string; company_watchlist: string; free_source_max_requests: string; free_source_min_signal_score: string;
@@ -34,6 +35,7 @@ export interface Cfg {
 
 export const EMPTY: Cfg = {
   llm_provider: "ollama",
+  embedding_provider: "onnx", embedding_openai_api_key: "",
   anthropic_key: "", anthropic_model: "claude-sonnet-4-6", openai_api_key: "", openai_model: "gpt-4o-mini",
   deepseek_api_key: "", deepseek_model: "deepseek-chat", gemini_api_key: "", gemini_model: "gemini-2.5-flash",
   groq_api_key: "", groq_model: "llama-3.3-70b-versatile", nvidia_api_key: "",
@@ -52,7 +54,7 @@ export const EMPTY: Cfg = {
   generator_provider: "", generator_api_key: "", generator_model: "",
   ingestor_provider: "", ingestor_api_key: "", ingestor_model: "",
   actuator_provider: "", actuator_api_key: "", actuator_model: "",
-  apify_token: "", apify_actor: "", linkedin_cookie: "", x_bearer_token: "", x_search_queries: "", x_watchlist: "",
+  apify_token: "", apify_actor: "", linkedin_cookie: "", france_travail_client_id: "", france_travail_client_secret: "", x_bearer_token: "", x_search_queries: "", x_watchlist: "",
   hunter_api_key: "", proxycurl_api_key: "", contact_lookup_enabled: "true",
   x_max_requests_per_scan: "5", x_max_results_per_query: "50", x_min_signal_score: "60", x_hot_lead_threshold: "80", x_enable_notifications: "false",
   free_sources_enabled: "true", free_source_targets: "", company_watchlist: "", free_source_max_requests: "20", free_source_min_signal_score: "60",
@@ -180,11 +182,20 @@ export const INDIA_SOURCE_PRESET = [
 
 export const FRANCE_SOURCE_PRESET = [
   "france_travail:developpeur;lieu=France;range=0-49,",
-  "site:welcometothejungle.com/fr/jobs France,",
-  "site:hellowork.com/fr-fr/emplois France,",
-  "site:jobs.smartrecruiters.com France,",
-  "site:teamtailor.com/jobs France,",
-  "site:boards.greenhouse.io France,",
+  "https://remotive.com/api/remote-jobs,",
+  "https://jobicy.com/api/v2/remote-jobs?count=50,",
+"https://weworkremotely.com/remote-jobs.rss,",
+"site:welcometothejungle.com/fr/jobs France,",
+"site:hellowork.com/fr-fr/emplois France,",
+"site:apec.fr/candidat/recherche-emploi.html/emploi France,",
+"site:cadremploi.fr/emploi France,",
+"site:meteojob.com/jobs France,",
+"site:lesjeudis.com/jobs France,",
+"site:linkedin.com/jobs France,",
+"site:fr.indeed.com/emplois France,",
+"site:jobs.smartrecruiters.com France,",
+"site:teamtailor.com/jobs France,",
+"site:boards.greenhouse.io France,",
   "site:jobs.lever.co France,",
   "site:jobs.ashbyhq.com France,",
   "site:apply.workable.com France,",

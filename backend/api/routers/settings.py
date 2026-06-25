@@ -26,8 +26,17 @@ LEGACY_MASKS = {
 
 
 def sensitive_keys(settings: dict) -> set:
-    fixed = {"anthropic_key", "linkedin_cookie", "x_bearer_token", "custom_connector_headers"}
-    dynamic = {key for key in settings if key.endswith("_api_key") or key.endswith("_key") or key.endswith("_token")}
+    fixed = {
+        "anthropic_key",
+        "linkedin_cookie",
+        "x_bearer_token",
+        "custom_connector_headers",
+        "france_travail_client_id",
+    }
+    dynamic = {
+        key for key in settings
+        if key.endswith("_api_key") or key.endswith("_key") or key.endswith("_token") or key.endswith("_secret")
+    }
     return fixed | dynamic
 
 

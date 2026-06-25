@@ -21,7 +21,7 @@ const stageDir = join(stageRoot, "runtime-pack");
 const vectorStageDir = join(stageDir, "vector-runtime");
 const browserStageDir = join(stageDir, "browser-runtime", "ms-playwright");
 const releaseAssetsDir = join(repoRoot, "release-assets");
-const includeBrowserRuntime = process.env.JHM_RUNTIME_PACK_INCLUDE_BROWSER === "1";
+const includeBrowserRuntime = process.env.JHM_RUNTIME_PACK_INCLUDE_BROWSER !== "0";
 
 const ONNX_MODEL_NAME = "all-MiniLM-L6-v2";
 const ONNX_HF_REPO = `sentence-transformers/${ONNX_MODEL_NAME}`;
@@ -308,7 +308,6 @@ if (includeBrowserRuntime) {
     filter: (source) => {
       const name = source.split(/[\\/]/).pop()?.toLowerCase() || "";
       if (name === ".links" || name === "__pycache__") return false;
-      if (name.startsWith("chromium_headless_shell")) return false;
       if (name.startsWith("ffmpeg-")) return false;
       if (name.startsWith("winldd-")) return false;
       return true;

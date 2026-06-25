@@ -141,9 +141,9 @@ function resolveSidecar(manifest) {
     }
 
     const reason = targetIsStale
-      ? `${sidecar} is ${bytes(sidecar)} bytes, expected ${manifest.sidecarBinaryBytes}`
-      : `${internal} is missing`;
-    console.warn(`Ignoring stale target sidecar (${reason}); using fresh resource sidecar instead.`);
+      ? `${sidecar} fait ${bytes(sidecar)} octets, attendu ${manifest.sidecarBinaryBytes}`
+      : `${internal} est manquant`;
+    console.warn(`Sidecar cible obsolète ignoré (${reason}) ; utilisation du sidecar ressource frais.`);
   }
 
   return prepareFallbackSidecar(manifest);

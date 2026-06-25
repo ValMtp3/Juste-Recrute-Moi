@@ -151,20 +151,17 @@ def _embedding_space(repo: Repository, limit: int = 80) -> dict:
             if name in {"profile", "candidates", "skills", "projects", "experiences", "credentials"}
         ]
     except Exception as exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_embedding_space: %s', exc)
+        logging.getLogger(__name__).debug("exception ignorée dans _embedding_space : %s", exc)
         return {"available": False, "points": points, "error": str(exc)}
 
     for table_name in tables:
         try:
             table = repo.vector.vec.open_table(table_name)
-            if hasattr(table, "to_arrow"):
-                rows = table.to_arrow().to_pylist()[:limit]
-            elif hasattr(table, "to_pandas"):
-                rows = table.to_pandas().head(limit).to_dict("records")
-            else:
-                rows = []
+            from data.graph.profile_vectors import _table_rows
+
+            rows = _table_rows(table, limit)
         except Exception as log_exc:
-            logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_embedding_space: %s', log_exc)
+            logging.getLogger(__name__).debug("exception ignorée dans _embedding_space : %s", log_exc)
             rows = []
         for row in rows:
             vector = row.get("vector") or []

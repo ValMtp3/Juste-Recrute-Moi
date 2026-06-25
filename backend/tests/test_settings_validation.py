@@ -156,3 +156,13 @@ def test_validate_provider_settings_uses_pending_deepseek_key(monkeypatch):
     assert calls["deepseek"] == "typed-deepseek-key"
     assert calls["gemini"] == "saved-gemini-key"
     assert result["deepseek"]["status"] == "ok"
+
+
+def test_france_travail_settings_are_sensitive():
+    keys = settings_router.sensitive_keys({
+        "france_travail_client_id": "id",
+        "france_travail_client_secret": "secret",
+    })
+
+    assert "france_travail_client_id" in keys
+    assert "france_travail_client_secret" in keys

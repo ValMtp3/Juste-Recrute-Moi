@@ -82,7 +82,7 @@ def sync_vectors_from_graph() -> dict:
         return {
             "status": "disabled",
             "synced": 0,
-            "error": getattr(store, "reason", "") or "vector store is unavailable",
+            "error": getattr(store, "reason", "") or "stockage vectoriel indisponible",
         }
     purge_profile_deletion_tombstones()
     deleted_bad_rows = prune_bad_vector_rows()

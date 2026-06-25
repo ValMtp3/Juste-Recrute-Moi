@@ -232,10 +232,16 @@ def _onnx_embed(texts: list[str]) -> list[list[float]]:
 # ── Tier 2: OpenAI API embedding ─────────────────────────────────────────
 
 def _openai_api_key() -> str | None:
-    """Read the OpenAI API key from settings."""
+    """Read the OpenAI API key used for embeddings.
+
+    ``embedding_openai_api_key`` keeps text-embedding-3-small independent from
+    the chat provider. ``openai_api_key`` remains a compatibility fallback for
+    existing installs that already configured OpenAI before the dedicated field
+    existed.
+    """
     try:
         from data.sqlite.settings import get_setting
-        key = get_setting("openai_api_key", "")
+        key = get_setting("embedding_openai_api_key", "") or get_setting("openai_api_key", "")
         return key if key else None
     except Exception:
         return os.environ.get("OPENAI_API_KEY")

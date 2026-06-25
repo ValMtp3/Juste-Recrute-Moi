@@ -27,8 +27,14 @@ def int_cfg(cfg: dict, key: str, default: int, min_value: int, max_value: int) -
     return _targets().int_cfg(cfg, key, default, min_value, max_value)
 
 
-def job_targets(raw: str, market_focus: str = "global") -> list[str]:
-    return _targets().job_targets(raw, market_focus)
+def job_targets(
+    raw: str,
+    market_focus: str = "global",
+    *,
+    search_text: str = "",
+    location: str = "",
+) -> list[str]:
+    return _targets().job_targets(raw, market_focus, search_text=search_text, location=location)
 
 
 def profile_for_discovery(profile: dict | None, cfg: dict) -> dict:
