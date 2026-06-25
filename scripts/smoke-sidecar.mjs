@@ -69,13 +69,19 @@ function extractArchive(archive, target) {
   }
 }
 
-function findRuntimePayload(root) {
+function findRuntimePayloads(root) {
   const queue = [root];
   for (let index = 0; index < queue.length; index += 1) {
     const current = queue[index];
     const vectorPayload = join(current, "vector-runtime");
     if (existsSync(join(vectorPayload, "lancedb")) && existsSync(join(vectorPayload, "pyarrow"))) {
-      return vectorPayload;
+      const browserPayload = join(current, "browser-runtime", "ms-playwright");
+      const modelsPayload = join(current, "models");
+      return {
+        vector: vectorPayload,
+        browser: existsSync(browserPayload) ? browserPayload : null,
+        models: existsSync(modelsPayload) ? modelsPayload : null,
+      };
     }
     try {
       for (const entry of readdirSync(current, { withFileTypes: true })) {
@@ -96,11 +102,17 @@ function preinstallRuntimePack() {
   }
   const extractDir = join(appDataDir, "runtime-pack-extract");
   extractArchive(archive, extractDir);
-  const payload = findRuntimePayload(extractDir);
-  if (!payload) {
+  const payloads = findRuntimePayloads(extractDir);
+  if (!payloads) {
     fail(`Runtime pack archive does not contain a vector-runtime payload: ${archive}`);
   }
-  cpSync(payload, join(appDataDir, "vector-runtime"), { recursive: true });
+  cpSync(payloads.vector, join(appDataDir, "vector-runtime"), { recursive: true });
+  if (payloads.browser) {
+    cpSync(payloads.browser, join(appDataDir, "browser-runtime", "ms-playwright"), { recursive: true });
+  }
+  if (payloads.models) {
+    cpSync(payloads.models, join(appDataDir, "models"), { recursive: true });
+  }
 }
 
 function remove(path, options = {}) {
