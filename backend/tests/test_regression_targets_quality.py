@@ -90,7 +90,8 @@ class RegressionTests(unittest.TestCase):
         from discovery import query_gen
 
         class EmptyPlan:
-            queries = []
+            def __init__(self):
+                self.queries = []
 
         profile = {
             "s": "Developpeur IA",
