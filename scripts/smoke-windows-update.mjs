@@ -583,9 +583,12 @@ async function smokeInstalledSidecar(installDir, appDataDir) {
     handshake = await waitForHandshake(child, stdoutLines, stderrLines);
     const health = await readHealth(handshake.port, handshake.token);
     const summary = requireHealth(health);
-    const runtime = await ensureVectorRuntime(handshake.port, handshake.token);
-    const runtimeHealth = await readHealth(handshake.port, handshake.token);
-    const runtimeSummary = requireHealth(runtimeHealth, { vectorRequired: runtime.ready });
+    let runtimeSummary = summary;
+    if (summary.vector !== "ok") {
+      const runtime = await ensureVectorRuntime(handshake.port, handshake.token);
+      const runtimeHealth = await readHealth(handshake.port, handshake.token);
+      runtimeSummary = requireHealth(runtimeHealth, { vectorRequired: runtime.ready });
+    }
     console.log(`Installed sidecar health passed: app=${summary.app}, sqlite=${summary.sqlite}, graph=${summary.graph}, vector=${runtimeSummary.vector || summary.vector}`);
   } finally {
     await stopSidecar(child, handshake);
