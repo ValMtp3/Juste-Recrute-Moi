@@ -240,9 +240,10 @@ def _france_clause(query: str, location: str, remote_pref: str = "any", contract
     if remote_pref == "remote":
         if not any(term in lower for term in ("remote", "télétravail", "teletravail")):
             clauses.append('("télétravail" OR teletravail OR remote)')
-    elif remote_pref in {"any", "hybrid"}:
-        if not any(term in lower for term in ("remote", "télétravail", "teletravail", "hybride", "hybrid")):
-            clauses.append('("télétravail" OR teletravail OR remote OR hybride OR hybrid)')
+    elif remote_pref in {"any", "hybrid"} and not any(
+        term in lower for term in ("remote", "télétravail", "teletravail", "hybride", "hybrid")
+    ):
+        clauses.append('("télétravail" OR teletravail OR remote OR hybride OR hybrid)')
 
     contract_terms = {
         "CDI": "CDI",
