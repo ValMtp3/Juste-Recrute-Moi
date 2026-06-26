@@ -13,24 +13,14 @@ const files = [
     read: jsonVersion,
     write: writeJsonVersion,
   },
-  {
-    name: "package-lock.json",
-    path: join(repoRoot, "package-lock.json"),
-    read: jsonVersion,
-    write: writeJsonVersion,
-  },
+
   {
     name: "website/package.json",
     path: join(repoRoot, "website", "package.json"),
     read: jsonVersion,
     write: writeJsonVersion,
   },
-  {
-    name: "website/package-lock.json",
-    path: join(repoRoot, "website", "package-lock.json"),
-    read: jsonVersion,
-    write: writeJsonVersion,
-  },
+
   {
     name: "src-tauri/tauri.conf.json",
     path: join(repoRoot, "src-tauri", "tauri.conf.json"),
