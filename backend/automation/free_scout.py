@@ -3,7 +3,7 @@ import asyncio
 import re
 import threading
 from contextvars import ContextVar
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -319,6 +319,7 @@ def run(
     kind_filter: str | None = None,
     max_requests: int = 20,
     min_signal_score: int = MIN_DEFAULT_QUALITY,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> list[dict]:
     errors: list[str] = []
     error_token = _ERROR_SINK.set(errors)
@@ -360,7 +361,9 @@ def run(
     leads: list[dict] = []
     seen: set[str] = set()
 
-    for target in all_targets[:cap]:
+    for i, target in enumerate(all_targets[:cap]):
+        if progress_callback:
+            progress_callback(i + 1, min(len(all_targets), cap), target)
         try:
             batch = asyncio.run(_scrape_target(target))
             usage["executed"] += 1
@@ -372,12 +375,33 @@ def run(
             errors.append(f"{target}: {_source_error_detail(exc)}")
             continue
 
+        target_loc = ""
+        if ":" in target:
+            try:
+                from core.config import FRANCE_LOCATION_HINTS
+            except ImportError:
+                FRANCE_LOCATION_HINTS = set()
+            raw = target.split(":", 1)[1]
+            parts = [p.strip() for p in raw.replace("|", ";").split(";") if p.strip()]
+            for part in parts:
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    if k.strip().lower() in {"lieu", "location", "where", "aroundquery"}:
+                        target_loc = v.strip()
+                        break
+            if not target_loc and parts and "=" not in parts[0]:
+                kw = parts[0].lower()
+                for hint in FRANCE_LOCATION_HINTS:
+                    if hint in kw.split():
+                        target_loc = hint
+                        break
+
         for item in batch:
             if wanted and item.get("kind") != wanted:
                 usage["filtered"] += 1
                 continue
             item = rank_lead_by_feedback(item)
-            quality = evaluate_lead_quality(item, min_quality=min_score)
+            quality = evaluate_lead_quality(item, min_quality=min_score, target_location=target_loc)
             item = attach_quality_metadata(item, quality)
             if not quality.get("accepted"):
                 usage["filtered"] += 1

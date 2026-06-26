@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 
 DEFAULT_JOB_TARGETS = [
-    "france_travail:developpeur;lieu=France;range=0-149",
+    "france_travail:developpeur;lieu=France;range=0-49",
     "site:hellowork.com/fr-fr/emplois France",
     "site:cadremploi.fr/emploi France",
     "site:meteojob.com/jobs France",
@@ -41,7 +41,7 @@ INDIA_JOB_TARGETS = [
 ]
 
 FRANCE_JOB_TARGETS = [
-    "france_travail:developpeur;lieu=France;range=0-149",
+    "france_travail:developpeur;lieu=France;range=0-49",
     "site:hellowork.com/fr-fr/emplois France",
     "site:cadremploi.fr/emploi France",
     "site:meteojob.com/jobs France",
@@ -284,7 +284,7 @@ def france_travail_target_from_plain(parts: list[str], fallback_location: str = 
     if intent.contract:
         suffix += f";typeContrat={intent.contract}"
     location = _clean_france_travail_value(location, "France")
-    return f"france_travail:{query};lieu={location};range=0-149{suffix}"
+    return f"france_travail:{query};lieu={location};range=0-49{suffix}"
 
 
 def job_market_focus(value) -> str:
@@ -306,13 +306,13 @@ def _france_targets_from_intent(search_text: str, fallback_location: str = "Fran
     if target:
         return [target, *FRANCE_JOB_TARGETS[1:]]
     if fallback_location and fallback_location.lower() != "france":
-        return [f"france_travail:developpeur;lieu={_clean_france_travail_value(fallback_location, 'France')};range=0-149", *FRANCE_JOB_TARGETS[1:]]
+        return [f"france_travail:developpeur;lieu={_clean_france_travail_value(fallback_location, 'France')};range=0-49", *FRANCE_JOB_TARGETS[1:]]
     return list(FRANCE_JOB_TARGETS)
 
 
 def job_targets(
     raw: str,
-    market_focus: str = "france",
+    market_focus: str = "global",
     *,
     search_text: str = "",
     location: str = "",

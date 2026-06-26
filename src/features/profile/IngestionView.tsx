@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import Icon from "../../shared/components/Icon";
 import type { ApiFetch, View } from "../../types";
 import { emitAppEvent } from "../../shared/lib/appEvents";
+import { ONBOARDING_KEY } from "../../shared/lib/leadUtils";
 
 type ResultStats = {
   skills?: number;
@@ -205,6 +206,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
       });
       if (r.ok) {
         setStatus("done");
+        localStorage.setItem(ONBOARDING_KEY, "done");
         if (type === "skill")   setSkillForm({ n: "", cat: "technical" });
         if (type === "exp")     setExpForm({ role: "", co: "", period: "", d: "" });
         if (type === "project") setProjForm({ title: "", stack: "", repo: "", impact: "" });
@@ -233,6 +235,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
       const r = await api(`/api/v1/ingest`, { method: "POST", body: fd, timeoutMs: 0 });
       if (r.ok) {
         await r.json().catch(() => ({}));
+        localStorage.setItem(ONBOARDING_KEY, "done");
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
         setStatus("done");
@@ -269,6 +272,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         } : data);
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
+        localStorage.setItem(ONBOARDING_KEY, "done");
         setStatus("idle");
       } else {
         const data = asRecord(await r.json().catch(() => ({})));
@@ -296,6 +300,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         setGithubResult(data);
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
+        localStorage.setItem(ONBOARDING_KEY, "done");
         setStatus("idle");
       } else {
         const data = asRecord(await r.json().catch(() => ({})));
@@ -362,6 +367,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         return;
       }
       setPortfolioResult({ ...portfolioResult, imported: data });
+      localStorage.setItem(ONBOARDING_KEY, "done");
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
       setStatus("idle");
@@ -411,6 +417,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         setJsonResult(data);
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
+        localStorage.setItem(ONBOARDING_KEY, "done");
         setStatus("idle");
       } else {
         const detail = asRecord(data).detail;
@@ -433,6 +440,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
       if (r.ok) {
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
+        localStorage.setItem(ONBOARDING_KEY, "done");
         setStatus("done");
         setRawText("");
       } else {

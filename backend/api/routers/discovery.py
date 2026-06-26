@@ -208,8 +208,18 @@ async def run_free_source_scan(
     kind_filter = "job"
     label = "offres"
     await manager.broadcast({"type": "agent", "event": "free_scout_start", "msg": f"Scan des sources gratuites pour les {label}..."})
+    async def on_progress(current: int, total: int, target: str):
+        await manager.broadcast({
+            "type": "agent",
+            "event": "scan_progress",
+            "msg": f"Exploration de {target} ({current}/{total})...",
+            "current": current,
+            "total": total,
+            "target": target
+        })
+
     try:
-        result = await discovery_service.scan_free_sources(cfg, kind_filter=kind_filter, profile=profile, force=force)
+        result = await discovery_service.scan_free_sources(cfg, kind_filter=kind_filter, profile=profile, force=force, progress_callback=on_progress)
     except Exception as exc:
         # Ferme l'entrée d'activité websocket avant de propager l'erreur, pour
         # éviter qu'un libellé de scan reste affiché sans événement terminal.

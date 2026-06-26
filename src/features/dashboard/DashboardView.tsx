@@ -175,12 +175,16 @@ const SecondaryButton = ({ children, onClick, disabled, danger }: { children: Re
 
 export function DashboardView({
   leads, dueFollowups, logs, setView, openDrawer,
-  scanning, reevaluating, cleaning, progress, onScan, onStopScan, onReevaluate, onStopReevaluate, onCleanup, scanErr, api = null,
+  scanning, reevaluating, cleaning, progress, onScan, scanSpeed, setScanSpeed, onStopScan, onReevaluate, onStopReevaluate, onCleanup, scanErr, api = null,
 }: {
-  leads: Lead[]; dueFollowups: Lead[]; logs: LogLine[]; setView: (v: View) => void; openDrawer: (l: Lead) => void;
+  leads: Lead[]; dueFollowups: Lead[]; logs: LogLine[];
+  setView: (view: View) => void; openDrawer: (lead: Lead) => void;
   scanning: boolean; reevaluating: boolean; cleaning: boolean;
-  progress?: OperationProgress;
-  onScan: () => void; onStopScan: () => void; onReevaluate: () => void; onStopReevaluate: () => void; onCleanup: () => void; scanErr: string | null;
+  progress: OperationProgress;
+  onScan: (speed?: "rapide" | "moyen" | "max") => void;
+  scanSpeed?: "rapide" | "moyen" | "max";
+  setScanSpeed?: (speed: "rapide" | "moyen" | "max") => void;
+  onStopScan: () => void; onReevaluate: () => void; onStopReevaluate: () => void; onCleanup: () => void; scanErr: string | null;
   api?: ApiFetch | null;
 }) {
   const active = leads.filter(l => l.status !== "discarded");
@@ -256,24 +260,64 @@ export function DashboardView({
                   <Icon name="x" size={13} color="var(--bad)" /> Arrêter
                 </button>
               ) : (
-                <button onClick={onScan} disabled={reevaluating || cleaning} style={{
-                  minHeight: 48,
-                  padding: "10px 22px",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  fontWeight: 850,
-                  letterSpacing: "0.10em",
-                  textTransform: "uppercase",
-                  background: reevaluating || cleaning ? "var(--ink-4)" : "var(--ink)",
-                  color: "var(--paper)",
-                  border: "1px solid var(--ink)",
-                  cursor: reevaluating || cleaning ? "not-allowed" : "pointer",
-                  display: "inline-flex",
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button onClick={() => onScan(scanSpeed)} disabled={reevaluating || cleaning} style={{
+                    minHeight: 48,
+                    padding: "10px 22px",
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 850,
+                    letterSpacing: "0.10em",
+                    textTransform: "uppercase",
+                    background: reevaluating || cleaning ? "var(--ink-4)" : "var(--ink)",
+                    color: "var(--paper)",
+                    border: "1px solid var(--ink)",
+                    cursor: reevaluating || cleaning ? "not-allowed" : "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    boxShadow: reevaluating || cleaning ? "none" : "0 4px 12px rgba(0,0,0,0.15)",
+                    transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                  }}>
+                    <Icon name="spark" size={13} color="var(--paper)" /> Lancer le scan
+                  </button>
+                  {setScanSpeed && (
+                    <select
+                      value={scanSpeed || "moyen"}
+                      onChange={e => setScanSpeed(e.target.value as "rapide" | "moyen" | "max")}
+                      disabled={reevaluating || cleaning}
+                      style={{
+                        height: 48,
+                        padding: "0 12px",
+                        borderRadius: 8,
+                        border: "1px solid var(--line)",
+                        background: "var(--paper-2)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "var(--ink-2)",
+                        cursor: reevaluating || cleaning ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <option value="rapide">Rapide (±5)</option>
+                      <option value="moyen">Moyen (±20)</option>
+                      <option value="max">Max (toutes)</option>
+                    </select>
+                  )}
+                </div>
+              )}
+              {!scanning && scanSpeed === "max" && (
+                <div style={{
+                  fontSize: 11,
+                  color: "var(--bad)",
+                  marginTop: 8,
+                  display: "flex",
                   alignItems: "center",
-                  gap: 8,
+                  gap: 6,
+                  fontWeight: 500,
                 }}>
-                  <Icon name="search" size={13} color="var(--paper)" /> Scanner les sources
-                </button>
+                  <Icon name="alert-circle" size={13} color="var(--bad)" />
+                  <span>Attention : le mode Max (150 offres/source) augmente le risque de bannissement par les fournisseurs d'API.</span>
+                </div>
               )}
               <SecondaryButton onClick={() => setView("apply")} disabled={busy}>
                 <Icon name="spark" size={13} /> Adapter une offre
@@ -282,6 +326,22 @@ export function DashboardView({
                 Pipeline <Icon name="arrow-right" size={13} />
               </SecondaryButton>
             </div>
+            {scanning && progress.active && progress.total > 0 && (
+              <div style={{ marginTop: 16, maxWidth: 560 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--ink-3)", marginBottom: 6 }}>
+                  <span>{progress.current || "Recherche..."}</span>
+                  <span className="mono">{progress.completed} / {progress.total}</span>
+                </div>
+                <div style={{ height: 4, background: "var(--line)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%",
+                    background: "var(--ink)",
+                    width: `${Math.min(100, Math.max(0, (progress.completed / progress.total) * 100))}%`,
+                    transition: "width 0.3s ease-out"
+                  }} />
+                </div>
+              </div>
+            )}
             {scanErr && <div style={{ marginTop: 10, fontSize: 12, color: "var(--bad)", fontWeight: 700 }}>{scanErr}</div>}
           </div>
 

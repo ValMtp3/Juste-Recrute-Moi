@@ -35,11 +35,24 @@ def _parse_target(target: str) -> dict[str, Any]:
 def _search_payload(target: str) -> dict[str, Any]:
     parsed = _parse_target(target)
     keywords = parsed.get("motsCles") or parsed.get("q") or parsed.get("query") or "developpeur"
+    try:
+        from data.repository import create_repository
+        db_settings = create_repository().settings.get_settings()
+        max_reqs = int(db_settings.get("free_source_max_requests", "20"))
+    except Exception:
+        max_reqs = 20
+
+    default_limit = 50
+    if max_reqs <= 5:
+        default_limit = 15
+    elif max_reqs > 20:
+        default_limit = 150
+
     # L'API APEC attend un POST GraphQL ou REST specifique, ici on fait le POST simple
     payload = {
         "motsCles": keywords,
         # Lieux, fonctions etc. pourraient être rajoutés ici
-        "pagination": {"activeIndex": 1, "selectedPage": 0, "limit": 50}
+        "pagination": {"activeIndex": 1, "selectedPage": 0, "limit": default_limit}
     }
     return payload
 

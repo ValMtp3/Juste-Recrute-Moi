@@ -2,14 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import Icon from "../../shared/components/Icon";
 import { LeadFilterBar } from "./components/LeadFilterBar";
 import { PipelineJobCard, PipelineSkeleton } from "./components/JobCard";
-import type { ApiFetch, Lead, LeadSort, PipelineTab, SeniorityFilter, View } from "../../types";
+import type { ApiFetch, Lead, LeadSort, OperationProgress, PipelineTab, SeniorityFilter, View } from "../../types";
 import { PAGE_SIZE, leadSearchText, sortLeads, seniorityMatches, uniqueLeadValues } from "../../shared/lib/leadUtils";
 import { emitAppEvent } from "../../shared/lib/appEvents";
 
-export function PipelineView({ leads, openDrawer, deleteLead, port, api, scanning, reevaluating, cleaning, onScan, onReevaluate, onStopReevaluate, onCleanup, setView, loading, error, tab }: {
+export function PipelineView({ leads, openDrawer, deleteLead, port, api, scanning, reevaluating, cleaning, progress, onScan, scanSpeed, setScanSpeed, onReevaluate, onStopReevaluate, onCleanup, setView, loading, error, tab }: {
   leads: Lead[]; openDrawer: (l: Lead) => void;
   deleteLead: (id: string) => void; port: number | null; api: ApiFetch | null;
-  scanning: boolean; reevaluating: boolean; cleaning: boolean; onScan: () => void; onReevaluate: () => void; onStopReevaluate: () => void; onCleanup: () => void; setView: (view: View) => void;
+  scanning: boolean; reevaluating: boolean; cleaning: boolean;
+  progress: OperationProgress;
+  onScan: (speed?: "rapide" | "moyen" | "max") => void;
+  scanSpeed?: "rapide" | "moyen" | "max";
+  setScanSpeed?: (speed: "rapide" | "moyen" | "max") => void;
+  onReevaluate: () => void; onStopReevaluate: () => void; onCleanup: () => void; setView: (view: View) => void;
   loading: boolean; error: string | null;
   tab: PipelineTab;
 }) {
@@ -157,6 +162,22 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
             <span>{error || exportErr || bulkNotice?.message || busyLabel}</span>
           </div>
         )}
+        {scanning && progress.active && progress.total > 0 && (
+          <div style={{ marginTop: 12, marginBottom: 12, maxWidth: 560 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--ink-3)", marginBottom: 6 }}>
+              <span>{progress.current || "Recherche..."}</span>
+              <span className="mono">{progress.completed} / {progress.total}</span>
+            </div>
+            <div style={{ height: 4, background: "var(--line)", borderRadius: 2, overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                background: "var(--ink)",
+                width: `${Math.min(100, Math.max(0, (progress.completed / progress.total) * 100))}%`,
+                transition: "width 0.3s ease-out"
+              }} />
+            </div>
+          </div>
+        )}
 
         <LeadFilterBar
           search={search}
@@ -245,10 +266,49 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
                  </button>
                ) : (
                  <>
-                   <button className="btn btn-accent" onClick={onScan} disabled={scanning || reevaluating || cleaning || loading}>
-                     <Icon name="search" size={13} color="#fff" /> Scanner maintenant
-                   </button>
-                   <button className="btn" onClick={() => setView("apply")}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, justifyContent: "center", alignItems: "center" }}>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center", alignItems: "center" }}>
+                      <button className="btn btn-accent" onClick={() => onScan(scanSpeed)} disabled={scanning || reevaluating || cleaning || loading}>
+                        <Icon name="search" size={13} color="#fff" /> Scanner maintenant
+                      </button>
+                      {setScanSpeed && (
+                        <select
+                          value={scanSpeed || "moyen"}
+                          onChange={e => setScanSpeed(e.target.value as "rapide" | "moyen" | "max")}
+                          disabled={scanning || reevaluating || cleaning || loading}
+                          style={{
+                            height: 32,
+                            padding: "0 8px",
+                            borderRadius: 6,
+                            border: "1px solid var(--line)",
+                            background: "var(--paper)",
+                            fontSize: 12,
+                            color: "var(--ink)",
+                            cursor: scanning || reevaluating || cleaning ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          <option value="rapide">Rapide (±5)</option>
+                          <option value="moyen">Moyen (±20)</option>
+                          <option value="max">Max (toutes)</option>
+                        </select>
+                      )}
+                    </div>
+                    {!scanning && scanSpeed === "max" && (
+                      <div style={{
+                        fontSize: 11,
+                        color: "var(--bad)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        fontWeight: 500,
+                      }}>
+                        <Icon name="alert-circle" size={12} color="var(--bad)" />
+                        <span>Attention : le mode Max (150 offres/source) augmente le risque de bannissement par les API.</span>
+                      </div>
+                    )}
+                  </div>
+                  <button className="btn" onClick={() => setView("apply")}>
                      <Icon name="spark" size={13} /> Adapter une offre
                    </button>
                  </>

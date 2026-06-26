@@ -130,9 +130,28 @@ def _parse_target(target: str) -> dict[str, str]:
 
 def _search_params(target: str) -> dict[str, str]:
     parsed = _parse_target(target)
+    try:
+        from data.repository import create_repository
+        db_settings = create_repository().settings.get_settings()
+        max_reqs = int(db_settings.get("free_source_max_requests", "20"))
+    except Exception:
+        max_reqs = 20
+
+    default_range = "0-49"
+    if max_reqs <= 5:
+        default_range = "0-19"
+    elif max_reqs > 20:
+        default_range = "0-149"
+
+    target_range = parsed.get("range")
+    if not target_range or target_range == "0-49":
+        range_val = default_range
+    else:
+        range_val = target_range
+
     params = {
         "motsCles": parsed.get("motsCles") or parsed.get("q") or parsed.get("query") or "developpeur",
-        "range": parsed.get("range") or "0-49",
+        "range": range_val,
     }
     mapping = {
         "lieu": "lieu",

@@ -74,6 +74,7 @@ class DiscoveryService:
         kind_filter: str | None = None,
         profile: dict | None = None,
         force: bool = False,
+        progress_callback: Any | None = None,
     ) -> DiscoveryRunResult:
         if not force and not free_sources_enabled(cfg):
             return DiscoveryRunResult()
@@ -90,6 +91,11 @@ class DiscoveryService:
                 message = "Scan des sources gratuites ignoré : ajoutez un poste cible, des compétences, des cibles source ou une liste d'entreprises."
             return DiscoveryRunResult(errors=[message])
 
+        loop = asyncio.get_running_loop()
+        def sync_progress(current: int, total: int, target: str):
+            if progress_callback:
+                asyncio.run_coroutine_threadsafe(progress_callback(current, total, target), loop)
+
         result = await asyncio.to_thread(
             run_free_scout,
             raw_targets=_filter_free_targets_for_market(raw_targets, cfg.get("job_market_focus", "france")),
@@ -100,6 +106,7 @@ class DiscoveryService:
             kind_filter=kind_filter or "job",
             max_requests=int_cfg(cfg, "free_source_max_requests", 20, 1, 80),
             min_signal_score=int_cfg(cfg, "free_source_min_signal_score", 60, 0, 100),
+            progress_callback=sync_progress,
         )
         return DiscoveryRunResult(
             leads=result.leads,

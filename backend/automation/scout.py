@@ -793,7 +793,30 @@ def run(
             "is_fresh": _is_fresh_lead(item),
         }
         item = {**item, "source_meta": {**raw_meta, **source_meta}}
-        quality = evaluate_lead_quality(item, min_quality=min_quality)
+
+        target_str = raw_meta.get("source_target", "")
+        target_loc = ""
+        if target_str and ":" in target_str:
+            try:
+                from core.config import FRANCE_LOCATION_HINTS
+            except ImportError:
+                FRANCE_LOCATION_HINTS = set()
+            raw = target_str.split(":", 1)[1]
+            parts = [p.strip() for p in raw.replace("|", ";").split(";") if p.strip()]
+            for part in parts:
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    if k.strip().lower() in {"lieu", "location", "where", "aroundquery"}:
+                        target_loc = v.strip()
+                        break
+            if not target_loc and parts and "=" not in parts[0]:
+                kw = parts[0].lower()
+                for hint in FRANCE_LOCATION_HINTS:
+                    if hint in kw.split():
+                        target_loc = hint
+                        break
+
+        quality = evaluate_lead_quality(item, min_quality=min_quality, target_location=target_loc)
         item = attach_quality_metadata(item, quality)
         if not quality.get("accepted"):
             usage["filtered"] += 1

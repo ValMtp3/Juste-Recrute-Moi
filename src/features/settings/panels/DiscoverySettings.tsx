@@ -240,11 +240,11 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
                 </LabelledField>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
-                  <LabelledField label="Requêtes gratuites" hint="par scan">
+                  <LabelledField label="Nb max. de sources" hint="par scan">
                     <input type="number" min={1} max={80} value={cfg.free_source_max_requests} onChange={set("free_source_max_requests")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
-                  <LabelledField label="Signal gratuit min." hint="0-100">
+                  <LabelledField label="Score qualité min." hint="Filtrage IA (0-100)">
                     <input type="number" min={0} max={100} value={cfg.free_source_min_signal_score} onChange={set("free_source_min_signal_score")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>

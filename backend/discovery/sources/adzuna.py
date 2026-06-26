@@ -46,10 +46,27 @@ def _parse_target(target: str) -> dict[str, str]:
 def _search_params(target: str) -> dict[str, str]:
     parsed = _parse_target(target)
     app_id, api_key = _env_client()
+    try:
+        from data.repository import create_repository
+        db_settings = create_repository().settings.get_settings()
+        max_reqs = int(db_settings.get("free_source_max_requests", "20"))
+    except Exception:
+        max_reqs = 20
+
+    default_results = "50"
+    if max_reqs <= 5:
+        default_results = "15"
+    elif max_reqs > 20:
+        default_results = "150"
+
+    results_val = parsed.get("results")
+    if not results_val or results_val == "50":
+        results_val = default_results
+
     params = {
         "app_id": app_id,
         "app_key": api_key,
-        "results_per_page": parsed.get("results") or "50",
+        "results_per_page": results_val,
         "what": parsed.get("what") or parsed.get("q") or parsed.get("query") or "developpeur",
         "where": parsed.get("where") or parsed.get("location") or parsed.get("lieu") or "France",
         "content-type": "application/json",

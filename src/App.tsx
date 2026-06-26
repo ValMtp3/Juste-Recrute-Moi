@@ -84,6 +84,7 @@ export default function App() {
     scanning, setScanning, reevaluating, setReevaluating, cleaning, setCleaning,
     scanErr, setScanErr, closeDrawer, focusApplyView, openSettings, openSetupGuide,
   } = useAppShellState();
+  const [scanSpeed, setScanSpeed] = useState<"rapide" | "moyen" | "max">("moyen");
   // Always pass the live version of the selected lead so the drawer reflects real-time updates
   const liveSel = sel ? (leads.find(l => l.job_id === sel.job_id) ?? sel) : null;
   const [startupSeconds, setStartupSeconds] = useState(0);
@@ -149,10 +150,18 @@ export default function App() {
     return onAppEvent("cleanup-done", h);
   }, [setCleaning]);
 
-  const onScan = useCallback(async () => {
+  const onScan = useCallback(async (speed?: "rapide" | "moyen" | "max") => {
     if (!port || !api || scanning) return;
     setScanning(true); setScanErr(null);
     try {
+      const selectedSpeed = speed || scanSpeed;
+      let maxRequests = "20";
+      if (selectedSpeed === "rapide") maxRequests = "5";
+      if (selectedSpeed === "max") maxRequests = "80";
+      await api(`/api/v1/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({ free_source_max_requests: maxRequests })
+      });
       const r = await api(`/api/v1/scan`, { method: "POST" });
       if (!r.ok) {
         throw new Error(await responseDetail(r, "Backend injoignable"));
@@ -160,7 +169,7 @@ export default function App() {
     } catch (e: unknown) {
       setScanErr(errorMessage(e, "Le scan a échoué")); setScanning(false);
     }
-  }, [port, api, scanning, setScanErr, setScanning]);
+  }, [port, api, scanning, scanSpeed, setScanErr, setScanning]);
 
   const onStopScan = useCallback(async () => {
     if (!port || !api) return;
@@ -282,8 +291,8 @@ export default function App() {
           />
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--paper)" }}>
             {view === "apply"     && <ErrorBoundary label="Adaptation" api={api ?? undefined}><ApplyJobView port={port} api={api} leads={leads} openDrawer={setSel} initialInput={applyDraft} autoFocus={applyAutoFocus} /></ErrorBoundary>}
-            {view === "dashboard" && <ErrorBoundary label="Tableau de bord" api={api ?? undefined}><DashboardView leads={leads} dueFollowups={dueFollowups} logs={logs} setView={setView} openDrawer={setSel} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} progress={progress} onScan={onScan} onStopScan={onStopScan} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} scanErr={scanErr} api={api} /></ErrorBoundary>}
-            {isPipelineView  && <ErrorBoundary label="Pipeline" api={api ?? undefined}><PipelineView leads={leads} openDrawer={setSel} deleteLead={deleteLead} port={port} api={api} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} onScan={onScan} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} setView={setView} loading={leadsLoading || !port || !api} error={leadsError} tab={pipelineTab} /></ErrorBoundary>}
+            {view === "dashboard" && <ErrorBoundary label="Tableau de bord" api={api ?? undefined}><DashboardView leads={leads} dueFollowups={dueFollowups} logs={logs} setView={setView} openDrawer={setSel} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} progress={progress} onScan={onScan} scanSpeed={scanSpeed} setScanSpeed={setScanSpeed} onStopScan={onStopScan} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} scanErr={scanErr} api={api} /></ErrorBoundary>}
+            {isPipelineView  && <ErrorBoundary label="Pipeline" api={api ?? undefined}><PipelineView leads={leads} openDrawer={setSel} deleteLead={deleteLead} port={port} api={api} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} progress={progress} onScan={onScan} scanSpeed={scanSpeed} setScanSpeed={setScanSpeed} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} setView={setView} loading={leadsLoading || !port || !api} error={leadsError} tab={pipelineTab} /></ErrorBoundary>}
             {view === "graph"     && <ErrorBoundary label="Graphe" api={api ?? undefined}><GraphView stats={stats} setView={setView} /></ErrorBoundary>}
             {view === "activity"  && <ErrorBoundary label="Activité" api={api ?? undefined}><ActivityView logs={logs} setView={setView} /></ErrorBoundary>}
             {view === "profile"   && (api ? <ErrorBoundary label="Profil" api={api ?? undefined}><ProfileView api={api} setView={setView} stats={stats} /></ErrorBoundary> : <BackendUnavailable title="Profil" conn={conn} port={port} />)}

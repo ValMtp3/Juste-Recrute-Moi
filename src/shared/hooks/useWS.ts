@@ -41,6 +41,15 @@ export function nextProgressFromAgentEvent(
   if (event === "eval_start") {
     return { active: true, mode: "scan", total: firstNumber(message), completed: 0, current: "", updatedAt: now };
   }
+  if (event === "scan_progress") {
+    // The backend sends current, total and target directly in the event, but we don't have access to the raw payload here.
+    // However, the message contains: "Exploration de {target} ({current}/{total})..."
+    // We can parse it or change the method signature, but since the frontend expects `message`, we'll parse it like `reeval_scored`.
+    const match = String(message || "").match(/\((\d+)\/(\d+)\)/);
+    const completed = match ? Number(match[1]) : previous.completed;
+    const total = match ? Number(match[2]) : previous.total;
+    return { active: true, mode: "scan", total, completed, current: message ?? "", updatedAt: now };
+  }
   if (event === "eval_scored") {
     return { active: true, mode: "scan", total: previous.total, completed: previous.completed + 1, current: message ?? "", updatedAt: now };
   }
