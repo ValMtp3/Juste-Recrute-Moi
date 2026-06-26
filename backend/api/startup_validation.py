@@ -21,7 +21,7 @@ def france_travail_credentials_missing(cfg: dict) -> bool:
         str(cfg.get("free_source_targets") or ""),
     ]).lower()
     france_travail_enabled = (
-        job_market_focus(cfg.get("job_market_focus", "global")) == "france"
+        job_market_focus(cfg.get("job_market_focus", "france")) == "france"
         or "france_travail:" in raw_targets
     )
     if not france_travail_enabled:
@@ -68,7 +68,7 @@ def configuration_warnings(cfg: dict) -> list[str]:
 
     raw_job_boards = str(cfg.get("job_boards", "") or "")
     if raw_job_boards.strip():
-        for target in job_targets(raw_job_boards, cfg.get("job_market_focus", "global")):
+        for target in job_targets(raw_job_boards, cfg.get("job_market_focus", "france")):
             lower = target.lower()
             if lower.startswith(("site:", "ats:", "france_travail:", "jobspy:", "import:", "github:", "hn:", "reddit:", "http://", "https://")):
                 if lower.startswith(("http://", "https://")) and not urlparse(target).netloc:

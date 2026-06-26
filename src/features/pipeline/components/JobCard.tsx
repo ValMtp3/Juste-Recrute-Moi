@@ -3,7 +3,7 @@ import { openExternalUrl } from "../../../shared/lib/openExternal";
 import Icon from "../../../shared/components/Icon";
 import type { ApiFetch, Lead } from "../../../types";
 import { GENERATION_TIMEOUT_MS } from "../../../api/generation";
-import { getMark, getTone, leadDisplayHeading, leadSeniority, seniorityLabel, seniorityTone } from "../../../shared/lib/leadUtils";
+import { getMark, getTone, leadDisplayHeading, leadSeniority, leadStatusLabel, seniorityLabel, seniorityTone } from "../../../shared/lib/leadUtils";
 import { emitAppEvent } from "../../../shared/lib/appEvents";
 
 const sourceReliability = (lead: Lead) => {
@@ -24,6 +24,7 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
   api?: ApiFetch | null;
 }) {
   const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const desc = lead.description?.trim();
   const signalScore = lead.signal_score || 0;
@@ -38,6 +39,7 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
     e.stopPropagation();
     if (!port || !api) return;
     setGenerating(true);
+    setGenerationError(null);
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
@@ -49,6 +51,7 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
       emitAppEvent("leads-refresh");
     } catch (error) {
       console.error("La génération du dossier a échoué", error);
+      setGenerationError(error instanceof Error ? error.message : "La génération du dossier a échoué");
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
       setGenerating(false);
@@ -148,6 +151,12 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
         </div>
       )}
 
+      {generationError && (
+        <div style={{ fontSize: 11.5, color: "var(--bad)", lineHeight: 1.5, border: "1px solid var(--bad)", background: "var(--bad-soft)", borderRadius: 8, padding: "7px 9px" }}>
+          {generationError}
+        </div>
+      )}
+
       {/* Footer */}
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
         <button
@@ -197,6 +206,7 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
   api?: ApiFetch | null;
 }) {
   const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const signalScore = lead.signal_score || 0;
   const matchScore = lead.score || 0;
@@ -205,6 +215,7 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
   const level = leadSeniority(lead);
   const levelTone = seniorityTone(level);
   const statusTone = getTone(lead.status);
+  const statusLabel = leadStatusLabel(lead.status);
   const display = leadDisplayHeading(lead);
   const urlLabel = lead.url ? lead.url.replace(/^https?:\/\//, "").slice(0, 42) : "Aucune URL source";
   const reliability = sourceReliability(lead);
@@ -213,6 +224,7 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
     e.stopPropagation();
     if (!port || !api) return;
     setGenerating(true);
+    setGenerationError(null);
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
@@ -224,6 +236,7 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
       emitAppEvent("leads-refresh");
     } catch (error) {
       console.error("La génération du dossier a échoué", error);
+      setGenerationError(error instanceof Error ? error.message : "La génération du dossier a échoué");
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
       setGenerating(false);
@@ -241,11 +254,11 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
         <div className="pipeline-job-title-row">
           <div className="pipeline-job-title">
             <span>{display.role}</span>
-            <b>||</b>
+            <b>chez</b>
             <span className="company">{display.company}</span>
           </div>
           <span className="pipeline-status-pill" style={{ background: `var(--${statusTone}-soft)`, color: `var(--${statusTone}-ink)`, borderColor: `var(--${statusTone})` }}>
-            {lead.status || "discovered"}
+            {statusLabel}
           </span>
         </div>
         <div className="pipeline-job-meta">
@@ -277,6 +290,7 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
           </button>
         </div>
         <div className="pipeline-source mono" title={lead.url}>{urlLabel}</div>
+        {generationError && <div className="pipeline-inline-error">{generationError}</div>}
       </div>
     </div>
   );

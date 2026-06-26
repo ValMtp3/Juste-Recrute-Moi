@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import Icon from "../../shared/components/Icon";
 import { LeadFilterBar } from "./components/LeadFilterBar";
 import { PipelineJobCard, PipelineSkeleton } from "./components/JobCard";
-import type { ApiFetch, Lead, LeadSort, PipelineTab, SeniorityFilter } from "../../types";
+import type { ApiFetch, Lead, LeadSort, PipelineTab, SeniorityFilter, View } from "../../types";
 import { PAGE_SIZE, leadSearchText, sortLeads, seniorityMatches, uniqueLeadValues } from "../../shared/lib/leadUtils";
 import { emitAppEvent } from "../../shared/lib/appEvents";
 
-export function PipelineView({ leads, openDrawer, deleteLead, port, api, scanning, reevaluating, cleaning, onReevaluate, onStopReevaluate, onCleanup, loading, error, tab }: {
+export function PipelineView({ leads, openDrawer, deleteLead, port, api, scanning, reevaluating, cleaning, onScan, onReevaluate, onStopReevaluate, onCleanup, setView, loading, error, tab }: {
   leads: Lead[]; openDrawer: (l: Lead) => void;
   deleteLead: (id: string) => void; port: number | null; api: ApiFetch | null;
-  scanning: boolean; reevaluating: boolean; cleaning: boolean; onReevaluate: () => void; onStopReevaluate: () => void; onCleanup: () => void;
+  scanning: boolean; reevaluating: boolean; cleaning: boolean; onScan: () => void; onReevaluate: () => void; onStopReevaluate: () => void; onCleanup: () => void; setView: (view: View) => void;
   loading: boolean; error: string | null;
   tab: PipelineTab;
 }) {
@@ -22,11 +22,16 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [exportErr, setExportErr] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState<"delete" | "applied" | null>(null);
+  const [bulkConfirmDelete, setBulkConfirmDelete] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState<{ tone: "success" | "warning" | "error"; message: string } | null>(null);
 
   useEffect(() => setVisibleCount(PAGE_SIZE), [tab, search, platform, sort, seniority]);
   useEffect(() => {
     setBulkSelecting(false);
     setSelected(new Set());
+    setBulkConfirmDelete(false);
+    setBulkNotice(null);
   }, [tab]);
 
   const platforms = useMemo(() => uniqueLeadValues(leads, "platform"), [leads]);
@@ -64,33 +69,62 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
       else next.add(id);
       return next;
     });
+    setBulkNotice(null);
+    setBulkConfirmDelete(false);
   };
 
   const bulkDelete = async () => {
-    if (!window.confirm(`Supprimer ${selected.size} offres ?`)) return;
+    if (selected.size === 0 || bulkBusy) return;
+    if (!bulkConfirmDelete) {
+      setBulkConfirmDelete(true);
+      setBulkNotice({ tone: "warning", message: `Confirmez la suppression définitive de ${selected.size} offre${selected.size > 1 ? "s" : ""}.` });
+      return;
+    }
     const count = selected.size;
-    const results = await Promise.allSettled([...selected].map(id => Promise.resolve(deleteLead(id))));
-    const failed = results.filter(r => r.status === "rejected").length;
-    if (failed > 0) alert(`${failed} suppressions sur ${count} ont échoué. Rafraîchissement de la liste.`);
-    setSelected(new Set());
-    setBulkSelecting(false);
-    emitAppEvent("leads-refresh");
+    setBulkBusy("delete");
+    setBulkNotice({ tone: "warning", message: `Suppression de ${count} offre${count > 1 ? "s" : ""} en cours...` });
+    try {
+      const results = await Promise.allSettled([...selected].map(id => Promise.resolve(deleteLead(id))));
+      const failed = results.filter(r => r.status === "rejected").length;
+      const done = count - failed;
+      setBulkNotice(failed > 0
+        ? { tone: "error", message: `${failed} suppression${failed > 1 ? "s" : ""} sur ${count} ont échoué. La liste va être rafraîchie.` }
+        : { tone: "success", message: `${done} offre${done > 1 ? "s" : ""} supprimée${done > 1 ? "s" : ""}.` });
+      setSelected(new Set());
+      setBulkSelecting(false);
+      setBulkConfirmDelete(false);
+      emitAppEvent("leads-refresh");
+    } finally {
+      setBulkBusy(null);
+    }
   };
 
   const bulkMarkApplied = async () => {
-    if (!api || selected.size === 0) return;
+    if (!api || selected.size === 0 || bulkBusy) return;
     const ids = [...selected];
-    const results = await Promise.allSettled(ids.map(id => api(`/api/v1/leads/${id}/status`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "applied" }),
-    })));
-    const failed = results.filter(r => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok)).length;
-    if (failed > 0) alert(`${failed} offres sur ${ids.length} n'ont pas pu être marquées comme postulées.`);
-    ids.forEach(job_id => emitAppEvent("lead-updated", { job_id, status: "applied" }));
-    setSelected(new Set());
-    setBulkSelecting(false);
-    emitAppEvent("leads-refresh");
+    setBulkBusy("applied");
+    setBulkNotice({ tone: "warning", message: `Marquage de ${ids.length} offre${ids.length > 1 ? "s" : ""} en postulée${ids.length > 1 ? "s" : ""}...` });
+    try {
+      const results = await Promise.allSettled(ids.map(id => api(`/api/v1/leads/${id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "applied" }),
+      })));
+      const failed = results.filter(r => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok)).length;
+      const succeeded = ids.length - failed;
+      if (failed > 0) {
+        setBulkNotice({ tone: "error", message: `${failed} offre${failed > 1 ? "s" : ""} sur ${ids.length} n'ont pas pu être marquées comme postulées.` });
+      } else {
+        setBulkNotice({ tone: "success", message: `${succeeded} offre${succeeded > 1 ? "s" : ""} marquée${succeeded > 1 ? "s" : ""} comme postulée${succeeded > 1 ? "s" : ""}.` });
+      }
+      ids.forEach(job_id => emitAppEvent("lead-updated", { job_id, status: "applied" }));
+      setSelected(new Set());
+      setBulkSelecting(false);
+      setBulkConfirmDelete(false);
+      emitAppEvent("leads-refresh");
+    } finally {
+      setBulkBusy(null);
+    }
   };
 
   const exportCsv = async () => {
@@ -117,10 +151,10 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
   return (
     <div className="pipeline-page">
       <div className="pipeline-top">
-        {(busyLabel || error || exportErr) && (
-          <div className={`pipeline-notice ${error || exportErr ? "error" : ""}`}>
-            {error || exportErr ? <Icon name="x" size={13} /> : <span className="dot pulse-soft" />}
-            <span>{error || exportErr || busyLabel}</span>
+        {(busyLabel || error || exportErr || bulkNotice) && (
+          <div className={`pipeline-notice ${error || exportErr ? "error" : bulkNotice?.tone || ""}`}>
+            {error || exportErr || bulkNotice?.tone === "error" ? <Icon name="x" size={13} /> : bulkNotice?.tone === "success" ? <Icon name="check" size={13} /> : <span className="dot pulse-soft" />}
+            <span>{error || exportErr || bulkNotice?.message || busyLabel}</span>
           </div>
         )}
 
@@ -144,13 +178,13 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
               </button>
               {bulkSelecting ? (
                 <>
-                  <button className="btn" onClick={bulkMarkApplied} disabled={!api || selected.size === 0 || loading}>
-                    <Icon name="check" size={13} /> Marquer postulées {selected.size}
+                  <button className="btn" onClick={bulkMarkApplied} disabled={!api || selected.size === 0 || loading || Boolean(bulkBusy)}>
+                    <Icon name="check" size={13} /> {bulkBusy === "applied" ? "Marquage..." : `Marquer postulées ${selected.size}`}
                   </button>
-                  <button className="btn" onClick={() => { setBulkSelecting(false); setSelected(new Set()); }}>Annuler</button>
+                  <button className="btn" onClick={() => { setBulkSelecting(false); setSelected(new Set()); setBulkConfirmDelete(false); setBulkNotice(null); }} disabled={Boolean(bulkBusy)}>Annuler</button>
                 </>
               ) : (
-                <button className="btn" onClick={() => setBulkSelecting(true)} disabled={activeTab.leads.length === 0 || loading}>
+                <button className="btn" onClick={() => { setBulkSelecting(true); setBulkNotice(null); }} disabled={activeTab.leads.length === 0 || loading || Boolean(bulkBusy)}>
                   <Icon name="check" size={13} /> Sélectionner
                 </button>
               )}
@@ -168,7 +202,9 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
               </button>
               {tab === "discarded" && (
                 bulkSelecting ? (
-                  <button className="btn danger" onClick={bulkDelete} disabled={selected.size === 0}>Supprimer {selected.size}</button>
+                  <button className="btn danger" onClick={bulkDelete} disabled={selected.size === 0 || Boolean(bulkBusy)}>
+                    {bulkBusy === "delete" ? "Suppression..." : bulkConfirmDelete ? `Confirmer ${selected.size}` : `Supprimer ${selected.size}`}
+                  </button>
                 ) : (
                   <button className="btn" onClick={() => setBulkSelecting(true)} disabled={activeTab.leads.length === 0}>Suppression groupée</button>
                 )
@@ -196,7 +232,28 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
           <div className="pipeline-empty">
             <Icon name={hasFilters ? "filter" : "search"} size={18} />
              <h3>{hasFilters ? "Aucune offre ne correspond à ces filtres" : `Aucune offre ${activeTab.label.toLowerCase()} pour l'instant`}</h3>
-             <p>{hasFilters ? "Efface les filtres ou baisse les seuils de score." : "Lance un scan depuis l'accueil ou colle une offre à adapter pour remplir cette colonne."}</p>
+             <p>{hasFilters ? "Effacez les filtres ou baissez les seuils de score." : "Lancez un scan depuis l'accueil ou collez une offre à adapter pour remplir cette colonne."}</p>
+             <div className="pipeline-empty-actions">
+               {hasFilters ? (
+                 <button className="btn" onClick={() => {
+                   setSearch("");
+                   setPlatform("");
+                   setSeniority("all");
+                   setSort("recommended");
+                 }}>
+                   Effacer les filtres
+                 </button>
+               ) : (
+                 <>
+                   <button className="btn btn-accent" onClick={onScan} disabled={scanning || reevaluating || cleaning || loading}>
+                     <Icon name="search" size={13} color="#fff" /> Scanner maintenant
+                   </button>
+                   <button className="btn" onClick={() => setView("apply")}>
+                     <Icon name="spark" size={13} /> Adapter une offre
+                   </button>
+                 </>
+               )}
+             </div>
           </div>
         ) : (
           <div className="pipeline-list">

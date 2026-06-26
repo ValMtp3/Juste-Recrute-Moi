@@ -403,7 +403,7 @@ async function ensureVectorRuntime(port, token) {
 const explicitSidecar = resolveExplicitSidecar();
 
 if (!explicitSidecar && !existsSync(manifestPath)) {
-  fail(`Sidecar manifest not found at ${manifestPath}. Run npm run build:sidecar first.`);
+  fail(`Sidecar manifest not found at ${manifestPath}. Run pnpm build:sidecar first.`);
 }
 
 const manifest = explicitSidecar ? {} : readJson(manifestPath);

@@ -8,6 +8,12 @@ describe("PipelineView critical UI contracts", () => {
     expect(source).toContain("Aucune offre");
   });
 
+  it("keeps empty-state recovery actions available", () => {
+    expect(source).toContain("Scanner maintenant");
+    expect(source).toContain("Adapter une offre");
+    expect(source).toContain("Effacer les filtres");
+  });
+
   it("keeps reevaluation controls wired", () => {
     expect(source).toContain("onReevaluate");
     expect(source).toContain("onStopReevaluate");
@@ -20,5 +26,15 @@ describe("PipelineView critical UI contracts", () => {
 
   it("keeps lead deletion available from the pipeline", () => {
     expect(source).toContain("deleteLead");
+  });
+
+  it("keeps bulk action feedback inline instead of blocking alerts", () => {
+    expect(source).toContain("bulkNotice");
+    expect(source).toContain("bulkConfirmDelete");
+    expect(source).toContain("Confirmez la suppression définitive");
+    expect(source).toContain("Suppression...");
+    expect(source).toContain("Marquage...");
+    expect(source).not.toContain("window.confirm");
+    expect(source).not.toContain("alert(");
   });
 });

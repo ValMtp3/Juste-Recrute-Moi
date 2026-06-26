@@ -55,8 +55,8 @@ Objectif : un tag `vX.Y.Z` doit correspondre a toutes les versions du depot.
 
 Actions :
 
-- utiliser `npm run version:bump -- X.Y.Z` ;
-- verifier `npm run version:check` en CI ;
+- utiliser `pnpm version:bump -- X.Y.Z` ;
+- verifier `pnpm version:check` en CI ;
 - refuser une release si un fichier versionne diverge du tag.
 
 ## Phase 2 - Builds clairs
@@ -65,9 +65,9 @@ Objectif : separer validation rapide et packaging public.
 
 Commandes attendues :
 
-- `npm run build` pour le frontend ;
-- `npm run build:sidecar` pour le sidecar ;
-- `npm run release:smoke` pour la validation locale ;
+- `pnpm build` pour le frontend ;
+- `pnpm build:sidecar` pour le sidecar ;
+- `pnpm release:smoke` pour la validation locale ;
 - workflows CI tagges pour les installateurs publics.
 
 ## Phase 3 - Sidecar et runtime

@@ -306,7 +306,7 @@ async def _run_scan_inner(
         job_store.update(job.job_id, status="cancelled", progress=100, error=msg)
         return
 
-    market_focus = cfg.get("job_market_focus", "global")
+    market_focus = cfg.get("job_market_focus", "france")
     raw_urls = job_targets(
         cfg.get("job_boards", ""),
         market_focus,

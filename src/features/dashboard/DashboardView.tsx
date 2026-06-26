@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import Icon from "../../shared/components/Icon";
 import type React from "react";
 import type { ApiFetch, Lead, LogLine, OperationProgress, View } from "../../types";
-import { getMark, getTone, leadDisplayHeading, leadSignal } from "../../shared/lib/leadUtils";
+import { getMark, getTone, leadDisplayHeading, leadSignal, leadStatusLabel } from "../../shared/lib/leadUtils";
 import { DebugResetButton } from "../../shared/components/DebugResetButton";
 import { settingsApi } from "../../api/settings";
 
 /**
- * "Ce que tu recherches" — free-text preferences the agent uses to target the
+ * "Ce que vous recherchez" — free-text preferences the agent uses to target the
  * scan and rank matching jobs higher. Loads + saves the job_preferences setting
  * directly (on blur), so it survives restarts and feeds the next scan/evaluation.
  */
@@ -43,9 +43,9 @@ function PreferencesBox({ api }: { api: ApiFetch | null }) {
     <section className="card" style={{ padding: 16, marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
         <div style={{ minWidth: 0 }}>
-          <span className="eyebrow">Ce que tu recherches</span>
+          <span className="eyebrow">Ce que vous recherchez</span>
           <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 3, lineHeight: 1.5 }}>
-            Décris ton poste idéal en français simple : l'agent l'utilise pour <b>cibler la recherche</b> et <b>remonter les offres les plus pertinentes</b>.
+            Décrivez votre poste idéal en français simple : l'agent l'utilise pour <b>cibler la recherche</b> et <b>remonter les offres les plus pertinentes</b>.
           </div>
         </div>
         {status === "saved" && <span className="pill" style={{ background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" }}>Enregistré</span>}
@@ -138,7 +138,7 @@ const LeadRow = ({ lead, openDrawer }: { lead: Lead; openDrawer: (l: Lead) => vo
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 750, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{role}</div>
         <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {company} / {lead.platform || "source"} / {lead.status}
+          {company} / {lead.platform || "source"} / {leadStatusLabel(lead.status)}
         </div>
       </div>
       <span className="mono tabular" style={{
@@ -196,6 +196,22 @@ export function DashboardView({
     .slice(0, 4);
   const busy = scanning || reevaluating || cleaning;
   const latest = logs[0];
+  const hasLeads = leads.length > 0;
+  const heroTitle = scanning
+    ? "Recherche en cours."
+    : reevaluating
+      ? "Re-score en cours."
+      : cleaning
+        ? "Nettoyage en cours."
+        : hasLeads
+          ? "Offres à traiter."
+          : "Prêt à chercher.";
+  const heroSubtitle = hasLeads
+    ? <><b>{leads.length} offres</b> récupérées, <b>{counts.scored}</b> évaluées avec un score, <b>{counts.tailoring + counts.ready} dossiers</b> adaptés.</>
+    : <>Décrivez ce que vous recherchez, vérifiez les sources, puis lancez un premier scan ou collez directement une offre.</>;
+  const nowLabel = busy
+    ? (scanning ? "Scan des sources configurées..." : reevaluating ? "Re-score des offres sauvegardées..." : "Nettoyage des lignes faibles...")
+    : (hasLeads ? "Prêt pour la prochaine action." : "Aucune offre en base pour l'instant.");
 
   return (
     <div className="scroll" style={{ padding: 24, flex: 1, height: "100%", minHeight: 0 }}>
@@ -214,10 +230,10 @@ export function DashboardView({
           <div style={{ minWidth: 0 }}>
             <div className="eyebrow">Agent actif</div>
             <h1 style={{ fontSize: 44, marginTop: 8 }}>
-              La recherche est <span className="italic-serif" style={{ color: "var(--ink-2)" }}>lancée.</span>
+              {heroTitle}
             </h1>
             <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.55, maxWidth: 560, marginTop: 10 }}>
-              <b>{leads.length} offres</b> récupérées, <b>{counts.scored}</b> évaluées avec un score, <b>{counts.tailoring + counts.ready} dossiers</b> adaptés.
+              {heroSubtitle}
             </div>
             <div className="row gap-2" style={{ flexWrap: "wrap", marginTop: 16 }}>
               {scanning ? (
@@ -278,7 +294,7 @@ export function DashboardView({
           }}>
             <div className="eyebrow">Maintenant</div>
             <div style={{ marginTop: 8, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
-              {busy ? (scanning ? "Scan des sources configurées..." : reevaluating ? "Re-score des offres sauvegardées..." : "Nettoyage des lignes faibles...") : "Prêt pour la prochaine action."}
+              {nowLabel}
             </div>
             {progress?.active && (
               <div style={{ marginTop: 12 }}>
@@ -339,7 +355,7 @@ export function DashboardView({
           <div className="col gap-2">
             {queue.length === 0 ? (
               <div style={{ padding: 14, fontSize: 12.5, color: "var(--ink-3)", borderRadius: 8, border: `1px solid ${warmBorder}`, background: warmSurface }}>
-                Lance un scan pour remplir cette liste.
+                Lancez un scan pour remplir cette liste.
               </div>
             ) : queue.map(lead => <LeadRow key={lead.job_id} lead={lead} openDrawer={openDrawer} />)}
           </div>

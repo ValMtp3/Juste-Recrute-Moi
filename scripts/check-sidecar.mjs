@@ -3,7 +3,7 @@
 //
 // M5: fail fast if `tauri build` runs without a packaged sidecar binary.
 // Tauri's externalBin names the file `jhm-sidecar-next-<target-triple><ext>`,
-// produced by `npm run build:sidecar`. A bundle built without it ships a UI
+// produced by `pnpm build:sidecar`. A bundle built without it ships a UI
 // with no working backend, so refuse to proceed.
 
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -36,7 +36,7 @@ function rustTriple() {
 
 function readManifest() {
   if (!existsSync(manifestPath)) {
-    fail("Missing src-tauri/resources/backend/sidecar-manifest.json. Run `npm run build:sidecar` before packaging.");
+    fail("Missing src-tauri/resources/backend/sidecar-manifest.json. Run `pnpm build:sidecar` before packaging.");
   }
   try {
     return JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -51,11 +51,11 @@ const manifest = readManifest();
 const sidecarPath = join(backendDir, expectedBinary);
 
 if (manifest.platformTriple !== triple) {
-  fail(`Sidecar manifest was built for ${manifest.platformTriple || "unknown"}, but this build target is ${triple}. Run \`npm run build:sidecar\`.`);
+  fail(`Sidecar manifest was built for ${manifest.platformTriple || "unknown"}, but this build target is ${triple}. Run \`pnpm build:sidecar\`.`);
 }
 
 if (manifest.sidecarBinary !== expectedBinary) {
-  fail(`Sidecar manifest points at ${manifest.sidecarBinary || "missing"}, expected ${expectedBinary}. Run \`npm run build:sidecar\`.`);
+  fail(`Sidecar manifest points at ${manifest.sidecarBinary || "missing"}, expected ${expectedBinary}. Run \`pnpm build:sidecar\`.`);
 }
 
 if (manifest.sidecarLayout !== "onefile") {
@@ -63,16 +63,16 @@ if (manifest.sidecarLayout !== "onefile") {
 }
 
 if (!existsSync(sidecarPath)) {
-  fail(`No sidecar binary found at src-tauri/resources/backend/${expectedBinary}. Run \`npm run build:sidecar\`.`);
+  fail(`No sidecar binary found at src-tauri/resources/backend/${expectedBinary}. Run \`pnpm build:sidecar\`.`);
 }
 
 const actualBytes = statSync(sidecarPath).size;
 if (actualBytes < minSidecarBytes) {
-  fail(`Sidecar binary is only ${actualBytes} bytes, which looks like a placeholder. Run \`npm run build:sidecar\`.`);
+  fail(`Sidecar binary is only ${actualBytes} bytes, which looks like a placeholder. Run \`pnpm build:sidecar\`.`);
 }
 
 if (Number(manifest.sidecarBinaryBytes || 0) !== actualBytes) {
-  fail(`Sidecar binary size (${actualBytes}) does not match the manifest (${manifest.sidecarBinaryBytes || "missing"}). Run \`npm run build:sidecar\`.`);
+  fail(`Sidecar binary size (${actualBytes}) does not match the manifest (${manifest.sidecarBinaryBytes || "missing"}). Run \`pnpm build:sidecar\`.`);
 }
 
 console.log(`[check-sidecar] sidecar binary present: ${expectedBinary} (${actualBytes} bytes).`);

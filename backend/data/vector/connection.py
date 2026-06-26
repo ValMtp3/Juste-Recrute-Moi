@@ -12,6 +12,7 @@ from core.paths import app_data_dir
 from data.vector.runtime import (
     add_vector_runtime_to_path,
     clear_vector_runtime_modules,
+    is_native_module_reinit_error,
     vector_runtime_files_complete,
     vector_runtime_ready,
 )
@@ -124,8 +125,8 @@ def _runtime_package_installed() -> bool:
 
 
 def _is_pyo3_reinit_error(exc: BaseException) -> bool:
-    """Detect the PyO3 'may only be initialized once per interpreter process' error."""
-    return "initialized once per interpreter" in str(exc).lower()
+    """Detect PyO3 native-extension reinitialization errors."""
+    return is_native_module_reinit_error(exc)
 
 
 def _set_lancedb_module(module):

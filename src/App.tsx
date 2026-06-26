@@ -46,12 +46,27 @@ const connLabel = (conn: string) => ({
   disconnected: "déconnecté",
 }[conn] || conn);
 
+function hasDesktopBridge() {
+  return typeof (window as Window & { __TAURI_INTERNALS__?: { transformCallback?: unknown } }).__TAURI_INTERNALS__?.transformCallback === "function";
+}
+
 function isActionableSubsystemIssue(name: string, value: SubsystemHealth[string]) {
   if (value.status === "ok") return false;
   const message = String(value.error || value.reason || "").toLowerCase();
   if (name === "llm" && message.includes("api key")) return false;
   if (name === "embeddings" && value.mode === "hashing") return false;
   return true;
+}
+
+async function responseDetail(response: Response, fallback: string) {
+  const detail = await response.json()
+    .then((body: { detail?: unknown }) => typeof body.detail === "string" ? body.detail : "")
+    .catch(() => "");
+  return detail || fallback;
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 export default function App() {
@@ -67,7 +82,7 @@ export default function App() {
     view, setView, sel, setSel, showSettings, setShowSettings, showOnboarding,
     setShowOnboarding, applyDraft, setApplyDraft, applyAutoFocus, setApplyAutoFocus,
     scanning, setScanning, reevaluating, setReevaluating, cleaning, setCleaning,
-    scanErr, setScanErr, closeDrawer, focusApplyView, openSettings,
+    scanErr, setScanErr, closeDrawer, focusApplyView, openSettings, openSetupGuide,
   } = useAppShellState();
   // Always pass the live version of the selected lead so the drawer reflects real-time updates
   const liveSel = sel ? (leads.find(l => l.job_id === sel.job_id) ?? sel) : null;
@@ -82,7 +97,7 @@ export default function App() {
   useEffect(() => {
     const h = () => setScanning(false);
     return onAppEvent("scan-done", h);
-  }, []);
+  }, [setScanning]);
 
   useEffect(() => {
     const h = (detail: { scanning?: boolean; reevaluating?: boolean } | undefined) => {
@@ -90,7 +105,7 @@ export default function App() {
       setReevaluating(Boolean(detail?.reevaluating));
     };
     return onAppEvent("backend-status", h);
-  }, []);
+  }, [setReevaluating, setScanning]);
 
   useEffect(() => {
     if (!scanning) return;
@@ -122,17 +137,17 @@ export default function App() {
     if (view !== "apply" || !applyAutoFocus) return;
     const timer = window.setTimeout(() => setApplyAutoFocus(false), 0);
     return () => window.clearTimeout(timer);
-  }, [view, applyAutoFocus]);
+  }, [view, applyAutoFocus, setApplyAutoFocus]);
 
   useEffect(() => {
     const h = () => setReevaluating(false);
     return onAppEvent("reevaluate-done", h);
-  }, []);
+  }, [setReevaluating]);
 
   useEffect(() => {
     const h = () => setCleaning(false);
     return onAppEvent("cleanup-done", h);
-  }, []);
+  }, [setCleaning]);
 
   const onScan = useCallback(async () => {
     if (!port || !api || scanning) return;
@@ -140,24 +155,22 @@ export default function App() {
     try {
       const r = await api(`/api/v1/scan`, { method: "POST" });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Backend injoignable");
+        throw new Error(await responseDetail(r, "Backend injoignable"));
       }
-    } catch (e: any) {
-      setScanErr(e.message || "Le scan a échoué"); setScanning(false);
+    } catch (e: unknown) {
+      setScanErr(errorMessage(e, "Le scan a échoué")); setScanning(false);
     }
-  }, [port, api, scanning]);
+  }, [port, api, scanning, setScanErr, setScanning]);
 
   const onStopScan = useCallback(async () => {
     if (!port || !api) return;
     try {
       const r = await api(`/api/v1/scan/stop`, { method: "POST" });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Arrêt du scan impossible");
+        throw new Error(await responseDetail(r, "Arrêt du scan impossible"));
       }
-    } catch (e: any) {
-      const msg = e.message || "La demande d'arrêt du scan a échoué";
+    } catch (e: unknown) {
+      const msg = errorMessage(e, "La demande d'arrêt du scan a échoué");
       setScanErr(msg);
       wsAddLog(msg, "system", "scan");
     }
@@ -169,26 +182,24 @@ export default function App() {
     try {
       const r = await api(`/api/v1/leads/reevaluate`, { method: "POST" });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "La réévaluation a échoué");
+        throw new Error(await responseDetail(r, "La réévaluation a échoué"));
       }
-    } catch (e: any) {
-      const msg = e.message || "La réévaluation a échoué";
+    } catch (e: unknown) {
+      const msg = errorMessage(e, "La réévaluation a échoué");
       setScanErr(msg); setReevaluating(false);
       wsAddLog(msg, "system", "reeval");
     }
-  }, [port, api, reevaluating, scanning, wsAddLog]);
+  }, [port, api, reevaluating, scanning, setReevaluating, setScanErr, wsAddLog]);
 
   const onStopReevaluate = useCallback(async () => {
     if (!port || !api) return;
     try {
       const r = await api(`/api/v1/leads/reevaluate/stop`, { method: "POST" });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Arrêt de la réévaluation impossible");
+        throw new Error(await responseDetail(r, "Arrêt de la réévaluation impossible"));
       }
-    } catch (e: any) {
-      const msg = e.message || "La demande d'arrêt de la réévaluation a échoué";
+    } catch (e: unknown) {
+      const msg = errorMessage(e, "La demande d'arrêt de la réévaluation a échoué");
       setScanErr(msg);
       wsAddLog(msg, "system", "reeval");
     }
@@ -202,20 +213,19 @@ export default function App() {
     try {
       const r = await api(`/api/v1/leads/cleanup`, { method: "POST" });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Le nettoyage a échoué");
+        throw new Error(await responseDetail(r, "Le nettoyage a échoué"));
       }
       const result = await r.json();
       wsAddLog(`Nettoyage : ${result.candidates ?? 0} lignes masquées après analyse de ${result.scanned ?? 0}`, "system", "cleanup");
       emitAppEvent("leads-refresh");
-    } catch (e: any) {
-      const msg = e.message || "Le nettoyage a échoué";
+    } catch (e: unknown) {
+      const msg = errorMessage(e, "Le nettoyage a échoué");
       setScanErr(msg);
       wsAddLog(msg, "system", "cleanup");
     } finally {
       setCleaning(false);
     }
-  }, [port, api, scanning, reevaluating, cleaning, wsAddLog]);
+  }, [port, api, scanning, reevaluating, cleaning, setCleaning, setScanErr, wsAddLog]);
 
   const deleteLead = useCallback(async (jobId: string) => {
     if (!port || !api) return;
@@ -260,19 +270,24 @@ export default function App() {
           leadCounts={leadCounts}
           collapsed={sidebarCollapsed}
           onToggleCollapsed={() => setSidebarCollapsed(value => !value)}
+          onGuide={openSetupGuide}
           onSettings={() => setShowSettings(true)}
         />
         <div className="app-main">
           <Topbar view={view} progress={progress} />
-          <SubsystemBanner items={degradedSubsystems} />
+          <SubsystemBanner
+            items={degradedSubsystems}
+            onSettings={() => setShowSettings(true)}
+            onActivity={() => setView("activity")}
+          />
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--paper)" }}>
             {view === "apply"     && <ErrorBoundary label="Adaptation" api={api ?? undefined}><ApplyJobView port={port} api={api} leads={leads} openDrawer={setSel} initialInput={applyDraft} autoFocus={applyAutoFocus} /></ErrorBoundary>}
-            {view === "dashboard" && <ErrorBoundary label="Dashboard" api={api ?? undefined}><DashboardView leads={leads} dueFollowups={dueFollowups} logs={logs} setView={setView} openDrawer={setSel} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} progress={progress} onScan={onScan} onStopScan={onStopScan} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} scanErr={scanErr} api={api} /></ErrorBoundary>}
-            {isPipelineView  && <ErrorBoundary label="Pipeline" api={api ?? undefined}><PipelineView leads={leads} openDrawer={setSel} deleteLead={deleteLead} port={port} api={api} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} loading={leadsLoading || !port || !api} error={leadsError} tab={pipelineTab} /></ErrorBoundary>}
-            {view === "graph"     && <ErrorBoundary label="Graphe" api={api ?? undefined}><GraphView stats={stats} /></ErrorBoundary>}
-            {view === "activity"  && <ErrorBoundary label="Activité" api={api ?? undefined}><ActivityView logs={logs} /></ErrorBoundary>}
+            {view === "dashboard" && <ErrorBoundary label="Tableau de bord" api={api ?? undefined}><DashboardView leads={leads} dueFollowups={dueFollowups} logs={logs} setView={setView} openDrawer={setSel} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} progress={progress} onScan={onScan} onStopScan={onStopScan} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} scanErr={scanErr} api={api} /></ErrorBoundary>}
+            {isPipelineView  && <ErrorBoundary label="Pipeline" api={api ?? undefined}><PipelineView leads={leads} openDrawer={setSel} deleteLead={deleteLead} port={port} api={api} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} onScan={onScan} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} setView={setView} loading={leadsLoading || !port || !api} error={leadsError} tab={pipelineTab} /></ErrorBoundary>}
+            {view === "graph"     && <ErrorBoundary label="Graphe" api={api ?? undefined}><GraphView stats={stats} setView={setView} /></ErrorBoundary>}
+            {view === "activity"  && <ErrorBoundary label="Activité" api={api ?? undefined}><ActivityView logs={logs} setView={setView} /></ErrorBoundary>}
             {view === "profile"   && (api ? <ErrorBoundary label="Profil" api={api ?? undefined}><ProfileView api={api} setView={setView} stats={stats} /></ErrorBoundary> : <BackendUnavailable title="Profil" conn={conn} port={port} />)}
-            {view === "ingestion" && (api ? <ErrorBoundary label="Contexte" api={api ?? undefined}><IngestionView api={api} /></ErrorBoundary> : <BackendUnavailable title="Ajout de contexte" conn={conn} port={port} />)}
+            {view === "ingestion" && (api ? <ErrorBoundary label="Contexte" api={api ?? undefined}><IngestionView api={api} setView={setView} /></ErrorBoundary> : <BackendUnavailable title="Ajout de contexte" conn={conn} port={port} />)}
           </div>
         </div>
 
@@ -290,7 +305,10 @@ export default function App() {
               <OnboardingWizard
                 key="onboarding"
                 api={api}
-                onOpenSettings={() => setShowSettings(true)}
+                onOpenSettings={() => {
+                  setShowOnboarding(false);
+                  setShowSettings(true);
+                }}
                 onFinish={(draft) => {
                   localStorage.setItem(ONBOARDING_KEY, "done");
                   setApplyDraft(draft);
@@ -315,27 +333,84 @@ export default function App() {
   );
 }
 
-function SubsystemBanner({ items }: { items: Array<[string, SubsystemHealth[string]]> }) {
+function readableSubsystemName(name: string) {
+  return ({
+    llm: "IA",
+    vector: "Vecteurs",
+    embeddings: "Embeddings",
+    graph: "Graphe",
+    database: "Base locale",
+  } as Record<string, string>)[name] || name;
+}
+
+function readableSubsystemStatus(status: string | undefined) {
+  const normalized = String(status || "unknown").toLowerCase();
+  return ({
+    degraded: "dégradé",
+    disabled: "désactivé",
+    error: "en erreur",
+    missing_key: "clé manquante",
+    ok: "opérationnel",
+    unavailable: "indisponible",
+    unknown: "état inconnu",
+  } as Record<string, string>)[normalized] || normalized.replace(/[_-]+/g, " ");
+}
+
+function readableSubsystemMessage(message: string) {
+  const trimmed = String(message || "").trim();
+  if (!trimmed) return "";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("llm api key is not configured")) {
+    return "Aucune clé IA n'est configurée pour le fournisseur choisi.";
+  }
+  if (lower.includes("lancedb") && lower.includes("n'est pas installé")) {
+    return "Le runtime vectoriel LanceDB n'est pas encore installé.";
+  }
+  return trimmed;
+}
+
+function SubsystemBanner({
+  items,
+  onSettings,
+  onActivity,
+}: {
+  items: Array<[string, SubsystemHealth[string]]>;
+  onSettings: () => void;
+  onActivity: () => void;
+}) {
   if (items.length === 0) return null;
-  const summary = items.map(([name, value]) => `${name}: ${value.status}`).join(" | ");
+  const summary = items.map(([name, value]) => `${readableSubsystemName(name)} : ${readableSubsystemStatus(value.status)}`).join(" | ");
   const detail = items
     .map(([name, value]) => {
-      const message = value.error || value.reason;
-      return message ? `${name}: ${message}` : "";
+      const message = readableSubsystemMessage(String(value.error || value.reason || ""));
+      return message ? `${readableSubsystemName(name)}: ${message}` : "";
     })
     .filter(Boolean)
     .join(" | ");
   return (
     <div className="subsystem-banner" role="status">
-      <strong>Sous-système dégradé</strong>
+      <strong>{items.length > 1 ? "Sous-systèmes à vérifier" : "Sous-système à vérifier"}</strong>
       <span>{summary}</span>
       {detail && <span className="subsystem-banner-detail">{detail}</span>}
+      <div className="subsystem-banner-actions">
+        <button className="btn btn-ghost" onClick={onSettings}>Paramètres</button>
+        <button className="btn btn-ghost" onClick={onActivity}>Activité</button>
+      </div>
     </div>
   );
 }
 
 function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; port: number | null; seconds: number; sidecarError: string | null }) {
   const isSlow = seconds >= 20;
+  const browserOnly = !hasDesktopBridge();
+  const desktopCommand = "pnpm dev:local";
+  const [copiedCommand, setCopiedCommand] = useState(false);
+  const copyDesktopCommand = useCallback(() => {
+    void navigator.clipboard?.writeText(desktopCommand).then(() => {
+      setCopiedCommand(true);
+      window.setTimeout(() => setCopiedCommand(false), 1800);
+    });
+  }, [desktopCommand]);
   return (
     <div style={{
       minHeight: "100vh",
@@ -354,19 +429,43 @@ function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; po
           <div className="spinner" />
           <div>
             <div className="eyebrow">Lancement de Juste Recrute Moi</div>
-            <h1 style={{ fontSize: 30, marginTop: 6 }}>Préparation de ton espace local</h1>
+            <h1 style={{ fontSize: 30, marginTop: 6 }}>Préparation de votre espace local</h1>
           </div>
         </div>
         <p style={{ color: "var(--ink-2)", lineHeight: 1.6, maxWidth: 620 }}>
-          L'application desktop démarre son backend intégré, ouvre la base locale et attend le jeton privé de l'API.
-          Le guide de configuration s'affichera automatiquement dès que le backend sera prêt.
+          {browserOnly
+            ? "Le frontend est ouvert seul dans le navigateur. Pour utiliser les scans, la base locale et la génération, lancez l'application desktop avec son backend intégré."
+            : "L'application desktop démarre son backend intégré, ouvre la base locale et attend le jeton privé de l'API."}
+          {!browserOnly && " Le guide de configuration s'affichera automatiquement dès que le backend sera prêt."}
         </p>
         <div className="row gap-2" style={{ flexWrap: "wrap" }}>
           <span className="pill">Backend : {connLabel(conn)}</span>
           <span className="pill">Port : {port ?? "en attente"}</span>
           <span className="pill">Temps écoulé : {seconds}s</span>
         </div>
-        {isSlow && (
+        {browserOnly && (
+          <div style={{
+            border: "1px solid var(--blue)",
+            borderRadius: 8,
+            padding: 14,
+            background: "var(--blue-soft)",
+            color: "var(--blue-ink)",
+            lineHeight: 1.55,
+          }}>
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>Mode frontend seul détecté</div>
+            <div>
+              Cette page permet de vérifier l'interface, mais les scans, la base locale, les fichiers et les réglages sécurisés passent par l'app desktop.
+            </div>
+            <div className="row gap-2" style={{ marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <span>Lancez l'expérience complète avec</span>
+              <span className="mono" style={{ padding: "6px 10px", borderRadius: 8, background: "var(--paper)", border: "1px solid var(--line)" }}>{desktopCommand}</span>
+              <button className="btn btn-ghost" onClick={copyDesktopCommand} type="button">
+                {copiedCommand ? "Commande copiée" : "Copier la commande"}
+              </button>
+            </div>
+          </div>
+        )}
+        {isSlow && !browserOnly && (
           <div style={{
             border: "1px solid var(--line)",
             borderRadius: 8,
@@ -376,9 +475,14 @@ function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; po
             lineHeight: 1.55,
           }}>
             Le démarrage prend plus de temps que prévu. Si cet écran reste affiché, le backend intégré n'a probablement pas démarré.
-            Sur macOS, ouvre Confidentialité et sécurité &gt; Ouvrir quand même si l'application a été bloquée, puis relance Juste Recrute Moi.
+            Sur macOS, ouvrez Confidentialité et sécurité &gt; Ouvrir quand même si l'application a été bloquée, puis relancez Juste Recrute Moi.
           </div>
         )}
+        <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+          <button className="btn" onClick={() => window.location.reload()}>
+            Réessayer la connexion
+          </button>
+        </div>
         {sidecarError && (
           <div style={{
             border: "1px solid var(--bad)",

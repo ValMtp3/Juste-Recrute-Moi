@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { settingsApi } from "../../../api/settings";
-import type { Cfg } from "./shared";
-import { ApiKeyInput, GLOBAL_MODEL_FIELD, isSubscriptionProvider, KEY_FIELD, ModelChips, ProviderPills, SectionLabel, SubscriptionNote, type SubStatus } from "./shared";
+import { GLOBAL_MODEL_FIELD, isSubscriptionProvider, KEY_FIELD, type Cfg, type SubStatus } from "./config";
+import { ApiKeyInput, ModelChips, ProviderPills, SectionLabel, SubscriptionNote } from "./shared";
 import type { ApiFetch } from "../../../types";
 
 type KeyStatus = "ok" | "invalid_key" | "unreachable" | "not_configured" | "unchecked";
@@ -14,21 +14,30 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
   const [err, setErr] = useState<string | null>(null);
   const [subStatus, setSubStatus] = useState<Record<string, SubStatus>>({});
   const [signingIn, setSigningIn] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
 
   const signIn = async () => {
     setSigningIn(true);
+    setSubscriptionError(null);
     try {
       await settingsApi.subscriptionLogin(api, prov);
       // L'OAuth navigateur se fait à côté ; on attend que le statut passe connecté.
       const start = Date.now();
+      let connected = false;
       while (Date.now() - start < 120000) {
         await new Promise(res => window.setTimeout(res, 2500));
         try {
           const d = await (await settingsApi.subscriptionStatus(api)).json();
           setSubStatus(d || {});
-          if (d?.[prov]?.logged_in) break;
+          if (d?.[prov]?.logged_in) {
+            connected = true;
+            break;
+          }
         } catch { /* keep polling */ }
       }
+      if (!connected) setSubscriptionError("Connexion non confirmée. Terminez l'authentification dans le navigateur, puis relancez la vérification.");
+    } catch (error) {
+      setSubscriptionError(error instanceof Error ? error.message : "La connexion à l'abonnement n'a pas pu démarrer.");
     } finally {
       setSigningIn(false);
     }
@@ -100,7 +109,10 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
                 <ApiKeyInput value={cfg[KEY_FIELD[prov]] as string} onChange={v => onChange(KEY_FIELD[prov], v)} provider={prov} api={api} secretKey={KEY_FIELD[prov]} />
               )}
               {isSubscriptionProvider(prov) && (
-                <SubscriptionNote provider={prov} status={subStatus[prov]} onSignIn={signIn} busy={signingIn} />
+                <>
+                  <SubscriptionNote provider={prov} status={subStatus[prov]} onSignIn={signIn} busy={signingIn} />
+                  {subscriptionError && <div role="alert" style={{ color: "var(--bad)", fontSize: 12, lineHeight: 1.45 }}>{subscriptionError}</div>}
+                </>
               )}
               {prov === "ollama" && (
                 <input type="text" placeholder="http://localhost:11434/v1" value={cfg.ollama_url} onChange={set("ollama_url")} className="mono field-input"

@@ -38,6 +38,10 @@ from discovery.sources.france_travail import scrape_target as _source_scrape_fra
 from discovery.sources.jobspy import scrape_target as _source_scrape_jobspy
 from discovery.sources.reddit import scrape_reddit as _source_scrape_reddit
 from discovery.sources.url_import import scrape_target as _source_scrape_url_import
+from discovery.sources.adzuna import scrape_target as _source_scrape_adzuna
+from discovery.sources.jooble import scrape_target as _source_scrape_jooble
+from discovery.sources.wttj_rss import scrape_target as _source_scrape_wttj
+from discovery.sources.apec import scrape_target as _source_scrape_apec
 from discovery.quality_gate import MIN_DEFAULT_QUALITY, attach_quality_metadata, evaluate_lead_quality
 from core.logging import get_logger
 
@@ -282,6 +286,14 @@ async def _scrape_target(target: str) -> list[dict]:
         return await _source_scrape_france_travail(target)
     if lower.startswith("jobspy:"):
         return await _source_scrape_jobspy(target)
+    if lower.startswith("adzuna:"):
+        return await _source_scrape_adzuna(target)
+    if lower.startswith("jooble:"):
+        return await _source_scrape_jooble(target)
+    if lower.startswith("wttj:"):
+        return await _source_scrape_wttj(target)
+    if lower.startswith("apec:"):
+        return await _source_scrape_apec(target)
     if lower.startswith("import:"):
         return await _source_scrape_url_import(target)
     if lower.startswith(("http://", "https://")):

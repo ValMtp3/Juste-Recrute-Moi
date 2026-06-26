@@ -6,6 +6,7 @@ import {
   getMark,
   isUrlOnlyText,
   leadSearchText,
+  leadStatusLabel,
   leadDisplayHeading,
   normalizeSeniority,
   roleFromUrl,
@@ -147,6 +148,7 @@ describe("lead utility formatting helpers", () => {
       lead({ company: "Acme", title: "Duplicate" }),
     ];
     expect(leadSearchText(items[0])).toContain("fastapi");
+    expect(leadSearchText(lead({ status: "applied" }))).toContain("postulée");
     expect(uniqueLeadValues(items, "company")).toEqual(["Acme", "Beta"]);
   });
 
@@ -159,6 +161,10 @@ describe("lead utility formatting helpers", () => {
 
   it("maps seniority and status labels to stable display values", () => {
     expect(seniorityLabel("beginner")).toBe("Débutant");
+    expect(leadStatusLabel("approved")).toBe("Dossier prêt");
+    expect(leadStatusLabel("discarded")).toBe("Masquée");
+    expect(leadStatusLabel("proposal_sent")).toBe("Proposition envoyée");
+    expect(leadStatusLabel("unknown-status")).toBe("unknown status");
     expect(seniorityTone("fresher")).toBe("teal");
     expect(getTone("accepted")).toBe("teal");
     expect(getTone("discarded")).toBe("red");

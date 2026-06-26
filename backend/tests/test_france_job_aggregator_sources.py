@@ -17,9 +17,9 @@ def test_france_market_targets_prioritize_stable_and_best_effort_sources():
     assert job_market_focus("fr") == "france"
     assert targets[0].startswith("france_travail:")
     assert not any(target.startswith("jobspy:") for target in targets)
-    assert "https://remotive.com/api/remote-jobs" in targets
-    assert "https://jobicy.com/api/v2/remote-jobs?count=50" in targets
-    assert "https://weworkremotely.com/remote-jobs.rss" in targets
+    assert "https://remotive.com/api/remote-jobs" not in targets
+    assert "https://jobicy.com/api/v2/remote-jobs?count=50" not in targets
+    assert "https://weworkremotely.com/remote-jobs.rss" not in targets
     assert any("welcometothejungle" in target for target in targets)
     assert "site:apec.fr/candidat/recherche-emploi.html/emploi France" in targets
     assert "site:cadremploi.fr/emploi France" in targets
@@ -32,9 +32,9 @@ def test_france_market_targets_prioritize_stable_and_best_effort_sources():
 def test_france_market_plain_search_keeps_fallback_sources():
     targets = job_targets("data, paris", "france")
 
-    assert targets[0] == "france_travail:data;lieu=paris;range=0-49"
-    assert "https://remotive.com/api/remote-jobs" in targets
-    assert "https://jobicy.com/api/v2/remote-jobs?count=50" in targets
+    assert targets[0] == "france_travail:data;lieu=Paris;range=0-49"
+    assert "https://remotive.com/api/remote-jobs" not in targets
+    assert "https://jobicy.com/api/v2/remote-jobs?count=50" not in targets
     assert any("welcometothejungle" in target for target in targets)
 
 

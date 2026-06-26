@@ -12,9 +12,9 @@ def _parse_target(target: str) -> dict[str, Any]:
     params: dict[str, Any] = {
         "search_term": "developpeur",
         "location": "France",
-        "results_wanted": 25,
+        "results_wanted": 50,
         "hours_old": 168,
-        "site_name": ["indeed", "google"],
+        "site_name": ["indeed", "google", "glassdoor", "zip_recruiter"],
         "country_indeed": "France",
     }
     parts = [part.strip() for part in raw.replace("|", ";").split(";") if part.strip()]

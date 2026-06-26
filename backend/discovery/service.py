@@ -92,7 +92,7 @@ class DiscoveryService:
 
         result = await asyncio.to_thread(
             run_free_scout,
-            raw_targets=_filter_free_targets_for_market(raw_targets, cfg.get("job_market_focus", "global")),
+            raw_targets=_filter_free_targets_for_market(raw_targets, cfg.get("job_market_focus", "france")),
             raw_watchlist=cfg.get("company_watchlist", ""),
             raw_custom_connectors=cfg.get("custom_connectors", ""),
             raw_custom_headers=cfg.get("custom_connector_headers", ""),
@@ -122,7 +122,7 @@ class DiscoveryService:
         result = await asyncio.to_thread(
             run_x_scan,
             bearer_token=cfg.get("x_bearer_token") or None,
-            raw_queries=cfg.get("x_search_queries", "") or profile_x_queries(profile or {}, cfg.get("job_market_focus", "global")),
+            raw_queries=cfg.get("x_search_queries", "") or profile_x_queries(profile or {}, cfg.get("job_market_focus", "france")),
             raw_watchlist=cfg.get("x_watchlist", ""),
             kind_filter=kind_filter,
             max_requests=int_cfg(cfg, "x_max_requests_per_scan", 5, 1, 50),

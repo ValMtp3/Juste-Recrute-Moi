@@ -7,25 +7,21 @@ from dataclasses import dataclass
 
 
 DEFAULT_JOB_TARGETS = [
-    "hn-hiring",
-    "https://remoteok.com/api",
-    "https://remotive.com/api/remote-jobs",
-    "https://jobicy.com/api/v2/remote-jobs?count=50",
-    "https://jobicy.com/feed/newjobs",
-    "https://weworkremotely.com/remote-jobs.rss",
-    "site:boards.greenhouse.io",
-    "site:jobs.lever.co",
-    "site:jobs.ashbyhq.com",
-    "site:apply.workable.com",
-    "site:wellfound.com/jobs",
-    "site:linkedin.com/jobs",
-    "site:indeed.com/jobs",
-    "site:glassdoor.com/Job",
-    "site:jobs.smartrecruiters.com",
-    "site:workdayjobs.com",
-    "site:naukri.com",
-    "site:instahyre.com",
-    "site:cutshort.io/jobs",
+    "france_travail:developpeur;lieu=France;range=0-149",
+    "site:hellowork.com/fr-fr/emplois France",
+    "site:cadremploi.fr/emploi France",
+    "site:meteojob.com/jobs France",
+    "site:lesjeudis.com/jobs France",
+    "site:linkedin.com/jobs France",
+    "site:fr.indeed.com/emplois France",
+    "site:talent.com/fr France",
+    "site:chooseyourboss.com France",
+    "site:jobs.smartrecruiters.com France",
+    "site:teamtailor.com/jobs France",
+    "site:boards.greenhouse.io France",
+    "site:jobs.lever.co France",
+    "site:jobs.ashbyhq.com France",
+    "site:apply.workable.com France",
 ]
 
 INDIA_JOB_TARGETS = [
@@ -45,24 +41,25 @@ INDIA_JOB_TARGETS = [
 ]
 
 FRANCE_JOB_TARGETS = [
-    "france_travail:developpeur;lieu=France;range=0-49",
-    "https://remotive.com/api/remote-jobs",
-    "https://jobicy.com/api/v2/remote-jobs?count=50",
-    "https://weworkremotely.com/remote-jobs.rss",
-    "site:welcometothejungle.com/fr/jobs France",
+    "france_travail:developpeur;lieu=France;range=0-149",
     "site:hellowork.com/fr-fr/emplois France",
-    "site:apec.fr/candidat/recherche-emploi.html/emploi France",
     "site:cadremploi.fr/emploi France",
     "site:meteojob.com/jobs France",
     "site:lesjeudis.com/jobs France",
     "site:linkedin.com/jobs France",
     "site:fr.indeed.com/emplois France",
+    "site:talent.com/fr France",
+    "site:chooseyourboss.com France",
     "site:jobs.smartrecruiters.com France",
     "site:teamtailor.com/jobs France",
     "site:boards.greenhouse.io France",
     "site:jobs.lever.co France",
     "site:jobs.ashbyhq.com France",
     "site:apply.workable.com France",
+    "adzuna:developpeur;location=France;results=50",
+    "jooble:developpeur;location=France",
+    "wttj:query=developpeur&aroundQuery=France",
+    "apec:developpeur",
 ]
 
 GENERIC_FRANCE_TRAVAIL_ROLES = {
@@ -78,6 +75,10 @@ CONFIGURED_TARGET_PREFIXES = (
     "ats:",
     "france_travail:",
     "jobspy:",
+    "adzuna:",
+    "jooble:",
+    "wttj:",
+    "apec:",
     "import:",
     "github:",
     "hn:",
@@ -283,7 +284,7 @@ def france_travail_target_from_plain(parts: list[str], fallback_location: str = 
     if intent.contract:
         suffix += f";typeContrat={intent.contract}"
     location = _clean_france_travail_value(location, "France")
-    return f"france_travail:{query};lieu={location};range=0-49{suffix}"
+    return f"france_travail:{query};lieu={location};range=0-149{suffix}"
 
 
 def job_market_focus(value) -> str:
@@ -305,13 +306,13 @@ def _france_targets_from_intent(search_text: str, fallback_location: str = "Fran
     if target:
         return [target, *FRANCE_JOB_TARGETS[1:]]
     if fallback_location and fallback_location.lower() != "france":
-        return [f"france_travail:developpeur;lieu={_clean_france_travail_value(fallback_location, 'France')};range=0-49", *FRANCE_JOB_TARGETS[1:]]
+        return [f"france_travail:developpeur;lieu={_clean_france_travail_value(fallback_location, 'France')};range=0-149", *FRANCE_JOB_TARGETS[1:]]
     return list(FRANCE_JOB_TARGETS)
 
 
 def job_targets(
     raw: str,
-    market_focus: str = "global",
+    market_focus: str = "france",
     *,
     search_text: str = "",
     location: str = "",
@@ -398,10 +399,6 @@ def job_targets(
             "lesjeudis",
             "linkedin",
             "indeed",
-            "remoteok",
-            "remotive",
-            "jobicy",
-            "weworkremotely",
             "smartrecruiters",
             "teamtailor",
             "greenhouse",

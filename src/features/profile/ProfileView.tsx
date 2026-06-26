@@ -5,20 +5,36 @@ import type { ApiFetch, GraphStats, View } from "../../types";
 import { applyProfileDeleteMarkers, entryTitle, mergeProfileWithGraphFallback, normalizeProfileResponse, profileDeleteKey, profileDeletePath, profileHasDeleteMarker, removeProfileItem, type ProfileDeleteMarker } from "./profileUtils";
 import { emitAppEvent, onAppEvent } from "../../shared/lib/appEvents";
 
-const stackItems = (stack: any): string[] =>
+type ProfileData = ReturnType<typeof normalizeProfileResponse>;
+type ProfileRecord = Record<string, unknown>;
+
+const asRecord = (value: unknown): ProfileRecord =>
+  value && typeof value === "object" && !Array.isArray(value) ? value as ProfileRecord : {};
+
+const textValue = (value: unknown): string => String(value || "");
+
+const errorMessage = (err: unknown, fallback: string): string =>
+  err instanceof Error && err.message ? err.message : fallback;
+
+const detailFromBody = (body: unknown): string => {
+  const detail = asRecord(body).detail;
+  return typeof detail === "string" ? detail : "";
+};
+
+const stackItems = (stack: unknown): string[] =>
   (Array.isArray(stack) ? stack : String(stack || "").split(","))
-    .map((s: string) => s.trim())
+    .map(s => String(s).trim())
     .filter(Boolean);
 
 const EMPTY_PROFILE_LIST: unknown[] = [];
 const profileList = (value: unknown): unknown[] => Array.isArray(value) ? value : EMPTY_PROFILE_LIST;
 
 export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (v: View) => void; stats?: GraphStats }) {
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [profileErr, setProfileErr] = useState<string | null>(null);
   const [profileNotice, setProfileNotice] = useState<string | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<any>(null);
+  const [editData, setEditData] = useState<ProfileRecord | null>(null);
   const [editingCandidate, setEditingCandidate] = useState(false);
   const [editingIdentity, setEditingIdentity] = useState(false);
   const [candForm, setCandForm] = useState({ n: "", s: "" });
@@ -67,9 +83,9 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       setProfileErr(null);
       setProfileNotice(null);
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Chargement du profil échoué :", err);
-      const message = err?.message || "Chargement du profil échoué";
+      const message = errorMessage(err, "Chargement du profil échoué");
       if (!options?.suppressError) {
         setProfileErr(options?.errorPrefix ? `${options.errorPrefix}: ${message}` : message);
       }
@@ -79,7 +95,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
   useEffect(() => {
-    setProfile((prev: any) => prev ? applyLocalDeletes(mergeProfileWithGraphFallback(prev, stats, { fillEmptyBuckets: false })) : prev);
+    setProfile(prev => prev ? applyLocalDeletes(mergeProfileWithGraphFallback(prev, stats, { fillEmptyBuckets: false })) : prev);
   }, [applyLocalDeletes, stats]);
   useEffect(() => {
     const onProfileRefresh = () => { void fetchProfile(); };
@@ -127,9 +143,9 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
     try {
       const res = await api(profileDeletePath(type, id), { method: "DELETE", timeoutMs: 120000 });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || `Suppression échouée (${res.status})`);
+      if (!res.ok) throw new Error(detailFromBody(body) || `Suppression échouée (${res.status})`);
       const markers = addDeleteMarker(marker);
-      setProfile((prev: any) => prev ? applyProfileDeleteMarkers(removeProfileItem(prev, type, id), markers) : prev);
+      setProfile(prev => prev ? applyProfileDeleteMarkers(removeProfileItem(prev, type, id), markers) : prev);
       const refreshed = await fetchProfile({ suppressError: true });
       if (!refreshed) {
         setProfileErr("Élément supprimé, mais le profil n'a pas pu être rechargé. Il reste masqué localement.");
@@ -137,10 +153,10 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
         setProfileErr(null);
       }
       emitAppEvent("graph-refresh");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Delete error:", err);
       removeDeleteMarker(marker);
-      setProfileErr(err?.message || "Suppression échouée");
+      setProfileErr(errorMessage(err, "Suppression échouée"));
     } finally {
       deleteInFlightRef.current = false;
       setDeletingItem(null);
@@ -154,18 +170,18 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
     }
     try {
       const res = await api(`/api/v1/profile/${type}/${id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editData),
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editData || {}),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || `Enregistrement échoué (${res.status})`);
+      if (!res.ok) throw new Error(detailFromBody(body) || `Enregistrement échoué (${res.status})`);
       setEditId(null);
       setEditData(null);
       setProfileErr(null);
       await fetchProfile();
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
-    } catch (err: any) {
-      setProfileErr(err?.message || "L'enregistrement du profil a échoué");
+    } catch (err: unknown) {
+      setProfileErr(errorMessage(err, "L'enregistrement du profil a échoué"));
     }
   };
 
@@ -175,15 +191,16 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(candForm),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || `Enregistrement échoué (${res.status})`);
-      setProfile((prev: any) => normalizeProfileResponse({ ...(prev || {}), n: body.n ?? candForm.n, s: body.s ?? candForm.s }));
+      if (!res.ok) throw new Error(detailFromBody(body) || `Enregistrement échoué (${res.status})`);
+      const bodyRecord = asRecord(body);
+      setProfile(prev => normalizeProfileResponse({ ...asRecord(prev), n: bodyRecord.n ?? candForm.n, s: bodyRecord.s ?? candForm.s }));
       setEditingCandidate(false);
       setProfileErr(null);
       await fetchProfile({ errorPrefix: "Contexte d'identité enregistré, mais le rafraîchissement a échoué" });
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
-    } catch (err: any) {
-      setProfileErr(err?.message || "L'enregistrement du contexte d'identité a échoué");
+    } catch (err: unknown) {
+      setProfileErr(errorMessage(err, "L'enregistrement du contexte d'identité a échoué"));
     }
   };
 
@@ -193,15 +210,18 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(identityForm),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || `Enregistrement échoué (${res.status})`);
-      setProfile((prev: any) => normalizeProfileResponse({ ...(prev || {}), identity: { ...((prev || {}).identity || {}), ...body } }));
+      if (!res.ok) throw new Error(detailFromBody(body) || `Enregistrement échoué (${res.status})`);
+      setProfile(prev => {
+        const prevRecord = asRecord(prev);
+        return normalizeProfileResponse({ ...prevRecord, identity: { ...asRecord(prevRecord.identity), ...asRecord(body) } });
+      });
       setEditingIdentity(false);
       setProfileErr(null);
       await fetchProfile({ errorPrefix: "Coordonnées enregistrées, mais le rafraîchissement a échoué" });
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
-    } catch (err: any) {
-      setProfileErr(err?.message || "L'enregistrement du contact a échoué");
+    } catch (err: unknown) {
+      setProfileErr(errorMessage(err, "L'enregistrement du contact a échoué"));
     }
   };
 
@@ -219,20 +239,21 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 404) {
-        throw new Error("Le backend actif ne connaît pas encore le nettoyage du profil. Relance l'application ou le backend local pour charger la nouvelle route.");
+        throw new Error("Le backend actif ne connaît pas encore le nettoyage du profil. Relancez l'application ou le backend local pour charger la nouvelle route.");
       }
-      if (!res.ok) throw new Error(body.detail || `Nettoyage échoué (${res.status})`);
-      const cleanedProfile = body.profile ? mergeProfileWithGraphFallback(body.profile, stats, { fillEmptyBuckets: false }) : profile;
+      if (!res.ok) throw new Error(detailFromBody(body) || `Nettoyage échoué (${res.status})`);
+      const bodyRecord = asRecord(body);
+      const cleanedProfile = bodyRecord.profile ? mergeProfileWithGraphFallback(bodyRecord.profile, stats, { fillEmptyBuckets: false }) : profile;
       setProfile(applyLocalDeletes(cleanedProfile, true));
-      const cleanupStats = body.stats || {};
+      const cleanupStats = asRecord(bodyRecord.stats);
       const removed = Number(cleanupStats.removed || 0) + Number(cleanupStats.deduplicated || 0);
       const corrected = Number(cleanupStats.corrected || 0);
       const purged = Number(cleanupStats.purged_graph || 0);
       await fetchProfile({ suppressError: true });
       setProfileNotice(`Nettoyage terminé : ${removed} doublon(s)/ligne(s) vide(s) retiré(s), ${corrected} correction(s) appliquée(s), ${purged} noeud(s) graphe purgé(s).`);
       emitAppEvent("graph-refresh");
-    } catch (err: any) {
-      setProfileErr(err?.message || "Le nettoyage du profil a échoué");
+    } catch (err: unknown) {
+      setProfileErr(errorMessage(err, "Le nettoyage du profil a échoué"));
     } finally {
       setCleaningProfile(false);
     }
@@ -254,22 +275,23 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
     ["city", identity.city, "globe"],
   ].filter(([, value]) => String(value || "").trim());
   const evidenceCount = skills.length + exp.length + projects.length + education.length + certifications.length + achievements.length + identityItems.length;
-  const topStacks = Array.from(new Set<string>(projects.flatMap((p: any) => stackItems(p.stack)))).slice(0, 10);
+  const topStacks = Array.from(new Set<string>(projects.flatMap(p => stackItems(asRecord(p).stack)))).slice(0, 10);
   const visibleStacks = topStacks.slice(0, 6);
   const summary = String(profile?.s || "").replace(/\s+/g, " ").trim();
   const summaryPreview = summary
     ? summary.length > 265 ? `${summary.slice(0, 262).trim()}...` : summary
-    : "Add your name and target role summary above. This becomes the anchor for scoring and document generation.";
+    : "Ajoutez votre nom et un résumé du rôle cible. Ce texte sert d'ancrage au scoring et à la génération des dossiers.";
   const skillItems = useMemo(() => {
     const seen = new Set<string>();
     return skills
-      .map((s: any) => {
-        const label = String(s?.n || s?.name || s?.title || "").trim();
-        const id = String(s?.id || "").trim();
+      .map(s => {
+        const item = asRecord(s);
+        const label = textValue(item.n || item.name || item.title).trim();
+        const id = textValue(item.id).trim();
         const key = (id || label).toLowerCase();
         if (!label || seen.has(key)) return null;
         seen.add(key);
-        return { label, cat: String(s?.cat || s?.category || "general"), id };
+        return { label, cat: textValue(item.cat || item.category || "general"), id };
       })
       .filter(Boolean) as { label: string; cat: string; id: string }[];
   }, [skills]);
@@ -284,20 +306,22 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
   const deletingKey = deletingItem?.key || "";
   const isDeleting = Boolean(deletingItem);
   const isDeletingKey = (key: string) => deletingKey === key;
+  const editField = (key: string) => textValue(editData?.[key]);
+  const setEditField = (key: string, value: string) => setEditData(prev => ({ ...asRecord(prev), [key]: value }));
   const deleteButtonTitle = (key: string, label: string) =>
-    isDeletingKey(key) ? `Deleting ${label}` : isDeleting ? "Wait for the current delete to finish" : `Delete ${label}`;
+    isDeletingKey(key) ? `Suppression de ${label}` : isDeleting ? "Attendez la fin de la suppression en cours" : `Supprimer ${label}`;
   const deleteButtonContent = (key: string) =>
     isDeletingKey(key) ? <span className="spinner-sm profile-delete-spinner" aria-hidden="true" /> : <Icon name="trash" size={14} />;
   const deleteStatus = (key: string) => isDeletingKey(key) ? (
-    <span className="profile-delete-status"><span className="spinner-sm profile-delete-spinner" aria-hidden="true" /> Deleting...</span>
+    <span className="profile-delete-status"><span className="spinner-sm profile-delete-spinner" aria-hidden="true" /> Suppression...</span>
   ) : null;
   const tabNodes = [
-    { id: "skills" as const, label: "Skills", count: skills.length, tone: "blue", icon: "spark" },
-    { id: "experience" as const, label: "Experience", count: exp.length, tone: "orange", icon: "brief" },
-    { id: "projects" as const, label: "Projects", count: projects.length, tone: "pink", icon: "layers" },
-    { id: "education" as const, label: "Education", count: education.length, tone: "green", icon: "file" },
-    { id: "certifications" as const, label: "Certs", count: certifications.length, tone: "purple", icon: "check" },
-    { id: "achievements" as const, label: "Wins", count: achievements.length, tone: "yellow", icon: "trending" },
+    { id: "skills" as const, label: "Compétences", count: skills.length, tone: "blue", icon: "spark" },
+    { id: "experience" as const, label: "Expériences", count: exp.length, tone: "orange", icon: "brief" },
+    { id: "projects" as const, label: "Projets", count: projects.length, tone: "pink", icon: "layers" },
+    { id: "education" as const, label: "Éducation", count: education.length, tone: "green", icon: "file" },
+    { id: "certifications" as const, label: "Certifications", count: certifications.length, tone: "purple", icon: "check" },
+    { id: "achievements" as const, label: "Réussites", count: achievements.length, tone: "yellow", icon: "trending" },
   ];
 
   return (
@@ -443,11 +467,11 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                 ))}
                 <div className="profile-overview-stack">
                   <div>
-                    <span className="eyebrow">Stack Tags</span>
+                    <span className="eyebrow">Tags de stack</span>
                     <strong>{topStacks.length}</strong>
                   </div>
                   <div className="profile-stack-mini">
-                    {visibleStacks.length ? visibleStacks.map(s => <span key={s} className="pill">{s}</span>) : <span className="pill">No project stack yet</span>}
+                    {visibleStacks.length ? visibleStacks.map(s => <span key={s} className="pill">{s}</span>) : <span className="pill">Aucune stack projet</span>}
                   </div>
                 </div>
               </div>
@@ -471,7 +495,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
               <div className="profile-tab-scroll">
                 {activeProfileTab === "skills" && (
                   <div className="profile-skill-grid">
-                    {skillItems.length === 0 && <div className="profile-empty">No skills yet.</div>}
+                    {skillItems.length === 0 && <div className="profile-empty">Aucune compétence enregistrée.</div>}
                     {previewSkills.map((s, idx) => {
                       const tone = ["blue", "yellow", "purple", "green", "orange", "teal"][idx % 6];
                       return (
@@ -495,42 +519,47 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
 
                 {activeProfileTab === "experience" && (
                   <div className="profile-timeline">
-                    {exp.length === 0 && <div className="profile-empty">No experience recorded.</div>}
-                    {previewExp.map((e: any, idx: number) => {
-                      const rowId = String(e?.id || "");
+                    {exp.length === 0 && <div className="profile-empty">Aucune expérience enregistrée.</div>}
+                    {previewExp.map((e: unknown, idx: number) => {
+                      const item = asRecord(e);
+                      const rowId = textValue(item.id);
                       const rowKey = profileDeleteKey(e) || `experience-${idx}`;
+                      const role = textValue(item.role);
+                      const company = textValue(item.co);
+                      const period = textValue(item.period);
+                      const description = textValue(item.d);
                       return (
                       <div key={rowKey} className="profile-timeline-item">
                         {rowId && editId === rowId ? (
                           <div className="col gap-3">
                             <div className="grid-2 gap-3">
-                              <input className="field-input" value={editData.role} placeholder="Role" onChange={v => setEditData({ ...editData, role: v.target.value })} />
-                              <input className="field-input" value={editData.co} placeholder="Company" onChange={v => setEditData({ ...editData, co: v.target.value })} />
+                            <input className="field-input" value={editField("role")} placeholder="Poste" onChange={v => setEditField("role", v.target.value)} />
+                              <input className="field-input" value={editField("co")} placeholder="Entreprise" onChange={v => setEditField("co", v.target.value)} />
                             </div>
-                            <input className="field-input" value={editData.period} placeholder="Period" onChange={v => setEditData({ ...editData, period: v.target.value })} />
-                            <textarea className="field-input" value={editData.d} rows={4} placeholder="Description" onChange={v => setEditData({ ...editData, d: v.target.value })} />
+                            <input className="field-input" value={editField("period")} placeholder="Période" onChange={v => setEditField("period", v.target.value)} />
+                            <textarea className="field-input" value={editField("d")} rows={4} placeholder="Description" onChange={v => setEditField("d", v.target.value)} />
                             <div className="row gap-2">
-                              <button className="btn btn-primary" onClick={() => saveEdit("experience", rowId)}>Save</button>
-                              <button className="btn btn-ghost" onClick={() => setEditId(null)}>Cancel</button>
+                              <button className="btn btn-primary" onClick={() => saveEdit("experience", rowId)}>Enregistrer</button>
+                              <button className="btn btn-ghost" onClick={() => setEditId(null)}>Annuler</button>
                             </div>
                           </div>
                         ) : (
                           <div className="col gap-1">
                             <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
                               <div className="col">
-                                <div className="profile-card-title">{e.role}</div>
+                                <div className="profile-card-title">{role}</div>
                                 <div className="row gap-2" style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 3 }}>
-                                  <span>{e.co}</span><span style={{ color: "var(--ink-4)" }}>-</span><span className="mono" style={{ fontSize: 11 }}>{e.period}</span>
+                                  <span>{company}</span><span style={{ color: "var(--ink-4)" }}>-</span><span className="mono" style={{ fontSize: 11 }}>{period}</span>
                                 </div>
                               </div>
                               <div className="row gap-2">
                                 <span className="profile-count-badge">{idx + 1}</span>
                                 {deleteStatus(`experience:${rowKey}`)}
-                                <button className="btn-icon profile-mini-action" onClick={() => { setEditId(rowId); setEditData({ ...e }); }} disabled={!rowId || isDeletingKey(`experience:${rowKey}`)} title={rowId ? "Edit experience" : "Re-import or refresh graph before editing this row"}><Icon name="edit" size={14} /></button>
+                                <button className="btn-icon profile-mini-action" onClick={() => { setEditId(rowId); setEditData({ ...item }); }} disabled={!rowId || isDeletingKey(`experience:${rowKey}`)} title={rowId ? "Modifier l'expérience" : "Réimportez ou rafraîchissez le graphe avant de modifier cette ligne"}><Icon name="edit" size={14} /></button>
                                 <button className="btn-icon profile-mini-action profile-danger" onClick={() => deleteItem("experience", rowKey)} disabled={isDeleting} title={deleteButtonTitle(`experience:${rowKey}`, entryTitle(e) || "experience")} >{deleteButtonContent(`experience:${rowKey}`)}</button>
                               </div>
                             </div>
-                            {e.d && <div style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6, marginTop: 10, whiteSpace: "pre-wrap" }}>{e.d}</div>}
+                            {description && <div style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6, marginTop: 10, whiteSpace: "pre-wrap" }}>{description}</div>}
                           </div>
                         )}
                       </div>
@@ -542,17 +571,22 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                 {activeProfileTab === "projects" && (
                   <div className="profile-project-grid">
                     {projects.length === 0 && <div className="profile-empty">Aucun projet mappé.</div>}
-                    {previewProjects.map((p: any, idx: number) => {
-                      const rowId = String(p?.id || "");
+                    {previewProjects.map((p: unknown, idx: number) => {
+                      const item = asRecord(p);
+                      const rowId = textValue(item.id);
                       const rowKey = profileDeleteKey(p) || `project-${idx}`;
+                      const title = textValue(item.title);
+                      const impact = textValue(item.impact);
+                      const repo = textValue(item.repo);
+                      const projectStack = stackItems(item.stack);
                       return (
                       <div key={rowKey} className="profile-project-card">
                         {rowId && editId === rowId ? (
                           <div className="col gap-3">
-                            <input className="field-input" value={editData.title} placeholder="Titre" onChange={v => setEditData({ ...editData, title: v.target.value })} />
-                            <input className="field-input" value={editData.stack} placeholder="Stack (séparée par des virgules)" onChange={v => setEditData({ ...editData, stack: v.target.value })} />
-                            <input className="field-input" value={editData.repo} placeholder="URL du repo" onChange={v => setEditData({ ...editData, repo: v.target.value })} />
-                            <textarea className="field-input" value={editData.impact} rows={4} placeholder="Impact" onChange={v => setEditData({ ...editData, impact: v.target.value })} />
+                            <input className="field-input" value={editField("title")} placeholder="Titre" onChange={v => setEditField("title", v.target.value)} />
+                            <input className="field-input" value={editField("stack")} placeholder="Stack (séparée par des virgules)" onChange={v => setEditField("stack", v.target.value)} />
+                            <input className="field-input" value={editField("repo")} placeholder="URL du repo" onChange={v => setEditField("repo", v.target.value)} />
+                            <textarea className="field-input" value={editField("impact")} rows={4} placeholder="Impact" onChange={v => setEditField("impact", v.target.value)} />
                             <div className="row gap-2">
                               <button className="btn btn-primary" onClick={() => saveEdit("project", rowId)}>Enregistrer</button>
                               <button className="btn btn-ghost" onClick={() => setEditId(null)}>Annuler</button>
@@ -561,21 +595,21 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                         ) : (
                           <div className="col gap-1">
                             <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                              <div className="profile-card-title">{p.title}</div>
+                              <div className="profile-card-title">{title}</div>
                               <div className="row gap-2">
                                 <span className="profile-count-badge">{idx + 1}</span>
                                 {deleteStatus(`project:${rowKey}`)}
-                                <button className="btn-icon profile-mini-action" onClick={() => { setEditId(rowId); setEditData({ ...p, stack: stackItems(p.stack).join(", ") }); }} disabled={!rowId || isDeletingKey(`project:${rowKey}`)} title={rowId ? "Edit project" : "Re-import or refresh graph before editing this row"}><Icon name="edit" size={14} /></button>
+                                <button className="btn-icon profile-mini-action" onClick={() => { setEditId(rowId); setEditData({ ...item, stack: projectStack.join(", ") }); }} disabled={!rowId || isDeletingKey(`project:${rowKey}`)} title={rowId ? "Modifier le projet" : "Réimportez ou rafraîchissez le graphe avant de modifier cette ligne"}><Icon name="edit" size={14} /></button>
                                 <button className="btn-icon profile-mini-action profile-danger" onClick={() => deleteItem("project", rowKey)} disabled={isDeleting} title={deleteButtonTitle(`project:${rowKey}`, entryTitle(p) || "project")}>{deleteButtonContent(`project:${rowKey}`)}</button>
                               </div>
                             </div>
                             <div className="row gap-1" style={{ flexWrap: "wrap", margin: "8px 0 10px" }}>
-                              {stackItems(p.stack).map((s: string, i: number) => (
+                              {projectStack.map((s, i) => (
                                 <span key={i} className="pill" style={{ fontSize: 11, padding: "4px 10px", background: "var(--pink-soft)", color: "var(--pink-ink)", border: "1px solid var(--pink)" }}>{s.trim()}</span>
                               ))}
                             </div>
-                            {p.impact && <div style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6 }}>{p.impact}</div>}
-                            {p.repo && <div className="row gap-2" style={{ marginTop: 10 }}><Icon name="link" size={12} color="var(--ink-3)" /><a href={p.repo} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--ink-3)" }}>{p.repo}</a></div>}
+                            {impact && <div style={{ fontSize: 13.5, color: "var(--ink-2)", lineHeight: 1.6 }}>{impact}</div>}
+                            {repo && <div className="row gap-2" style={{ marginTop: 10 }}><Icon name="link" size={12} color="var(--ink-3)" /><a href={repo} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "var(--ink-3)" }}>{repo}</a></div>}
                           </div>
                         )}
                       </div>
@@ -585,8 +619,8 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                 )}
                 {activeProfileTab === "education" && (
                   <div className="profile-skill-grid">
-                    {education.length === 0 && <div className="profile-empty">No education recorded.</div>}
-                    {previewEducation.map((item: any, idx: number) => {
+                    {education.length === 0 && <div className="profile-empty">Aucune formation enregistrée.</div>}
+                    {previewEducation.map((item: unknown, idx: number) => {
                       const rowKey = profileDeleteKey(item);
                       return (
                       <div key={`${entryTitle(item)}-${idx}`} className="profile-list-tile profile-list-tile-green">
@@ -608,8 +642,8 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                 )}
                 {activeProfileTab === "certifications" && (
                   <div className="profile-skill-grid">
-                    {certifications.length === 0 && <div className="profile-empty">No certifications recorded.</div>}
-                    {previewCertifications.map((item: any, idx: number) => {
+                    {certifications.length === 0 && <div className="profile-empty">Aucune certification enregistrée.</div>}
+                    {previewCertifications.map((item: unknown, idx: number) => {
                       const rowKey = profileDeleteKey(item);
                       return (
                       <div key={`${entryTitle(item)}-${idx}`} className="profile-list-tile profile-list-tile-purple">
@@ -631,8 +665,8 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                 )}
                 {activeProfileTab === "achievements" && (
                   <div className="profile-skill-grid">
-                    {achievements.length === 0 && <div className="profile-empty">No achievements recorded.</div>}
-                    {previewAchievements.map((item: any, idx: number) => {
+                    {achievements.length === 0 && <div className="profile-empty">Aucune réussite enregistrée.</div>}
+                    {previewAchievements.map((item: unknown, idx: number) => {
                       const rowKey = profileDeleteKey(item);
                       return (
                       <div key={`${entryTitle(item)}-${idx}`} className="profile-list-tile profile-list-tile-yellow">
@@ -654,7 +688,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
                 )}
                 {listTotal > listShown && (
                   <button className="profile-view-all" onClick={() => setExpandedProfileList(true)}>
-                    View all {activeProfileTab} <Icon name="arrow-right" size={13} />
+                    Voir les {listTotal} éléments <Icon name="arrow-right" size={13} />
                   </button>
                 )}
               </div>

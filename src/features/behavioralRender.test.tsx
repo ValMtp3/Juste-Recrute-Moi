@@ -81,7 +81,7 @@ describe("high-risk component behavioral render coverage", () => {
 
   it("renders profile and ingestion entry points without crashing", () => {
     const profileHtml = renderToStaticMarkup(<ProfileView api={api} setView={vi.fn()} />);
-    const ingestionHtml = renderToStaticMarkup(<IngestionView api={api} />);
+    const ingestionHtml = renderToStaticMarkup(<IngestionView api={api} setView={vi.fn()} />);
 
     expect(profileHtml).toContain("Profil candidat");
     expect(ingestionHtml).toContain("Ajouter du contexte");

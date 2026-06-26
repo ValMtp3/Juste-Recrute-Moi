@@ -45,6 +45,7 @@ type PromptState = "checking" | "waiting" | "required" | "installing" | "restart
 
 const ACTIVE_PROGRESS = new Set(["starting", "downloading", "extracting", "copying", "verifying", "syncing"]);
 const RUNTIME_STATUS_TIMEOUT_MS = 90000;
+const RUNTIME_INSTALL_START_TIMEOUT_MS = 0;
 
 function isActiveProgress(progress?: RuntimeProgress) {
   return Boolean(progress?.active || (progress?.status && ACTIVE_PROGRESS.has(progress.status)));
@@ -66,10 +67,56 @@ function isBackendConnectivityError(message: string) {
     normalized.includes("failed to fetch");
 }
 
+async function responseDetail(response: Response, fallback: string) {
+  const detail = await response.json()
+    .then((body: { detail?: unknown }) => typeof body.detail === "string" ? body.detail : "")
+    .catch(() => "");
+  return detail || fallback;
+}
+
+function readableRuntimeError(message: string) {
+  const trimmed = String(message || "").trim();
+  if (!trimmed) return "Le pack runtime n'a pas pu être vérifié. Réessayez dans un instant.";
+  const normalized = trimmed.toLowerCase();
+  if (isBackendConnectivityError(trimmed)) {
+    return "Le backend local démarre encore.";
+  }
+  if (normalized.includes("runtime check failed with http")) {
+    return "Le backend local n'a pas pu vérifier le pack runtime. Réessayez dans un instant.";
+  }
+  if (normalized.includes("runtime install failed with http 404") || (normalized.includes("404") && normalized.includes("runtime"))) {
+    return "Le fichier du pack runtime est introuvable pour cette version. Installez la dernière release ou réessayez après la mise à jour.";
+  }
+  if (normalized.includes("runtime install failed")) {
+    return "L'installation du pack runtime a échoué. Vérifiez votre connexion, puis relancez l'installation.";
+  }
+  if (normalized.includes("lancedb") && normalized.includes("pas installé")) {
+    return "Le runtime vectoriel LanceDB n'est pas encore installé.";
+  }
+  if (normalized.includes("permission denied") || normalized.includes("eacces")) {
+    return "L'application n'a pas les droits d'écriture pour installer le pack runtime. Déplacez-la dans Applications ou relancez avec les droits nécessaires.";
+  }
+  if (normalized.includes("no space") || normalized.includes("enospc")) {
+    return "Espace disque insuffisant pour installer le pack runtime.";
+  }
+  return trimmed;
+}
+
+function runtimeCheckHttpError(status: number) {
+  if (status === 404) return "La route de vérification du pack runtime est introuvable. Vérifiez que l'application desktop est bien à jour.";
+  return "Le backend local n'a pas pu vérifier le pack runtime. Réessayez dans un instant.";
+}
+
+function runtimeInstallHttpError(status: number) {
+  if (status === 404) return "Le fichier du pack runtime est introuvable pour cette version. Installez la dernière release ou réessayez après la mise à jour.";
+  if (status === 409) return "Une installation du pack runtime est déjà en cours.";
+  return "Le backend local n'a pas accepté l'installation du pack runtime. Réessayez dans un instant.";
+}
+
 function bannerMessage(state: PromptState, payload: RuntimePayload | null, error: string) {
   if (state === "waiting") {
     return error
-      ? `${error} Nouvelle tentative automatique.`
+      ? `${readableRuntimeError(error)} Nouvelle tentative automatique.`
       : "Attente du démarrage du backend local.";
   }
   if (state === "installing") {
@@ -81,13 +128,13 @@ function bannerMessage(state: PromptState, payload: RuntimePayload | null, error
     return message;
   }
   if (state === "restart_required") {
-    return error || payload?.vector?.error || "Runtime pack installed. Restart to finish loading.";
+    return error ? readableRuntimeError(error) : payload?.vector?.error ? readableRuntimeError(payload.vector.error) : "Pack runtime installé. Redémarrez l'application pour terminer le chargement.";
   }
   if (state === "restarting") {
     return "Réouverture de Juste Recrute Moi...";
   }
-  if (error) return error;
-  return "Runtime pack required for semantic matching.";
+  if (error) return readableRuntimeError(error);
+  return "Le pack runtime est nécessaire pour activer le matching sémantique.";
 }
 
 export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
@@ -144,7 +191,7 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
       return;
     }
     if (next.progress?.status === "error") {
-      setError(next.progress.error || next.progress.message || next.install_error || "Runtime install failed.");
+      setError(readableRuntimeError(next.progress.error || next.progress.message || next.install_error || "Runtime install failed."));
       updateState("error");
       return;
     }
@@ -156,7 +203,7 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
     statusRequestRef.current = requestId;
     try {
       const response = await api("/api/v1/runtime/vector", { timeoutMs: RUNTIME_STATUS_TIMEOUT_MS });
-      if (!response.ok) throw new Error(`Runtime check failed with HTTP ${response.status}.`);
+      if (!response.ok) throw new Error(await responseDetail(response, runtimeCheckHttpError(response.status)));
       const next = await response.json() as RuntimePayload;
       if (requestId !== statusRequestRef.current) return;
       applyPayload(next);
@@ -164,7 +211,7 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
       if (requestId !== statusRequestRef.current) return;
       const message = err instanceof Error ? err.message : String(err);
       consecutiveStatusFailuresRef.current += 1;
-      setError(message);
+      setError(readableRuntimeError(message));
       if (stateRef.current === "installing" && consecutiveStatusFailuresRef.current < 4) {
         return;
       }
@@ -199,16 +246,16 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
     setError("");
     setDismissed(false);
     try {
-      const response = await api("/api/v1/runtime/vector/install", { method: "POST", timeoutMs: 30000 });
+      const response = await api("/api/v1/runtime/vector/install", { method: "POST", timeoutMs: RUNTIME_INSTALL_START_TIMEOUT_MS });
       const next = await response.json().catch(() => ({})) as RuntimePayload & { detail?: string };
-      if (!response.ok) throw new Error(next.detail || `Runtime install failed with HTTP ${response.status}.`);
+      if (!response.ok) throw new Error(next.detail || runtimeInstallHttpError(response.status));
       applyPayload(next);
       window.setTimeout(() => {
         void loadStatus();
       }, 600);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setError(message);
+      setError(readableRuntimeError(message));
       updateState(isBackendConnectivityError(message) ? "waiting" : "error");
     } finally {
       installInFlightRef.current = false;
@@ -221,7 +268,7 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
     try {
       await relaunch();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(readableRuntimeError(err instanceof Error ? err.message : String(err)));
       updateState("restart_required");
     }
   };
@@ -253,26 +300,26 @@ export function SemanticRuntimePrompt({ api }: { api: ApiFetch }) {
         <div className="semantic-runtime-banner-actions">
           {needsRestart && (
             <button className="btn btn-accent btn-sm" onClick={() => void restartApp()} disabled={state === "restarting"}>
-              {state === "restarting" ? "Restarting…" : "Restart"}
+              {state === "restarting" ? "Redémarrage..." : "Redémarrer"}
             </button>
           )}
           {canInstall && (
             <button className="btn btn-accent btn-sm" onClick={install} disabled={isBusy}>
-              Install
+              Installer
             </button>
           )}
           {(state === "waiting" || state === "error") && (
             <button className="btn btn-ghost btn-sm" onClick={() => void loadStatus()}>
-              Retry
+              Réessayer
             </button>
           )}
           {!needsRestart && state !== "error" && (
             <button
               className="btn btn-ghost btn-sm semantic-runtime-dismiss"
               onClick={() => setDismissed(true)}
-              aria-label="Dismiss"
+              aria-label="Masquer"
             >
-              ✕
+              ×
             </button>
           )}
         </div>

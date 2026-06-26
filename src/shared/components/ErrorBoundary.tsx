@@ -4,7 +4,7 @@ class ErrorBoundary extends React.Component<
   { children: React.ReactNode; label: string; api?: (path: string, opts?: RequestInit) => Promise<Response> },
   { error: Error | null; retryCount: number }
 > {
-  state = { error: null, retryCount: 0 };
+  state: { error: Error | null; retryCount: number } = { error: null, retryCount: 0 };
 
   static getDerivedStateFromError(e: Error) {
     return { error: e };
@@ -27,17 +27,20 @@ class ErrorBoundary extends React.Component<
   render() {
     if (this.state.error) {
       return (
-        <div style={{
-          display: "flex", flexDirection: "column", alignItems: "center",
-          justifyContent: "center", height: "100%", gap: 12, opacity: 0.6,
-        }}>
-          <p style={{ margin: 0, fontSize: 14 }}>
-            {this.props.label} n'a pas pu se charger.
-          </p>
-          <button onClick={() => this.setState(prev => ({ error: null, retryCount: prev.retryCount + 1 }))}
-            style={{ fontSize: 12 }}>
-            Réessayer
-          </button>
+        <div className="error-boundary-fallback" role="alert">
+          <div className="error-boundary-icon" aria-hidden="true">!</div>
+          <div className="error-boundary-copy">
+            <h3>{this.props.label} n'a pas pu se charger.</h3>
+            <p>{this.state.error.message || "Une erreur d'affichage a interrompu cette vue."}</p>
+          </div>
+          <div className="error-boundary-actions">
+            <button className="btn btn-primary" onClick={() => this.setState(prev => ({ error: null, retryCount: prev.retryCount + 1 }))}>
+              Réessayer
+            </button>
+            <button className="btn btn-ghost" onClick={() => window.location.reload()}>
+              Recharger l'app
+            </button>
+          </div>
         </div>
       );
     }

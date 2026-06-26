@@ -425,7 +425,10 @@ def test_runtime_pack_install_copies_incomplete_vector_runtime(monkeypatch, tmp_
 def test_vector_runtime_ready_requires_real_import(monkeypatch, tmp_path):
     from data.vector import runtime
 
-    monkeypatch.setitem(sys.modules, "numpy", types.SimpleNamespace())
+    for key in ("lancedb", "pyarrow"):
+        monkeypatch.delitem(sys.modules, key, raising=False)
+    existing_numpy = types.SimpleNamespace()
+    monkeypatch.setitem(sys.modules, "numpy", existing_numpy)
     monkeypatch.setattr(runtime, "_runtime_has_any_vector_payload", lambda _path: True)
     monkeypatch.setattr(runtime, "vector_runtime_files_complete", lambda _path: True)
     monkeypatch.setattr(runtime, "add_vector_runtime_to_path", lambda _path: None)
@@ -440,7 +443,28 @@ def test_vector_runtime_ready_requires_real_import(monkeypatch, tmp_path):
 
     assert runtime.vector_runtime_ready(tmp_path / "vector-runtime") is False
     assert runtime._vector_runtime_import_error(tmp_path / "vector-runtime") == "lancedb: ImportError: native module load failed"
-    assert "numpy" not in sys.modules
+    assert sys.modules["numpy"] is existing_numpy
+
+
+def test_vector_runtime_ready_accepts_native_reinit_error(monkeypatch, tmp_path):
+    from data.vector import runtime
+
+    for key in ("lancedb", "pyarrow"):
+        monkeypatch.delitem(sys.modules, key, raising=False)
+    monkeypatch.setattr(runtime, "_runtime_has_any_vector_payload", lambda _path: True)
+    monkeypatch.setattr(runtime, "vector_runtime_files_complete", lambda _path: True)
+    monkeypatch.setattr(runtime, "add_vector_runtime_to_path", lambda _path: None)
+    monkeypatch.setattr(runtime.importlib.util, "find_spec", lambda _name: object())
+
+    def import_module(name: str):
+        if name == "lancedb":
+            raise ImportError("cannot load module more than once per process")
+        return types.SimpleNamespace()
+
+    monkeypatch.setattr(runtime.importlib, "import_module", import_module)
+
+    assert runtime._vector_runtime_import_error(tmp_path / "vector-runtime") == ""
+    assert runtime.vector_runtime_ready(tmp_path / "vector-runtime") is True
 
 
 def test_hash_embedding_fallback_reports_ok(monkeypatch):

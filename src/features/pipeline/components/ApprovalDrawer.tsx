@@ -6,7 +6,7 @@ import Icon from "../../../shared/components/Icon";
 import type { ApiFetch, KeywordCoverage, Lead } from "../../../types";
 import { isAbortLikeError } from "../../../api/client";
 import { GENERATION_TIMEOUT_MS } from "../../../api/generation";
-import { cleanLeadText, getTone, leadDisplayHeading } from "../../../shared/lib/leadUtils";
+import { cleanLeadText, getTone, leadDisplayHeading, leadStatusLabel } from "../../../shared/lib/leadUtils";
 import { emitAppEvent } from "../../../shared/lib/appEvents";
 import { FormReader } from "../../apply/components/FormReader";
 
@@ -32,16 +32,19 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [versionErr, setVersionErr] = useState<string | null>(null);
   const [generatedLead, setGeneratedLead] = useState<Lead | null>(null);
+  const [copyStatus, setCopyStatus] = useState<{ label: string; ok: boolean; message: string } | null>(null);
   type TemplateOption = { id: string; name: string; is_default: boolean };
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [templateId, setTemplateId] = useState<string>("");
   const generateControllerRef = useRef<AbortController | null>(null);
   const pipelineControllerRef = useRef<AbortController | null>(null);
+  const copyStatusTimerRef = useRef<number | null>(null);
   const j = generatedLead ? { ...initialLead, ...generatedLead } : initialLead;
 
   useEffect(() => () => {
     generateControllerRef.current?.abort();
     pipelineControllerRef.current?.abort();
+    if (copyStatusTimerRef.current) window.clearTimeout(copyStatusTimerRef.current);
   }, []);
 
   // Load the saved resume templates so the user can pick which one this job's
@@ -86,6 +89,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
   const visibleGenerateErr = generateErr && !/request\s+cancel(?:led|ed)|abort/i.test(generateErr)
     ? generateErr
     : null;
+  const pipelineMsgIsError = Boolean(pipelineMsg && !pipelineMsg.startsWith("Pipeline lancé"));
   const display = leadDisplayHeading(j);
   const originalTitle = cleanLeadText(j.title);
   const descriptionText = cleanLeadText(j.description);
@@ -300,15 +304,32 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     ["Budget", j.budget || ""],
   ].filter(([, value]) => value);
 
-  const draftBlock = (label: string, value?: string) => value ? (
-    <div key={label} style={{ background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span className="mono" style={{ fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
-        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => navigator.clipboard?.writeText(value)}>Copier</button>
+  const copyDraft = async (label: string, value: string) => {
+    if (copyStatusTimerRef.current) window.clearTimeout(copyStatusTimerRef.current);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyStatus({ label, ok: true, message: `${label} copié.` });
+    } catch {
+      setCopyStatus({ label, ok: false, message: "Copie impossible. Sélectionnez le texte manuellement." });
+    }
+    copyStatusTimerRef.current = window.setTimeout(() => setCopyStatus(null), 1800);
+  };
+
+  const draftBlock = (label: string, value?: string) => {
+    if (!value) return null;
+    const currentCopyStatus = copyStatus?.label === label ? copyStatus : null;
+    return (
+      <div key={label} style={{ background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <span className="mono" style={{ fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => void copyDraft(label, value)}>
+            {currentCopyStatus ? currentCopyStatus.ok ? "Copié" : "Erreur" : "Copier"}
+          </button>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{value}</div>
       </div>
-      <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{value}</div>
-    </div>
-  ) : null;
+    );
+  };
 
   return (
     <div className="drawer-backdrop" onClick={onClose} style={{ zIndex: 100, display: "grid", placeItems: "center", padding: 12, overflow: "hidden" }}>
@@ -321,7 +342,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "18px 22px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, gap: 16, background: "var(--paper)", flexWrap: "wrap" }}>
           <div style={{ minWidth: 0 }}>
             <div className="row gap-2" style={{ marginBottom: 7, flexWrap: "wrap" }}>
-              <span className="pill" style={{ background: `var(--${getTone(j.status)})`, color: `var(--${getTone(j.status)}-ink)` }}>{j.status}</span>
+              <span className="pill" style={{ background: `var(--${getTone(j.status)})`, color: `var(--${getTone(j.status)}-ink)` }}>{leadStatusLabel(j.status)}</span>
               <span className="pill mono" style={{ background: "var(--paper-3)", color: "var(--ink-3)" }}>{j.platform}</span>
               {j.budget && <span className="pill mono" style={{ background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" }}>{j.budget}</span>}
               {(j.signal_score || 0) > 0 && <span className="pill mono" style={{ background: (j.signal_score || 0) >= 80 ? "var(--orange-soft)" : "var(--yellow-soft)", color: (j.signal_score || 0) >= 80 ? "var(--orange-ink)" : "var(--yellow-ink)", border: `1px solid ${(j.signal_score || 0) >= 80 ? "var(--orange)" : "var(--yellow)"}` }}>Signal {j.signal_score}</span>}
@@ -330,7 +351,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
               {j.score > 0 && <span className="pill mono" style={{ background: j.score >= 85 ? "var(--green-soft)" : j.score >= 60 ? "var(--yellow-soft)" : "var(--bad-soft)", color: j.score >= 85 ? "var(--green-ink)" : j.score >= 60 ? "var(--yellow-ink)" : "var(--bad)" }}>Match {j.score}/100</span>}
             </div>
             <h2 style={{ fontSize: 26, fontWeight: 600, overflowWrap: "anywhere" }}>
-              {display.role} <span style={{ color: "var(--ink-3)", fontWeight: 700 }}>||</span> {display.company}
+              {display.role} <span style={{ color: "var(--ink-3)", fontWeight: 700 }}>chez</span> {display.company}
             </h2>
             <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 2 }}>{j.platform}</p>
           </div>
@@ -392,7 +413,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                 }}>{pipelineRunning ? "Pipeline en cours..." : "Lancer le pipeline complet"}</button>
               </div>
             </div>
-            {pipelineMsg && <div style={{ color: pipelineMsg.includes("failed") || pipelineMsg.includes("Server") ? "var(--bad)" : "var(--blue-ink)", fontSize: 12 }}>{pipelineMsg}</div>}
+            {pipelineMsg && <div style={{ color: pipelineMsgIsError ? "var(--bad)" : "var(--blue-ink)", fontSize: 12 }}>{pipelineMsg}</div>}
             <div className="row gap-2" style={{ background: "var(--paper-3)", padding: 5, borderRadius: 10, flexShrink: 0 }}>
               {[
                 ["resume", "CV", resumeReady],
@@ -596,7 +617,9 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                     <div style={{ background: "var(--purple-soft)", border: "1px solid var(--purple)", borderRadius: 10, padding: "10px 12px" }}>
                       <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                         <span className="mono" style={{ fontSize: 10, color: "var(--purple-ink)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>Message court recruteur/fondateur</span>
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => navigator.clipboard?.writeText(j.outreach_reply!)}>Copier</button>
+                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => void copyDraft("Message court", j.outreach_reply!)}>
+                          {copyStatus?.label === "Message court" ? copyStatus.ok ? "Copié" : "Erreur" : "Copier"}
+                        </button>
                       </div>
                       <div style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.65, whiteSpace: "pre-wrap", fontWeight: 500 }}>{j.outreach_reply}</div>
                     </div>
@@ -604,6 +627,11 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                   {draftBlock("Note LinkedIn", j.outreach_dm)}
                   {draftBlock("Email d'approche", j.outreach_email)}
                   {draftBlock("Proposition", j.proposal_draft)}
+                  {copyStatus && (
+                    <div style={{ color: copyStatus.ok ? "var(--green-ink)" : "var(--bad)", fontSize: 11.5 }}>
+                      {copyStatus.message}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

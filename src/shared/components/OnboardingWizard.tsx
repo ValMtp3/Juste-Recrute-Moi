@@ -101,6 +101,18 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
     { name: "Guide de démarrage", detail: "Rouvrez cet assistant depuis la barre latérale pour revérifier clés, sources, pages ou premier dossier." },
   ];
 
+  const selectResumeFile = (nextFile?: File | null) => {
+    if (!nextFile) return;
+    const lower = nextFile.name.toLowerCase();
+    if (!lower.endsWith(".pdf") && !lower.endsWith(".docx") && !lower.endsWith(".txt") && !lower.endsWith(".md")) {
+      setFile(null);
+      setErr("Format non supporté. Importez un CV en PDF, DOCX, TXT ou Markdown.");
+      return;
+    }
+    setFile(nextFile);
+    setErr(null);
+  };
+
   const saveResume = async () => {
     if (!file && !rawResume.trim()) {
       setErr("Importez un fichier CV ou collez le texte du CV.");
@@ -112,7 +124,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
     if (file) fd.append("file", file);
     else fd.append("raw", rawResume.trim());
     try {
-      const r = await api(`/api/v1/ingest`, { method: "POST", body: fd });
+      const r = await api(`/api/v1/ingest`, { method: "POST", body: fd, timeoutMs: 0 });
       if (!r.ok) {
         const detail = await r.json().then(d => d.detail).catch(() => "");
         throw new Error(detail || `L'import du CV a renvoyé ${r.status}`);
@@ -122,7 +134,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
       setStep(1);
     } catch (e) {
       const message = e instanceof Error ? e.message : "L'import du CV a échoué";
-      setErr(message === "Failed to fetch" ? "Backend local injoignable. Relance Juste Recrute Moi puis réessaie." : message);
+      setErr(message === "Failed to fetch" ? "Backend local injoignable. Relancez Juste Recrute Moi puis réessayez." : message);
     } finally {
       setBusy(false);
     }
@@ -132,7 +144,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
     setBusy(true);
     setErr(null);
     const trimmedRole = role.trim();
-    const payload: Record<string, any> = {
+    const payload: Record<string, string | boolean> = {
       job_market_focus: market,
       remote_preference: remotePref,
       llm_provider: provider,
@@ -219,7 +231,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
             </div>
           </div>
           <button className="btn btn-ghost" onClick={() => onFinish("")} style={{ alignSelf: "flex-start" }}>
-            Ignorer la configuration
+            Configurer plus tard
           </button>
         </div>
 
@@ -229,7 +241,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
           {step === 0 && (
             <div className="col gap-4">
               <label className="card" style={{ padding: 18, cursor: "pointer", borderStyle: "dashed", background: "var(--paper)" }}>
-                <input type="file" accept=".pdf,.docx,.txt,.md" style={{ display: "none" }} onChange={e => setFile(e.target.files?.[0] || null)} />
+                <input type="file" accept=".pdf,.docx,.txt,.md" style={{ display: "none" }} onChange={e => { selectResumeFile(e.target.files?.[0]); e.currentTarget.value = ""; }} />
                 <div className="row gap-3">
                   <Icon name="upload" size={20} />
                   <div>
@@ -328,7 +340,9 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
                 </div>
               )}
               <div className="row gap-2" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                <button className="btn" onClick={onOpenSettings}><Icon name="settings" size={13} /> Réglages avancés</button>
+                <button className="btn" onClick={onOpenSettings} title="Fermer ce guide et ouvrir les paramètres complets">
+                  <Icon name="settings" size={13} /> Réglages avancés
+                </button>
                 <button className="btn btn-accent" onClick={savePreferences} disabled={busy} style={{ minWidth: 170, justifyContent: "center" }}>
                   <Icon name="arrow-right" size={14} color="#fff" /> {busy ? "Enregistrement..." : "Continuer"}
                 </button>

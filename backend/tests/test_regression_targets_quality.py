@@ -51,10 +51,11 @@ class RegressionTests(unittest.TestCase):
 
         targets = job_targets("", "global")
 
-        self.assertIn("site:linkedin.com/jobs", targets)
-        self.assertIn("site:indeed.com/jobs", targets)
-        self.assertIn("site:workdayjobs.com", targets)
-        self.assertIn("https://remotive.com/api/remote-jobs", targets)
+        self.assertIn("site:linkedin.com/jobs France", targets)
+        self.assertIn("site:fr.indeed.com/emplois France", targets)
+        self.assertIn("site:boards.greenhouse.io France", targets)
+        self.assertNotIn("https://remotive.com/api/remote-jobs", targets)
+        self.assertNotIn("https://weworkremotely.com/remote-jobs.rss", targets)
         self.assertNotIn("software engineer", " ".join(targets).lower())
 
     def test_india_query_generation_keeps_location_clause_on_fallback(self):

@@ -6,7 +6,8 @@ import { GlobalSettings } from "./panels/GlobalSettings";
 import { ResumeTemplatesPanel } from "./panels/ResumeTemplatesPanel";
 import { StepSettings } from "./panels/StepSettings";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { EMPTY, SecretInput, type Cfg } from "./panels/shared";
+import { EMPTY, KEY_FIELD, SECRET_MASKS, isSubscriptionProvider, type Cfg } from "./panels/config";
+import { SecretInput } from "./panels/shared";
 import { SectionLabel } from "./panels/shared";
 import { useTheme, type ThemePref } from "../../shared/lib/theme";
 import { settingsApi } from "../../api/settings";
@@ -21,7 +22,7 @@ const LEGAL_LINKS: { label: string; href: string }[] = [
 function LegalSettings() {
   return (
     <div>
-      <SectionLabel label="Légal & confidentialité" sub="Juste Recrute Moi est local-first : tes données restent sur cet appareil" />
+      <SectionLabel label="Légal & confidentialité" sub="Juste Recrute Moi est local-first : vos données restent sur cet appareil" />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {LEGAL_LINKS.map(l => (
           <button key={l.href} className="btn ghost" onClick={() => openUrl(l.href)}
@@ -46,7 +47,7 @@ function AppearanceSettings() {
   const { pref, setPref } = useTheme();
   return (
     <div>
-      <SectionLabel label="Apparence" sub="thème utilisé dans l'app : Système suit ton OS" />
+      <SectionLabel label="Apparence" sub="thème utilisé dans l'app : Système suit votre OS" />
       <div style={{ display: "flex", gap: 8 }}>
         {THEME_OPTIONS.map(opt => {
           const active = pref === opt.value;
@@ -76,7 +77,7 @@ function AppearanceSettings() {
 const EMBEDDING_OPTIONS = [
   { value: "onnx", label: "Local", sub: "MiniLM, hors ligne" },
   { value: "openai", label: "OpenAI API", sub: "text-embedding-3-small" },
-  { value: "hash", label: "Fallback", sub: "léger, non sémantique" },
+  { value: "hash", label: "Secours", sub: "léger, non sémantique" },
 ];
 
 function EmbeddingSettings({ cfg, onChange, api }: { cfg: Cfg; onChange: (k: keyof Cfg, v: string) => void; api: ApiFetch }) {
@@ -84,7 +85,7 @@ function EmbeddingSettings({ cfg, onChange, api }: { cfg: Cfg; onChange: (k: key
 
   return (
     <div>
-      <SectionLabel label="Embeddings" sub="indépendant du provider chat : utilisé pour le matching sémantique" />
+      <SectionLabel label="Embeddings" sub="indépendant du fournisseur de chat : utilisé pour le matching sémantique" />
       <div style={{ padding: 16, borderRadius: 14, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
           {EMBEDDING_OPTIONS.map(opt => {
@@ -114,10 +115,67 @@ function EmbeddingSettings({ cfg, onChange, api }: { cfg: Cfg; onChange: (k: key
               placeholder="sk-..."
             />
             <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>
-              Le chat peut rester sur Custom. Cette clé sert seulement à générer les vecteurs avec text-embedding-3-small.
+              Le chat peut rester sur un fournisseur personnalisé. Cette clé sert seulement à générer les vecteurs avec text-embedding-3-small.
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function isConfigured(value: string | undefined) {
+  const trimmed = String(value || "").trim();
+  return Boolean(trimmed) || SECRET_MASKS.has(trimmed);
+}
+
+function SettingsReadiness({ cfg }: { cfg: Cfg }) {
+  const provider = cfg.llm_provider || "ollama";
+  const keyField = KEY_FIELD[provider];
+  const llmReady = provider === "ollama" || isSubscriptionProvider(provider) || (keyField ? isConfigured(cfg[keyField] as string) : false);
+  const targetReady = isConfigured(cfg.desired_position) || isConfigured(cfg.onboarding_target_role);
+  const sourceReady = cfg.free_sources_enabled !== "false" && (
+    isConfigured(cfg.job_boards) ||
+    isConfigured(cfg.free_source_targets) ||
+    cfg.job_market_focus === "france"
+  );
+  const volumeReady = Number(cfg.free_source_max_requests || 0) >= 10 && cfg.browser_scan_enabled !== "false";
+  const items = [
+    {
+      label: "IA",
+      ok: llmReady,
+      detail: llmReady ? `Fournisseur ${provider}` : "Ajoutez une clé ou choisissez Ollama / abonnement CLI.",
+    },
+    {
+      label: "Cible",
+      ok: targetReady,
+      detail: targetReady ? "Poste recherché renseigné" : "Ajoutez un rôle ou intitulé cible.",
+    },
+    {
+      label: "Sources",
+      ok: sourceReady,
+      detail: sourceReady ? "Recherche gratuite active" : "Active les sources gratuites ou ajoute un preset.",
+    },
+    {
+      label: "Volume",
+      ok: volumeReady,
+      detail: volumeReady ? "Scan navigateur et budget corrects" : "Active le scan navigateur ou augmente les requêtes.",
+    },
+  ];
+
+  return (
+    <div>
+      <SectionLabel label="État de configuration" sub="ce qui influence directement la qualité des résultats" />
+      <div className="settings-readiness-grid">
+        {items.map(item => (
+          <div key={item.label} className={"settings-readiness-card " + (item.ok ? "ok" : "warn")}>
+            <div className="settings-readiness-head">
+              <span>{item.label}</span>
+              <span className="mono">{item.ok ? "prêt" : "à faire"}</span>
+            </div>
+            <p>{item.detail}</p>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -182,7 +240,7 @@ function DangerZone({ api }: { api: ApiFetch }) {
 
   return (
     <div>
-      <SectionLabel label="Zone dangereuse" sub="Efface les données locales pour repartir à zéro : action irréversible" />
+      <SectionLabel label="Zone dangereuse" sub="Effacez les données locales pour repartir à zéro : action irréversible" />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ border: "1px solid var(--yellow)", background: "var(--yellow-soft)", borderRadius: 12, padding: 14 }}>
         {!vectorOpen ? (
@@ -200,10 +258,10 @@ function DangerZone({ api }: { api: ApiFetch }) {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
-              <Icon name="alert" size={13} /> Cette action recrée les embeddings locaux sans supprimer les offres, le profil ni les paramètres. Tape <b>VECTORS</b> pour confirmer.
+              <Icon name="alert" size={13} /> Cette action recrée les embeddings locaux sans supprimer les offres, le profil ni les paramètres. Tapez <b>VECTORS</b> pour confirmer.
             </div>
             <input type="text" value={vectorConfirm} onChange={e => setVectorConfirm(e.target.value)}
-              placeholder="Tape VECTORS pour confirmer" className="field-input" style={{ fontSize: 13 }} />
+              placeholder="Tapez VECTORS pour confirmer" className="field-input" style={{ fontSize: 13 }} />
             {vectorError && <div style={{ color: "var(--bad)", fontSize: 12, fontWeight: 700 }}>{vectorError}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="btn" disabled={vectorBusy}
@@ -221,7 +279,7 @@ function DangerZone({ api }: { api: ApiFetch }) {
         {!open ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div style={{ fontSize: 12.5, color: "var(--ink-2)", maxWidth: 460 }}>
-              Supprime toutes les offres, ton profil (graphe + vecteurs) et les documents générés sur cet appareil. Les paramètres et clés fournisseur sont conservés.
+              Supprime toutes les offres, votre profil (graphe + vecteurs) et les documents générés sur cet appareil. Les paramètres et clés fournisseur sont conservés.
             </div>
             <button className="btn" onClick={() => setOpen(true)}
               style={{ color: "var(--bad)", borderColor: "var(--bad)", fontSize: 13, padding: "8px 16px", whiteSpace: "nowrap" }}>
@@ -231,14 +289,14 @@ function DangerZone({ api }: { api: ApiFetch }) {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
-              <Icon name="alert" size={13} /> Cette action supprime définitivement toutes les offres, ton profil (graphe + vecteurs) et les PDF générés sur cet appareil. Tape <b>DELETE</b> pour confirmer.
+              <Icon name="alert" size={13} /> Cette action supprime définitivement toutes les offres, votre profil (graphe + vecteurs) et les PDF générés sur cet appareil. Tapez <b>DELETE</b> pour confirmer.
             </div>
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "var(--ink-2)", cursor: "pointer" }}>
               <input type="checkbox" checked={clearSettings} onChange={e => setClearSettings(e.target.checked)} />
               Réinitialiser aussi les paramètres et fournisseurs
             </label>
             <input type="text" value={confirmText} onChange={e => setConfirmText(e.target.value)}
-              placeholder="Tape DELETE pour confirmer" autoFocus className="field-input" style={{ fontSize: 13 }} />
+              placeholder="Tapez DELETE pour confirmer" autoFocus className="field-input" style={{ fontSize: 13 }} />
             {error && <div style={{ color: "var(--bad)", fontSize: 12, fontWeight: 700 }}>{error}</div>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="btn" disabled={busy}
@@ -259,15 +317,23 @@ function DangerZone({ api }: { api: ApiFetch }) {
 
 export default function SettingsModal({ api, onClose }: Props) {
   const [cfg, setCfg]       = useState<Cfg>(EMPTY);
+  const [loadingCfg, setLoadingCfg] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
+    setLoadingCfg(true);
+    setLoadError(null);
     api("/api/v1/settings")
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`Le serveur a renvoyé ${r.status}`);
+        return r.json();
+      })
       .then(d => setCfg(c => ({ ...c, ...d })))
-      .catch(() => {});
+      .catch(error => setLoadError(error instanceof Error ? error.message : "Les paramètres n'ont pas pu être chargés"))
+      .finally(() => setLoadingCfg(false));
   }, [api]);
 
   const set = (k: keyof Cfg) =>
@@ -277,6 +343,7 @@ export default function SettingsModal({ api, onClose }: Props) {
   const onChange = (k: keyof Cfg, v: string) => setCfg(c => ({ ...c, [k]: v }));
 
   const save = async () => {
+    if (loadingCfg || loadError) return;
     setSaving(true);
     setSaveError(null);
     try {
@@ -312,7 +379,21 @@ export default function SettingsModal({ api, onClose }: Props) {
         </div>
 
         <div className="scroll" style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 22 }}>
+          {(loadingCfg || loadError) && (
+            <div style={{
+              padding: "10px 12px",
+              borderRadius: 8,
+              border: `1px solid ${loadError ? "var(--bad)" : "var(--line)"}`,
+              background: loadError ? "var(--bad-soft)" : "var(--paper-2)",
+              color: loadError ? "var(--bad)" : "var(--ink-2)",
+              fontSize: 12,
+              fontWeight: 700,
+            }}>
+              {loadError || "Chargement des paramètres..."}
+            </div>
+          )}
           <AppearanceSettings />
+          <SettingsReadiness cfg={cfg} />
           <GlobalSettings cfg={cfg} set={set} onChange={onChange} prov={prov} api={api} />
           <EmbeddingSettings cfg={cfg} onChange={onChange} api={api} />
           <ResumeTemplatesPanel api={api} />
@@ -327,8 +408,8 @@ export default function SettingsModal({ api, onClose }: Props) {
         <div style={{ padding: "14px 24px", borderTop: "1px solid var(--line)", background: "var(--paper-2)", display: "flex", justifyContent: "flex-end", gap: 10 }}>
           {saveError && <div style={{ marginRight: "auto", alignSelf: "center", color: "var(--bad)", fontSize: 12, fontWeight: 700 }}>{saveError}</div>}
           <button className="btn" onClick={onClose} style={{ padding: "9px 20px", fontSize: 13, borderRadius: 10 }}>Annuler</button>
-          <button className="btn btn-accent" onClick={save} disabled={saving} style={{ padding: "9px 26px", fontSize: 13, borderRadius: 10, minWidth: 110 }}>
-            {saved ? "Enregistré" : saving ? "Enregistrement..." : "Enregistrer"}
+          <button className="btn btn-accent" onClick={save} disabled={saving || loadingCfg || Boolean(loadError)} style={{ padding: "9px 26px", fontSize: 13, borderRadius: 10, minWidth: 110 }}>
+            {loadError ? "Chargement requis" : loadingCfg ? "Chargement..." : saved ? "Enregistré" : saving ? "Enregistrement..." : "Enregistrer"}
           </button>
         </div>
       </div>

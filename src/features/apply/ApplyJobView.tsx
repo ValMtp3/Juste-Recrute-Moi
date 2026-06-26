@@ -8,6 +8,57 @@ import { emitAppEvent, onAppEvent } from "../../shared/lib/appEvents";
 const CUSTOMIZE_START_TIMEOUT_MS = 10000;
 const CUSTOMIZE_WATCHDOG_MS = 12000;
 
+const CONTACT_STATUS_LABELS: Record<string, string> = {
+  disabled: "Recherche désactivée",
+  empty: "Contact non recherché",
+  error: "Recherche indisponible",
+  found: "Contact trouvé",
+  missing_hunter_key: "Clé Hunter.io manquante",
+  no_domain: "Domaine introuvable",
+  not_found: "Aucun contact trouvé",
+  unknown: "État inconnu",
+};
+
+function readableContactStatus(status: string | undefined) {
+  const normalized = String(status || "unknown").toLowerCase();
+  return CONTACT_STATUS_LABELS[normalized] || normalized.replace(/[_-]+/g, " ");
+}
+
+function readableContactMessage(message: string | undefined) {
+  const trimmed = String(message || "").trim();
+  if (!trimmed) return "";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("add a hunter.io api key")) {
+    return "Ajoutez une clé Hunter.io dans les paramètres pour trouver des contacts recruteurs ou fondateurs.";
+  }
+  if (lower.includes("hunter lookup failed")) {
+    return "La recherche Hunter.io a échoué. Vérifiez la clé API ou réessayez plus tard.";
+  }
+  if (lower.includes("hunter did not return usable contacts")) {
+    return "Aucun contact exploitable n'a été trouvé pour ce domaine.";
+  }
+  return trimmed;
+}
+
+function readableApplyError(message: string) {
+  const trimmed = String(message || "").trim();
+  if (!trimmed) return "La génération du dossier a échoué.";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("request cancelled") || lower.includes("requête annulée")) {
+    return "Attente arrêtée. Si la génération a déjà commencé, elle peut encore finir en arrière-plan.";
+  }
+  if (lower.includes("no url available")) {
+    return "Aucune URL exploitable n'est disponible pour cette offre. Collez la description complète ou ajoutez le lien de l'offre.";
+  }
+  if (lower.includes("api key") || lower.includes("llm")) {
+    return "La génération a besoin d'une clé IA valide. Vérifiez le fournisseur et la clé dans les paramètres.";
+  }
+  if (/le serveur a renvoyé \d+/.test(lower)) {
+    return "Le serveur local n'a pas accepté la demande. Vérifiez Activité, puis réessayez.";
+  }
+  return trimmed;
+}
+
 function withDeadline<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
@@ -38,6 +89,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
   const [coverBlobUrl, setCoverBlobUrl] = useState<string | null>(null);
   const [resumeLoadErr, setResumeLoadErr] = useState<string | null>(null);
   const [coverLoadErr, setCoverLoadErr] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
   const liveLead = lead ? (leads.find(l => l.job_id === lead.job_id) || lead) : null;
   const resumeReady = Boolean(liveLead?.resume_asset || liveLead?.asset);
@@ -197,7 +249,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
     } catch (e) {
       if (mountedRef.current) {
         const message = e instanceof Error ? e.message : "La génération du dossier a échoué";
-        setErr(message === "Request cancelled" || message === "Requête annulée" ? "Attente arrêtée. Si la génération a déjà commencé, elle peut encore finir en arrière-plan." : message);
+        setErr(readableApplyError(message));
         setBusy(false);
       }
     } finally {
@@ -206,7 +258,26 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
     }
   };
 
-  const copyText = (value: string) => navigator.clipboard?.writeText(value);
+  const copyText = async (value: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopyStatus("Copié dans le presse-papiers.");
+    } catch (error) {
+      setCopyStatus(error instanceof Error ? `Copie impossible : ${error.message}` : "Copie impossible.");
+    }
+    window.setTimeout(() => setCopyStatus(null), 1800);
+  };
   const stepTone = (done: boolean, active: boolean) => done ? "green" : active ? "purple" : "blue";
   const stepPill = (label: string, done: boolean, active: boolean) => {
     const tone = stepTone(done, active);
@@ -244,6 +315,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
             </button>
           )}
           {err && <div style={{ color: "var(--bad)", background: "var(--bad-soft)", border: "1px solid var(--bad)", borderRadius: 8, padding: "9px 11px", fontSize: 12 }}>{err}</div>}
+          {copyStatus && <div style={{ color: copyStatus.startsWith("Copie impossible") ? "var(--bad)" : "var(--green-ink)", background: copyStatus.startsWith("Copie impossible") ? "var(--bad-soft)" : "var(--green-soft)", border: `1px solid ${copyStatus.startsWith("Copie impossible") ? "var(--bad)" : "var(--green)"}`, borderRadius: 8, padding: "9px 11px", fontSize: 12 }}>{copyStatus}</div>}
           {liveLead && (
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               {stepPill("Offre capturée", true, false)}
@@ -305,14 +377,14 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
                     <>
                       <h3 style={{ fontSize: 17, fontWeight: 800, marginTop: 5 }}>Recherche de contact</h3>
                       <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3 }}>
-                        {contactLookup.message || (resumeReady && coverReady ? "Ajoute une clé Hunter.io dans les paramètres pour trouver des emails recruteurs ou fondateurs." : "La recherche de contact démarre après génération du dossier.")}
+                        {readableContactMessage(contactLookup.message) || (resumeReady && coverReady ? "Ajoutez une clé Hunter.io dans les paramètres pour trouver des emails recruteurs ou fondateurs." : "La recherche de contact démarre après génération du dossier.")}
                       </div>
                     </>
                   )}
                 </div>
                 {contactLookup.status && (
                   <span className="pill mono" style={{ background: primaryContact ? "var(--paper)" : "var(--paper-3)", color: primaryContact ? "var(--green-ink)" : "var(--ink-3)", border: `1px solid ${primaryContact ? "var(--green)" : "var(--line)"}` }}>
-                    {contactLookup.status.replace(/_/g, " ")}
+                    {readableContactStatus(contactLookup.status)}
                   </span>
                 )}
               </div>

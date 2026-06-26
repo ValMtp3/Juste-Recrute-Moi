@@ -13,6 +13,10 @@ from discovery.sources.ats import (
 )
 from discovery.sources.france_travail import scrape_target as scrape_france_travail_target
 from discovery.sources.jobspy import scrape_target as scrape_jobspy_target
+from discovery.sources.adzuna import scrape_target as scrape_adzuna_target
+from discovery.sources.jooble import scrape_target as scrape_jooble_target
+from discovery.sources.wttj_rss import scrape_target as scrape_wttj_target
+from discovery.sources.apec import scrape_target as scrape_apec_target
 from discovery.sources.url_import import scrape_target as scrape_url_import_target
 from discovery.sources.apify import run_actor as run_apify_actor
 from discovery.sources.apify import run_board_scan
@@ -45,6 +49,10 @@ __all__ = [
     "scrape_greenhouse",
     "scrape_hn",
     "scrape_hn_hiring",
+    "scrape_adzuna_target",
+    "scrape_jooble_target",
+    "scrape_wttj_target",
+    "scrape_apec_target",
     "scrape_jobicy_api",
     "scrape_jobspy_target",
     "scrape_lever",

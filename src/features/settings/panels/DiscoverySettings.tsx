@@ -1,10 +1,67 @@
 import { useState, type ChangeEvent } from "react";
-import type { Cfg } from "./shared";
-import { BigToggle, FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, LabelledField, SecretInput, SectionLabel } from "./shared";
+import { FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, type Cfg } from "./config";
+import { BigToggle, LabelledField, SecretInput, SectionLabel } from "./shared";
 import type { ApiFetch } from "../../../types";
+
+const SOURCE_PRESETS = {
+  france: FRANCE_SOURCE_PRESET,
+  global: GLOBAL_SOURCE_PRESET,
+  india: INDIA_SOURCE_PRESET,
+} as const;
+
+const MARKET_LABELS: Record<keyof typeof SOURCE_PRESETS, string> = {
+  france: "France",
+  global: "International",
+  india: "Inde",
+};
+
+function configuredSourceTargets(raw: string) {
+  return String(raw || "")
+    .split(/\n/)
+    .flatMap(line => line.trim().startsWith("#") ? [] : line.split(","))
+    .map(target => target.trim())
+    .filter(target => target && !target.startsWith("#"));
+}
+
+function sourceKind(target: string) {
+  const lower = target.toLowerCase();
+  if (lower.startsWith("france_travail:")) return "France Travail";
+  if (lower.startsWith("http://") || lower.startsWith("https://")) return "Flux web/API";
+  if (lower.startsWith("site:") || lower.startsWith("ats:")) return "Sites et ATS";
+  if (lower.startsWith("github:") || lower.startsWith("hn:") || lower.startsWith("reddit:") || lower === "hn-hiring") return "Communautés";
+  if (lower.startsWith("jobspy:")) return "JobSpy";
+  return "Autres";
+}
+
+function sourceKindCounts(targets: string[]) {
+  const counts = new Map<string, number>();
+  for (const target of targets) {
+    const kind = sourceKind(target);
+    counts.set(kind, (counts.get(kind) || 0) + 1);
+  }
+  return [...counts.entries()];
+}
 
 export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: (k: keyof Cfg) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void; api: ApiFetch }) {
   const [siteDraft, setSiteDraft] = useState("");
+  const [siteFeedback, setSiteFeedback] = useState("");
+  const marketFocus = ((cfg.job_market_focus || "france") in SOURCE_PRESETS ? cfg.job_market_focus || "france" : "global") as keyof typeof SOURCE_PRESETS;
+  const configuredTargets = configuredSourceTargets(cfg.job_boards);
+  const defaultTargets = configuredSourceTargets(SOURCE_PRESETS[marketFocus]);
+  const activeTargets = configuredTargets.length ? configuredTargets : defaultTargets;
+  const sourceSummary = configuredTargets.length
+    ? `${activeTargets.length} source${activeTargets.length > 1 ? "s" : ""} configurée${activeTargets.length > 1 ? "s" : ""}`
+    : `${defaultTargets.length} sources recommandées pour ${MARKET_LABELS[marketFocus]}`;
+  const sourceCounts = sourceKindCounts(activeTargets);
+  const applyMarketPreset = (market: keyof typeof SOURCE_PRESETS) => {
+    onChange("job_market_focus", market);
+    onChange("job_boards", SOURCE_PRESETS[market]);
+    setSiteFeedback(`Sources ${MARKET_LABELS[market]} appliquées. Enregistrez les paramètres pour les utiliser au prochain scan.`);
+  };
+  const resetToMarketDefaults = () => {
+    onChange("job_boards", "");
+    setSiteFeedback(`Retour au preset ${MARKET_LABELS[marketFocus]} par défaut. Enregistrez les paramètres pour l'utiliser au prochain scan.`);
+  };
 
   const atsHosts = new Set(["greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com", "teamtailor.com"]);
   const isKnownAtsHost = (raw: string) => {
@@ -29,15 +86,23 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
       return value;
     }
     const domain = value.replace(/^www\./i, "").replace(/\/+$/, "");
-    return `site:${domain} ("jobs" OR "careers" OR "hiring" OR "open roles") (remote OR hybrid OR onsite OR France OR global)`;
+    return `site:${domain} ("jobs" OR "careers" OR "hiring" OR "open roles" OR recrutement OR emploi OR postes) (remote OR hybrid OR onsite OR France OR global OR télétravail OR hybride)`;
   };
 
   const addSiteSource = () => {
     const target = sourceTargetFromSite(siteDraft);
-    if (!target || cfg.job_boards.includes(target)) return;
+    if (!target) {
+      setSiteFeedback("Saisissez un domaine, une URL, une source API ou une requête site:.");
+      return;
+    }
+    if (cfg.job_boards.includes(target)) {
+      setSiteFeedback("Cette source est déjà présente.");
+      return;
+    }
     const sep = cfg.job_boards.trim() ? ",\n" : "";
     onChange("job_boards", cfg.job_boards.trim() + sep + target);
     setSiteDraft("");
+    setSiteFeedback("Source ajoutée. Enregistrez les paramètres pour l'utiliser au prochain scan.");
   };
 
   return (
@@ -265,14 +330,14 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Marché ciblé</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {[
+                    {([
                       { id: "france", label: "Marché français", sub: "France Travail, ATS et jobboards français" },
                       { id: "global", label: "International", sub: "Jobboards mondiaux, ATS, flux remote et sources généralistes" },
                       { id: "india", label: "Marché indien", sub: "Jobboards indiens, startups locales, ATS et offres remote India" },
-                    ].map(mode => {
-                      const active = (cfg.job_market_focus || "global") === mode.id;
+                    ] as const).map(mode => {
+                      const active = marketFocus === mode.id;
                       return (
-                        <button key={mode.id} onClick={() => onChange("job_market_focus", mode.id)} style={{
+                        <button key={mode.id} type="button" onClick={() => onChange("job_market_focus", mode.id)} style={{
                           textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
                           background: active ? "var(--blue-soft)" : "var(--paper-3)",
                           border: `1.5px solid ${active ? "var(--blue)" : "var(--line)"}`,
@@ -283,6 +348,36 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
                         </button>
                       );
                     })}
+                  </div>
+                  <div style={{ padding: 12, borderRadius: 10, border: "1px solid var(--line)", background: "var(--paper-3)", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div>
+                        <div className="eyebrow">Scan prévu</div>
+                        <div style={{ marginTop: 3, fontSize: 12.5, fontWeight: 700, color: "var(--ink-2)" }}>{sourceSummary}</div>
+                        <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.45 }}>
+                          {configuredTargets.length
+                            ? "Le champ ci-dessous remplace le preset du marché. Videz-le pour revenir aux sources recommandées."
+                            : "Le champ peut rester vide : l'application utilisera ces sources recommandées au prochain scan."}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <button type="button" className="btn btn-ghost" onClick={() => applyMarketPreset(marketFocus)} style={{ fontSize: 11, padding: "5px 9px" }}>
+                          Remplir avec ce preset
+                        </button>
+                        {configuredTargets.length > 0 && (
+                          <button type="button" className="btn btn-ghost" onClick={resetToMarketDefaults} style={{ fontSize: 11, padding: "5px 9px" }}>
+                            Revenir au défaut
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {sourceCounts.map(([kind, count]) => (
+                        <span key={kind} className="pill mono" style={{ background: "var(--paper)", color: "var(--ink-2)", border: "1px solid var(--line)", fontSize: 10.5 }}>
+                          {kind}: {count}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div style={{ marginBottom: 8 }}>
@@ -309,12 +404,17 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
                       Sera ajouté : {sourceTargetFromSite(siteDraft)}
                     </div>
                   )}
+                  {siteFeedback && (
+                    <div role="status" style={{ marginBottom: 10, color: siteFeedback.includes("ajoutée") ? "var(--green-ink)" : "var(--yellow-ink)", fontSize: 11.5, lineHeight: 1.45 }}>
+                      {siteFeedback}
+                    </div>
+                  )}
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7 }}>Ajout rapide</div>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {[
-                      { label: "Preset international", url: GLOBAL_SOURCE_PRESET },
-                      { label: "Preset France", url: FRANCE_SOURCE_PRESET },
-                      { label: "Preset Inde", url: INDIA_SOURCE_PRESET },
+                    {([
+                      { label: "Preset international", url: GLOBAL_SOURCE_PRESET, presetMarket: "global" },
+                      { label: "Preset France", url: FRANCE_SOURCE_PRESET, presetMarket: "france" },
+                      { label: "Preset Inde", url: INDIA_SOURCE_PRESET, presetMarket: "india" },
                       { label: "HN Hiring", url: "hn-hiring" },
                       { label: "RemoteOK", url: "https://remoteok.com/api" },
                       { label: "LinkedIn", url: "site:linkedin.com/jobs" },
@@ -343,16 +443,22 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
                       { label: "Remotive All", url: "https://remotive.com/api/remote-jobs" },
                       { label: "Jobicy All", url: "https://jobicy.com/api/v2/remote-jobs?count=50" },
                       { label: "Jobicy", url: "https://jobicy.com/feed/newjobs" },
-                    ].map(p => {
-                      const already = cfg.job_boards.includes(p.url);
+                    ] as const).map(p => {
+                      const isPreset = "presetMarket" in p;
+                      const already = isPreset ? (marketFocus === p.presetMarket && cfg.job_boards.trim() === p.url.trim()) : cfg.job_boards.includes(p.url);
                       return (
-                        <button key={p.label} onClick={() => {
-                          if (already) return;
+                        <button key={p.label} type="button" onClick={() => {
+                          if (isPreset) {
+                            applyMarketPreset(p.presetMarket);
+                            return;
+                          }
+                          if (already) {
+                            setSiteFeedback("Cette source est déjà présente.");
+                            return;
+                          }
                           const sep = cfg.job_boards.trim() ? ",\n" : "";
-                          if (p.label === "Preset France") onChange("job_market_focus", "france");
-                          if (p.label === "Preset Inde") onChange("job_market_focus", "india");
-                          if (p.label === "Preset international") onChange("job_market_focus", "global");
                           onChange("job_boards", cfg.job_boards.trim() + sep + p.url);
+                          setSiteFeedback(`${p.label} ajouté. Enregistrez les paramètres pour l'utiliser au prochain scan.`);
                         }} style={{
                           padding: "4px 10px", borderRadius: 7, fontSize: 10.5, cursor: already ? "default" : "pointer",
                           fontWeight: 600, transition: "all .12s ease",
@@ -361,7 +467,7 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
                           border: `1px solid ${already ? "var(--blue)" : "var(--line)"}`,
                           opacity: already ? 0.7 : 1,
                         }}>
-                          {already ? "Ajouté " : "+ "}{p.label}
+                          {isPreset ? (already ? "Preset actif " : "Remplacer par ") : (already ? "Ajouté " : "+ ")}{p.label}
                         </button>
                       );
                     })}

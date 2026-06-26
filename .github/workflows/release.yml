@@ -13,6 +13,7 @@ concurrency:
 env:
   PYTHON_VERSION: "3.13"
   NODE_VERSION: "24"
+  PNPM_VERSION: "10.33.2"
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   # pip-audit currently reports no fixed versions for these transitive ML advisories.
   # Keep the audit strict for all other packages; remove entries as upstream fixes land.
@@ -47,14 +48,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - name: Verify tag matches project versions
-        run: npm run version:check -- "${{ github.ref_name }}"
+        run: pnpm version:check -- "${{ github.ref_name }}"
 
   # ── Shared frontend build (platform-agnostic) ────────────
   build-frontend:
@@ -65,17 +69,20 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - name: Installer les dépendances frontend
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Compiler le frontend
-        run: npm run build
+        run: pnpm build
 
       - name: Publier le dist frontend
         uses: actions/upload-artifact@v4
@@ -93,26 +100,29 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - name: Installer les dépendances frontend
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Audit frontend dependencies
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $auditLines = npm audit --audit-level=moderate --json 2>&1
+          $auditLines = pnpm audit --audit-level=moderate --json 2>&1
           $auditExit = $LASTEXITCODE
           $auditText = ($auditLines -join "`n").Trim()
 
           if (-not $auditText) {
             if ($auditExit -ne 0) {
-              Write-Warning "npm audit exited with $auditExit but returned no report. npm ci already completed successfully, so continuing."
+              Write-Warning "pnpm audit exited with $auditExit but returned no report. pnpm install --frozen-lockfile already completed successfully, so continuing."
             }
             exit 0
           }
@@ -139,11 +149,11 @@ jobs:
 
           if ($blocking -gt 0) {
             Write-Host $auditText
-            throw "npm audit found $blocking moderate/high/critical frontend vulnerabilities."
+            throw "pnpm audit found $blocking moderate/high/critical frontend vulnerabilities."
           }
 
           if ($auditExit -ne 0) {
-            Write-Warning "npm audit exited with $auditExit but reported no moderate/high/critical vulnerabilities. Continuing."
+            Write-Warning "pnpm audit exited with $auditExit but reported no moderate/high/critical vulnerabilities. Continuing."
           }
 
       - uses: actions/setup-python@v6
@@ -173,11 +183,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - uses: actions/setup-python@v6
         with:
@@ -193,10 +206,10 @@ jobs:
         run: cd backend && uv sync --dev --frozen
 
       - name: Compiler le sidecar avec le script canonique
-        run: npm run build:sidecar
+        run: pnpm build:sidecar
 
       - name: Préparer le pack runtime OTA obligatoire
-        run: npm run build:runtime-pack
+        run: pnpm build:runtime-pack
 
       - name: List sidecar output
         shell: pwsh
@@ -216,7 +229,7 @@ jobs:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
           JHM_SMOKE_PREINSTALL_RUNTIME: "1"
           JHM_SMOKE_RUNTIME_PACK_ARCHIVE: release-assets\Juste-Recrute-Moi-runtime-pack-windows.zip
-        run: npm run smoke:sidecar
+        run: pnpm smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
         uses: actions/upload-artifact@v4
@@ -241,11 +254,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - uses: actions/setup-python@v6
         with:
@@ -261,10 +277,10 @@ jobs:
         run: cd backend && uv sync --dev --frozen
 
       - name: Compiler le sidecar avec le script canonique
-        run: npm run build:sidecar
+        run: pnpm build:sidecar
 
       - name: Préparer le pack runtime OTA obligatoire
-        run: npm run build:runtime-pack
+        run: pnpm build:runtime-pack
 
       - name: List sidecar output
         shell: bash
@@ -283,7 +299,7 @@ jobs:
         env:
           JHM_SMOKE_PREINSTALL_RUNTIME: "1"
           JHM_SMOKE_RUNTIME_PACK_ARCHIVE: release-assets/Juste-Recrute-Moi-runtime-pack-macos.zip
-        run: npm run smoke:sidecar
+        run: pnpm smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
         uses: actions/upload-artifact@v4
@@ -308,11 +324,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - uses: actions/setup-python@v6
         with:
@@ -328,10 +347,10 @@ jobs:
         run: cd backend && uv sync --dev --frozen
 
       - name: Compiler le sidecar avec le script canonique
-        run: npm run build:sidecar
+        run: pnpm build:sidecar
 
       - name: Préparer le pack runtime OTA obligatoire
-        run: npm run build:runtime-pack
+        run: pnpm build:runtime-pack
 
       - name: List sidecar output
         shell: bash
@@ -348,7 +367,7 @@ jobs:
           JHM_VECTOR_RUNTIME_REQUIRED: "1"
           JHM_SMOKE_PREINSTALL_RUNTIME: "1"
           JHM_SMOKE_RUNTIME_PACK_ARCHIVE: release-assets/Juste-Recrute-Moi-runtime-pack-linux.zip
-        run: npm run smoke:sidecar
+        run: pnpm smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
         uses: actions/upload-artifact@v4
@@ -378,14 +397,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - name: Installer les dépendances frontend
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -446,7 +468,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           CARGO_PROFILE_RELEASE_LTO: "false"
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
-        run: npm run package:windows
+        run: pnpm package:windows
 
       - name: Smoke installed Windows package
         shell: pwsh
@@ -462,7 +484,7 @@ jobs:
           }
           $env:JHM_WINDOWS_INSTALLER_SMOKE = "1"
           $env:JHM_NEW_INSTALLER = $installer.FullName
-          npm run smoke:windows-update
+          pnpm smoke:windows-update
 
       - name: Smoke Windows update over previous stable
         shell: pwsh
@@ -508,7 +530,7 @@ jobs:
           $env:JHM_WINDOWS_UPDATE_SMOKE = "1"
           $env:JHM_OLD_INSTALLER = $oldInstaller.FullName
           $env:JHM_NEW_INSTALLER = $newInstaller.FullName
-          npm run smoke:windows-update
+          pnpm smoke:windows-update
 
       - name: Smoke packaged Windows sidecar
         shell: pwsh
@@ -523,7 +545,7 @@ jobs:
           if (-not (Test-Path $sidecarPath)) {
             throw "Ressource sidecar Windows packagée introuvable : $sidecarPath"
           }
-          npm run smoke:sidecar
+          pnpm smoke:sidecar
 
       - name: Collect release assets
         shell: pwsh
@@ -574,14 +596,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - name: Installer les dépendances frontend
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -684,7 +709,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           CARGO_PROFILE_RELEASE_LTO: "false"
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
-        run: npm run package:macos
+        run: pnpm package:macos
 
       - name: Smoke packaged macOS sidecar
         shell: bash
@@ -716,7 +741,7 @@ jobs:
             exit 1
           fi
           export JHM_SIDECAR_PATH="$sidecar_path"
-          npm run smoke:sidecar
+          pnpm smoke:sidecar
 
       - name: Collect release assets
         shell: bash
@@ -766,14 +791,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - name: Installer les dépendances frontend
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Installer les dépendances système Tauri Linux
         run: |
@@ -869,7 +897,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           CARGO_PROFILE_RELEASE_LTO: "false"
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
-        run: npm run package:linux
+        run: pnpm package:linux
 
       - name: Collect release assets
         shell: bash
@@ -1001,7 +1029,7 @@ jobs:
           PY
 
           cd ..
-          npm run release:verify-updater -- release-assets "${tag}"
+          pnpm release:verify-updater -- release-assets "${tag}"
 
           {
             echo "## Juste Recrute Moi ${tag}"

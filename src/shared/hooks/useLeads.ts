@@ -17,7 +17,7 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
     const topScore = Math.max(lead.score || 0, lead.signal_score ?? 0);
     if (topScore < 80) return;
     invoke("notify_high_score_lead", {
-      title: `Strong match: ${lead.title}`,
+      title: `Offre prioritaire : ${lead.title}`,
       body: `${lead.company} · Score ${topScore}`,
     }).catch(() => {});
   };
@@ -43,7 +43,12 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
       if (!background) setLoading(true);
       try {
         const r = await api(`/api/v1/leads`, { signal: controller.signal });
-        if (!r.ok) throw new Error(`Lead load failed (${r.status})`);
+        if (!r.ok) {
+          const detail = await r.json()
+            .then((body: { detail?: unknown }) => typeof body.detail === "string" ? body.detail : "")
+            .catch(() => "");
+          throw new Error(detail || `Chargement des offres échoué (${r.status})`);
+        }
         const data = await r.json();
         if (!alive) return;
         if (seq !== snapshotSeq) {
@@ -59,7 +64,7 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
       } catch (e) {
         if (!alive) return;
         if (controller.signal.aborted || isAbortLikeError(e)) return;
-        setError(e instanceof Error ? e.message : "Lead load failed");
+        setError(e instanceof Error ? e.message : "Chargement des offres échoué");
       } finally {
         if (alive) {
           setLoading(false);
@@ -117,6 +122,6 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
       offLeadUpdated();
       offLeadsRefresh();
     };
-  }, [api]);
+  }, [api, addLog]);
   return { leads, setLeads, loading: loading && !loaded, error };
 }

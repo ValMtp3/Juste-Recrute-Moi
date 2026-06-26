@@ -1,34 +1,34 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 
-const npm = process.platform === "win32" ? "npm.cmd" : "npm";
+const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const backendPython = process.platform === "win32" ? ".venv\\Scripts\\python.exe" : ".venv/bin/python";
 const systemPython = process.platform === "win32" ? "python" : "python3";
-const npmOptions = (options = {}) => ({
+const scriptOptions = (options = {}) => ({
   ...options,
   shell: process.platform === "win32",
 });
 
 const groups = {
   "check:all": [
-    ["version check", npm, ["run", "version:check"], npmOptions()],
-    ["frontend typecheck", npm, ["run", "typecheck"], npmOptions()],
-    ["frontend tests", npm, ["test"], npmOptions()],
-    ["frontend build", npm, ["run", "build"], npmOptions()],
-    ["website build", npm, ["run", "build"], npmOptions({ cwd: "website" })],
+    ["version check", pnpm, ["version:check"], scriptOptions()],
+    ["frontend typecheck", pnpm, ["typecheck"], scriptOptions()],
+    ["frontend tests", pnpm, ["test"], scriptOptions()],
+    ["frontend build", pnpm, ["build"], scriptOptions()],
+    ["website build", pnpm, ["build"], scriptOptions({ cwd: "website" })],
     ["backend tests", backendPython, ["-m", "pytest", "tests", "-q"], { cwd: "backend", fallback: [systemPython, ["-m", "pytest", "tests", "-q"]] }],
     ["rust tests", "cargo", ["test", "--lib"], { cwd: "src-tauri" }],
     ["rust check", "cargo", ["check"], { cwd: "src-tauri" }],
   ],
   "build:all": [
-    ["frontend build", npm, ["run", "build"], npmOptions()],
-    ["website build", npm, ["run", "build"], npmOptions({ cwd: "website" })],
+    ["frontend build", pnpm, ["build"], scriptOptions()],
+    ["website build", pnpm, ["build"], scriptOptions({ cwd: "website" })],
     ["rust check", "cargo", ["check"], { cwd: "src-tauri" }],
   ],
   "release:smoke": [
-    ["frontend build", npm, ["run", "build"], npmOptions()],
-    ["sidecar build", npm, ["run", "build:sidecar"], npmOptions()],
-    ["runtime pack asset", npm, ["run", "build:runtime-pack"], npmOptions()],
+    ["frontend build", pnpm, ["build"], scriptOptions()],
+    ["sidecar build", pnpm, ["build:sidecar"], scriptOptions()],
+    ["runtime pack asset", pnpm, ["build:runtime-pack"], scriptOptions()],
   ],
 };
 

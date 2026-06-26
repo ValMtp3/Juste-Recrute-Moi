@@ -35,6 +35,10 @@ _INSTALL_PROGRESS: dict = {
     "started_at": None,
     "updated_at": None,
 }
+_NATIVE_REINIT_ERROR_MARKERS = (
+    "initialized once per interpreter",
+    "cannot load module more than once per process",
+)
 
 warnings.filterwarnings(
     "ignore",
@@ -325,6 +329,34 @@ def clear_vector_runtime_modules() -> None:
             sys.modules.pop(key, None)
 
 
+def is_native_module_reinit_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return any(marker in message for marker in _NATIVE_REINIT_ERROR_MARKERS)
+
+
+def _runtime_module_loaded(module) -> bool:
+    return module is not None
+
+
+def _runtime_module_location(module) -> str:
+    return getattr(module, "__file__", "") or ",".join(map(str, getattr(module, "__path__", []))) or "unknown location"
+
+
+def _import_runtime_module(module_name: str) -> str:
+    cached = sys.modules.get(module_name)
+    if _runtime_module_loaded(cached):
+        return ""
+    try:
+        module = importlib.import_module(module_name)
+    except Exception as exc:
+        if is_native_module_reinit_error(exc):
+            return ""
+        return f"{module_name}: {type(exc).__name__}: {exc}"
+    if not _runtime_module_loaded(module):
+        return f"{module_name}: module incomplet dans {_runtime_module_location(module)}"
+    return ""
+
+
 def _vector_runtime_import_error(path: Path | None = None) -> str:
     root = path or vector_runtime_dir()
     has_payload = _runtime_has_any_vector_payload(root)
@@ -333,17 +365,15 @@ def _vector_runtime_import_error(path: Path | None = None) -> str:
     if getattr(sys, "frozen", False) and not vector_runtime_files_complete(root):
         return "les fichiers du runtime vectoriel sont incomplets"
     add_vector_runtime_to_path(root)
-    clear_vector_runtime_modules()
     try:
-        if not importlib.util.find_spec("lancedb"):
-            return "le module lancedb est introuvable"
-        if not importlib.util.find_spec("pyarrow"):
-            return "le module pyarrow est introuvable"
         for module_name in ("pyarrow", "lancedb"):
-            try:
-                importlib.import_module(module_name)
-            except Exception as exc:
-                return f"{module_name}: {type(exc).__name__}: {exc}"
+            cached = sys.modules.get(module_name)
+            module_available = cached is not None or bool(importlib.util.find_spec(module_name))
+            if not module_available:
+                return f"le module {module_name} est introuvable"
+            error = _import_runtime_module(module_name)
+            if error:
+                return error
         return ""
     except (ImportError, ValueError, AttributeError) as exc:
         return f"{type(exc).__name__}: {exc}"

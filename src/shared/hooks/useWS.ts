@@ -9,7 +9,9 @@ const READY_RETRY_MS = 180;
 const READY_ATTEMPTS = 60;
 
 const delay = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms));
-const hasTauriEventBridge = () => typeof (window as any).__TAURI_INTERNALS__?.transformCallback === "function";
+const hasTauriEventBridge = () => (
+  typeof (window as Window & { __TAURI_INTERNALS__?: { transformCallback?: unknown } }).__TAURI_INTERNALS__?.transformCallback === "function"
+);
 
 const emptyProgress = (): OperationProgress => ({
   active: false,
@@ -339,7 +341,7 @@ export function useWS() {
       if (wsRef.current) wsRef.current.onclose = null;
       wsRef.current?.close();
     };
-  }, [connect]);
+  }, [addLog, connect]);
 
   return { conn, port, apiToken, sidecarError, logs, beat, addLog, progress };
 }
