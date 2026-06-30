@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { check, type DownloadEvent, type DownloadOptions, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { readLocalStorage, readSessionStorage, removeSessionStorage, writeLocalStorage, writeSessionStorage } from "../lib/storage";
 
 type UpdateState = "checking" | "available" | "downloading" | "installing" | "relaunching" | "ready" | "error";
 type UpdateInstallStatus = {
@@ -109,8 +110,8 @@ export function UpdatePrompt() {
   const [total, setTotal] = useState<number | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
-  const [dismissedVersion, setDismissedVersion] = useState(() => localStorage.getItem(DISMISSED_UPDATE_KEY) || "");
-  const [pendingRestartVersion, setPendingRestartVersion] = useState(() => sessionStorage.getItem(PENDING_RESTART_KEY) || "");
+  const [dismissedVersion, setDismissedVersion] = useState(() => readLocalStorage(DISMISSED_UPDATE_KEY));
+  const [pendingRestartVersion, setPendingRestartVersion] = useState(() => readSessionStorage(PENDING_RESTART_KEY));
 
   useEffect(() => {
     let alive = true;
@@ -180,14 +181,14 @@ export function UpdatePrompt() {
   if (!update) return null;
 
   const dismiss = () => {
-    localStorage.setItem(DISMISSED_UPDATE_KEY, update.version);
+    writeLocalStorage(DISMISSED_UPDATE_KEY, update.version);
     setDismissedVersion(update.version);
     setUpdate(null);
   };
 
   const relaunchIntoUpdate = async () => {
     try {
-      sessionStorage.removeItem(PENDING_RESTART_KEY);
+      removeSessionStorage(PENDING_RESTART_KEY);
       await relaunch();
     } catch (err) {
       setError(readableUpdateError(err));
@@ -230,7 +231,7 @@ export function UpdatePrompt() {
         await update.downloadAndInstall(onEvent, updateDownloadOptions(UPDATE_DOWNLOAD_RETRY_HEADERS));
       }
 
-      sessionStorage.setItem(PENDING_RESTART_KEY, update.version);
+      writeSessionStorage(PENDING_RESTART_KEY, update.version);
       setPendingRestartVersion(update.version);
       setState("relaunching");
       window.setTimeout(() => {

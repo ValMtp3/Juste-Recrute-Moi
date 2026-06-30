@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SectionLabel } from "./shared";
 import type { ApiFetch } from "../../../types";
+import { readJsonResponse, responseErrorMessage } from "../../../shared/lib/httpError";
 
 export interface ResumeTemplate {
   id: string;
@@ -10,6 +11,46 @@ export interface ResumeTemplate {
   created_at: string;
   char_count: number;
   preview: string;
+}
+
+function readableTemplateError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("format") || lower.includes("unsupported")) {
+    return "Format non supporté. Importez un modèle en PDF, DOCX, TXT ou Markdown.";
+  }
+  if (lower.includes("import") || lower.includes("upload")) {
+    return "L'import du modèle a échoué. Vérifiez le fichier, puis réessayez.";
+  }
+  if (lower.includes("delete") || lower.includes("supprim")) {
+    return "Le modèle n'a pas pu être supprimé. Réessayez dans quelques secondes.";
+  }
+  if (lower.includes("not found") || lower.includes("introuvable")) {
+    return "Modèle de CV introuvable. Rechargez les réglages puis réessayez.";
+  }
+  if (lower.includes("default") || lower.includes("défaut")) {
+    return "Le modèle par défaut n'a pas pu être changé. Réessayez dans quelques secondes.";
+  }
+  if (lower.includes("templates") || lower.includes("modèles")) {
+    return fallback;
+  }
+  return trimmed;
+}
+
+async function parseTemplatesResponse(response: Response) {
+  const body = await readJsonResponse<unknown>(
+    response,
+    "Réponse du backend illisible. Relancez Juste Recrute Moi puis réessayez.",
+  );
+  if (body && typeof body === "object" && Array.isArray((body as { templates?: unknown }).templates)) {
+    return body as { templates: ResumeTemplate[] };
+  }
+  throw new Error("Réponse du backend illisible. Relancez Juste Recrute Moi puis réessayez.");
 }
 
 export function ResumeTemplatesPanel({ api }: { api: ApiFetch }) {
@@ -25,12 +66,12 @@ export function ResumeTemplatesPanel({ api }: { api: ApiFetch }) {
     setLoading(true);
     try {
       const res = await api("/api/v1/templates");
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || "Les modèles n'ont pas pu être chargés");
-      setTemplates(body.templates || []);
+      if (!res.ok) throw new Error(await responseErrorMessage(res, "Les modèles n'ont pas pu être chargés"));
+      const body = await parseTemplatesResponse(res);
+      setTemplates(body.templates);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Les modèles n'ont pas pu être chargés");
+      setError(readableTemplateError(err, "Les modèles n'ont pas pu être chargés"));
     } finally {
       setLoading(false);
     }
@@ -54,12 +95,11 @@ export function ResumeTemplatesPanel({ api }: { api: ApiFetch }) {
       form.append("file", file);
       form.append("make_default", templates.length === 0 ? "true" : "false");
       const res = await api("/api/v1/templates/upload", { method: "POST", body: form, timeoutMs: 60000 });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.detail || `Import échoué (${res.status})`);
+      if (!res.ok) throw new Error(await responseErrorMessage(res, `Import échoué (${res.status})`));
       await load();
       setMessage(willBecomeDefault ? "Modèle importé et défini comme style par défaut." : "Modèle importé.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "L'import a échoué");
+      setError(readableTemplateError(err, "L'import a échoué"));
     } finally {
       setLoading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -73,14 +113,13 @@ export function ResumeTemplatesPanel({ api }: { api: ApiFetch }) {
     try {
       const res = await run();
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.detail || `Action échouée (${res.status})`);
+        throw new Error(await responseErrorMessage(res, `Action échouée (${res.status})`));
       }
       await load();
       setMessage(successMessage);
       setConfirmDeleteId("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Action échouée");
+      setError(readableTemplateError(err, "Action échouée"));
     } finally {
       setBusyId("");
     }

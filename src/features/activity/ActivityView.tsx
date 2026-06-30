@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../shared/components/Icon";
 import type { LogLine, View } from "../../types";
+import { copyTextToClipboard } from "../../shared/lib/clipboard";
 
 type ActivityTab = "all" | "scout" | "eval" | "customize" | "system";
 
@@ -48,9 +49,14 @@ export function ActivityView({ logs, setView }: { logs: LogLine[]; setView: (vie
   const [actTab, setActTab] = useState<ActivityTab>("all");
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
   const visibleLogs = useMemo(() => visibleForTab(logs, actTab), [actTab, logs]);
   const tabCounts = useMemo(() => Object.fromEntries(ACTIVITY_TABS.map(tab => [tab.id, visibleForTab(logs, tab.id).length])) as Record<ActivityTab, number>, [logs]);
   const latestVisibleLog = visibleLogs[0] || null;
+
+  useEffect(() => () => {
+    if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+  }, []);
 
   const copyThinking = async () => {
     const body = visibleLogs
@@ -58,21 +64,12 @@ export function ActivityView({ logs, setView }: { logs: LogLine[]; setView: (vie
       .join("\n");
     const text = body || "Aucun journal agent visible.";
     try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-      }
+      const copiedText = await copyTextToClipboard(text);
+      if (!copiedText) throw new Error("clipboard unavailable");
       setCopyError(null);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1400);
+      if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopied(false), 1400);
     } catch {
       setCopyError(activityCopyErrorMessage());
     }

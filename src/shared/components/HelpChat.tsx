@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import Icon from "./Icon";
 import type { ApiFetch } from "../../types";
+import { readJsonResponse, responseErrorMessage } from "../lib/httpError";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -17,16 +18,13 @@ const HELP_SUGGESTIONS = [
 ];
 
 async function helpErrorMessage(response: Response) {
-  const detail = await response.clone().json().then((data: { detail?: unknown; message?: unknown }) => (
-    String(data.detail || data.message || "")
-  )).catch(() => "");
-
   if (response.status === 404) {
     return "L'aide intégrée n'est pas disponible dans le backend actif. Redémarrez l'application si le backend vient de changer, puis vérifiez l'onglet Activité.";
   }
   if (response.status >= 500) {
     return `L'aide backend a échoué (${response.status}). Consultez l'onglet Activité pour voir l'erreur serveur.`;
   }
+  const detail = await responseErrorMessage(response, "");
   return detail ? `L'aide a refusé la demande (${response.status}) : ${detail}` : `L'aide a retourné ${response.status}.`;
 }
 
@@ -37,6 +35,15 @@ function readableFailure(error: unknown) {
     return "Backend local injoignable. Relancez Juste Recrute Moi ou ouvrez l'onglet Activité pour confirmer que le service est démarré.";
   }
   return message || "Le chat d'aide a échoué.";
+}
+
+async function readHelpAnswer(response: Response) {
+  const data = await readJsonResponse<Record<string, unknown>>(
+    response,
+    "L'aide a répondu dans un format illisible. Consultez l'onglet Activité, puis réessayez.",
+  );
+  if (typeof data.answer === "string" && data.answer.trim()) return data.answer;
+  return "Je ne peux pas encore répondre à ça.";
 }
 
 export function HelpChat({ api }: { api: ApiFetch }) {
@@ -67,8 +74,7 @@ export function HelpChat({ api }: { api: ApiFetch }) {
         body: JSON.stringify({ question, history: next.slice(-8) }),
       });
       if (!r.ok) throw new Error(await helpErrorMessage(r));
-      const data = await r.json();
-      setMessages([...next, { role: "assistant", content: data.answer || "Je ne peux pas encore répondre à ça." }]);
+      setMessages([...next, { role: "assistant", content: await readHelpAnswer(r) }]);
     } catch (e) {
       setMessages([...next, { role: "assistant", content: readableFailure(e) }]);
     } finally {

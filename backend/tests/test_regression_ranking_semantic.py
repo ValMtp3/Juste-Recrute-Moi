@@ -282,7 +282,7 @@ class RegressionTests(unittest.TestCase):
         self.assertIs(semantic_fit.call_args.kwargs["candidate_data"], profile)
         self.assertTrue(any("Semantic fit" in point for point in result["match_points"]))
 
-    def test_evaluator_second_pass_skips_low_baseline_in_balanced_mode(self):
+    def test_evaluator_second_pass_skips_low_baseline_in_lean_mode(self):
         from ranking.evaluator import score
 
         baseline = {
@@ -296,11 +296,11 @@ class RegressionTests(unittest.TestCase):
         with mock.patch("ranking.evaluator._evaluator_llm_requested", return_value=True), \
              mock.patch("ranking.evaluator.score_job_lead", return_value=SimpleNamespace(as_dict=lambda: dict(baseline))), \
              mock.patch("ranking.evaluator._score_with_llm", side_effect=AssertionError("LLM should not run")):
-            result = score("Job Title: Adjacent Analyst", _sample_scoring_profile(), {"llm_scan_mode": "balanced"})
+            result = score("Job Title: Adjacent Analyst", _sample_scoring_profile(), {"llm_scan_mode": "lean"})
 
         self.assertEqual(result["scored_by"], "deterministic_triage")
-        self.assertEqual(result["llm_scan_mode"], "balanced")
-        self.assertIn("below the balanced full-AI review threshold", result["reason"])
+        self.assertEqual(result["llm_scan_mode"], "lean")
+        self.assertIn("below the lean full-AI review threshold", result["reason"])
 
     def test_evaluator_thorough_mode_runs_second_pass_on_low_baseline(self):
         from ranking.evaluator import score
@@ -323,7 +323,7 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(result["scored_by"], "llm")
         self.assertEqual(result["llm_scan_mode"], "thorough")
 
-    def test_evaluator_respects_hard_cap_before_llm_second_pass(self):
+    def test_evaluator_balanced_mode_runs_second_pass_inside_hard_cap(self):
         from ranking.evaluator import score
 
         baseline = {
@@ -334,10 +334,14 @@ class RegressionTests(unittest.TestCase):
             "applied_cap": 38,
         }
 
+        llm_result = {**baseline, "score": 38, "reason": "Seniority cap still applies."}
+
         with mock.patch("ranking.evaluator._evaluator_llm_requested", return_value=True), \
              mock.patch("ranking.evaluator.score_job_lead", return_value=SimpleNamespace(as_dict=lambda: dict(baseline))), \
-             mock.patch("ranking.evaluator._score_with_llm", side_effect=AssertionError("LLM should not run")):
+             mock.patch("ranking.evaluator._score_with_llm", return_value=llm_result) as score_with_llm:
             result = score("Job Title: Senior Engineer", _sample_scoring_profile(), {"llm_scan_mode": "balanced"})
 
-        self.assertEqual(result["scored_by"], "deterministic_triage")
+        score_with_llm.assert_called_once()
+        self.assertEqual(result["scored_by"], "llm")
+        self.assertEqual(result["llm_scan_mode"], "balanced")
         self.assertLessEqual(result["score"], 38)

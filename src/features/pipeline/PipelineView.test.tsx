@@ -22,10 +22,35 @@ describe("PipelineView critical UI contracts", () => {
   it("keeps cleanup controls wired", () => {
     expect(source).toContain("onCleanup");
     expect(source).toContain("cleaning");
+    expect(source).toContain("cleanupConfirm");
+    expect(source).toContain("Le nettoyage masque les lignes hors sujet");
+    expect(source).toContain("Confirmer nettoyer");
   });
 
   it("keeps lead deletion available from the pipeline", () => {
     expect(source).toContain("deleteLead");
+    expect(source).toContain("handleDeleteLead");
+    expect(source).toContain("deletingLeadId");
+    expect(source).toContain("Suppression de l'offre en cours");
+    expect(source).toContain("La suppression de l'offre a échoué.");
+    expect(source).toContain("readablePipelineError");
+    expect(source).toContain("Identifiant d'offre invalide");
+    expect(source).toContain("invalid job id format");
+  });
+
+  it("keeps export errors user-facing", () => {
+    expect(source).toContain("responseErrorMessage");
+    expect(source).toContain("L'export CSV n'a pas pu être préparé");
+    expect(source).not.toContain("setExportErr(e instanceof Error ? e.message");
+  });
+
+  it("does not optimistically mark failed bulk status updates as applied", () => {
+    expect(source).toContain("succeededIds");
+    expect(source).toContain("succeededIds.forEach(job_id => emitAppEvent");
+    expect(source).toContain("responseErrorMessage(response, `Marquage échoué");
+    expect(source).toContain("failedResults[0].reason");
+    expect(source).not.toContain("ids.forEach(job_id => emitAppEvent");
+    expect(source).not.toContain("throw new Error(`Marquage échoué");
   });
 
   it("keeps bulk action feedback inline instead of blocking alerts", () => {

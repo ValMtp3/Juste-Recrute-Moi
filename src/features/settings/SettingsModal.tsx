@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Icon from "../../shared/components/Icon";
 import { AutomationSettings } from "./panels/AutomationSettings";
 import { DiscoverySettings } from "./panels/DiscoverySettings";
@@ -10,6 +10,7 @@ import { EMPTY, KEY_FIELD, SECRET_MASKS, isSubscriptionProvider, type Cfg } from
 import { SecretInput } from "./panels/shared";
 import { SectionLabel } from "./panels/shared";
 import { useTheme, type ThemePref } from "../../shared/lib/theme";
+import { readJsonResponse, responseErrorMessage } from "../../shared/lib/httpError";
 import { settingsApi } from "../../api/settings";
 import type { ApiFetch } from "../../types";
 
@@ -20,22 +21,77 @@ const LEGAL_LINKS: { label: string; href: string }[] = [
 ];
 
 function LegalSettings() {
+  const [legalError, setLegalError] = useState<string | null>(null);
+  const openLegalLink = async (href: string) => {
+    try {
+      setLegalError(null);
+      await openUrl(href);
+    } catch (error: unknown) {
+      console.error("Ouverture du lien légal échouée :", error);
+      setLegalError(readableSettingsError(error, "Le lien légal n'a pas pu être ouvert. Réessayez depuis GitHub."));
+    }
+  };
+
   return (
     <div>
       <SectionLabel label="Légal & confidentialité" sub="Juste Recrute Moi est local-first : vos données restent sur cet appareil" />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {LEGAL_LINKS.map(l => (
-          <button key={l.href} className="btn ghost" onClick={() => openUrl(l.href)}
+          <button key={l.href} className="btn ghost" onClick={() => { void openLegalLink(l.href); }}
             style={{ fontSize: 12, padding: "7px 11px" }}>
             <Icon name="external" size={12} /> {l.label}
           </button>
         ))}
       </div>
+      {legalError && (
+        <div role="alert" style={{ marginTop: 8, color: "var(--bad)", fontSize: 12, lineHeight: 1.45 }}>
+          {legalError}
+        </div>
+      )}
     </div>
   );
 }
 
 interface Props { api: ApiFetch; onClose: () => void; }
+
+function readableSettingsError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("réinitialisation")) {
+    return "La réinitialisation n'a pas pu être lancée. Vérifiez Activité, puis réessayez.";
+  }
+  if (lower.includes("reconstruction") || lower.includes("vecteur")) {
+    return "La reconstruction des vecteurs a échoué. Vérifiez le runtime embeddings et réessayez.";
+  }
+  if (lower.includes("notification") || lower.includes("permission")) {
+    return fallback;
+  }
+  if (lower.includes("failed to open") || lower.includes("could not open") || lower.includes("opener") || lower.includes("url")) {
+    return fallback;
+  }
+  if (lower.includes("paramètres") || lower.includes("settings")) {
+    return fallback;
+  }
+  return trimmed;
+}
+
+async function parseVectorRebuildSummary(response: Response) {
+  const data = await readJsonResponse(
+    response,
+    "Réponse de reconstruction illisible. Relancez Juste Recrute Moi puis réessayez.",
+  );
+  const summary = data && typeof data === "object" ? (data as { summary?: unknown }).summary : null;
+  const summaryRecord = summary && typeof summary === "object" ? summary as { vectors_dropped?: unknown; sync?: unknown } : {};
+  const sync = summaryRecord.sync && typeof summaryRecord.sync === "object" ? summaryRecord.sync as { synced?: unknown } : {};
+  const dropped = Array.isArray(summaryRecord.vectors_dropped) ? summaryRecord.vectors_dropped.length : 0;
+  const synced = typeof sync.synced === "number" ? sync.synced : 0;
+  return { dropped, synced };
+}
 
 const THEME_OPTIONS: { value: ThemePref; label: string; icon: string }[] = [
   { value: "light", label: "Clair", icon: "sun" },
@@ -203,14 +259,13 @@ function DangerZone({ api }: { api: ApiFetch }) {
     try {
       const response = await settingsApi.resetData(api, { clearSettings });
       if (!response.ok) {
-        const detail = await response.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Réinitialisation échouée");
+        throw new Error(await responseErrorMessage(response, "Réinitialisation échouée"));
       }
       // Reload so every view re-fetches the now-empty data and returns to a clean
       // first-run state.
       window.location.reload();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(readableSettingsError(e, "Réinitialisation échouée"));
       setBusy(false);
     }
   };
@@ -222,17 +277,15 @@ function DangerZone({ api }: { api: ApiFetch }) {
     setVectorResult(null);
     try {
       const response = await settingsApi.rebuildVectors(api);
-      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.detail || "Reconstruction des vecteurs échouée");
+        throw new Error(await responseErrorMessage(response, "Reconstruction des vecteurs échouée"));
       }
-      const dropped = Array.isArray(data.summary?.vectors_dropped) ? data.summary.vectors_dropped.length : 0;
-      const synced = data.summary?.sync?.synced ?? 0;
+      const { dropped, synced } = await parseVectorRebuildSummary(response);
       setVectorResult(`${dropped} table(s) supprimée(s), ${synced} vecteur(s) resynchronisé(s).`);
       setVectorOpen(false);
       setVectorConfirm("");
     } catch (e) {
-      setVectorError(e instanceof Error ? e.message : String(e));
+      setVectorError(readableSettingsError(e, "Reconstruction des vecteurs échouée"));
     } finally {
       setVectorBusy(false);
     }
@@ -322,17 +375,26 @@ export default function SettingsModal({ api, onClose }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved]   = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveWarning, setSaveWarning] = useState<string | null>(null);
+  const savedTimerRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (savedTimerRef.current) window.clearTimeout(savedTimerRef.current);
+  }, []);
 
   useEffect(() => {
     setLoadingCfg(true);
     setLoadError(null);
     api("/api/v1/settings")
-      .then(r => {
-        if (!r.ok) throw new Error(`Le serveur a renvoyé ${r.status}`);
-        return r.json();
+      .then(async r => {
+        if (!r.ok) throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`));
+        return readJsonResponse<Partial<Cfg>>(
+          r,
+          "Les paramètres ont répondu dans un format illisible. Rechargez l'application puis réessayez.",
+        );
       })
       .then(d => setCfg(c => ({ ...c, ...d })))
-      .catch(error => setLoadError(error instanceof Error ? error.message : "Les paramètres n'ont pas pu être chargés"))
+      .catch(error => setLoadError(readableSettingsError(error, "Les paramètres n'ont pas pu être chargés")))
       .finally(() => setLoadingCfg(false));
   }, [api]);
 
@@ -346,20 +408,30 @@ export default function SettingsModal({ api, onClose }: Props) {
     if (loadingCfg || loadError) return;
     setSaving(true);
     setSaveError(null);
+    setSaveWarning(null);
     try {
       const response = await api("/api/v1/settings", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg),
       });
       if (!response.ok) {
-        const detail = await response.json().then(data => data.detail).catch(() => "");
-        throw new Error(detail || "Les paramètres n'ont pas pu être enregistrés");
+        throw new Error(await responseErrorMessage(response, "Les paramètres n'ont pas pu être enregistrés"));
       }
       if (cfg.x_enable_notifications === "true" && "Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission().catch(() => {});
+        try {
+          const permission = await Notification.requestPermission();
+          if (permission !== "granted") {
+            setSaveWarning("Paramètres enregistrés, mais les notifications ne sont pas autorisées sur cet appareil.");
+          }
+        } catch (notificationError: unknown) {
+          console.error("Permission notification refusée :", notificationError);
+          setSaveWarning(readableSettingsError(notificationError, "Paramètres enregistrés, mais la permission notification n'a pas pu être demandée."));
+        }
       }
-      setSaved(true); setTimeout(() => setSaved(false), 2000);
+      setSaved(true);
+      if (savedTimerRef.current) window.clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = window.setTimeout(() => setSaved(false), 2000);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : String(error));
+      setSaveError(readableSettingsError(error, "Les paramètres n'ont pas pu être enregistrés"));
     } finally { setSaving(false); }
   };
 
@@ -407,6 +479,7 @@ export default function SettingsModal({ api, onClose }: Props) {
 
         <div style={{ padding: "14px 24px", borderTop: "1px solid var(--line)", background: "var(--paper-2)", display: "flex", justifyContent: "flex-end", gap: 10 }}>
           {saveError && <div style={{ marginRight: "auto", alignSelf: "center", color: "var(--bad)", fontSize: 12, fontWeight: 700 }}>{saveError}</div>}
+          {!saveError && saveWarning && <div style={{ marginRight: "auto", alignSelf: "center", color: "var(--yellow-ink)", fontSize: 12, fontWeight: 700 }}>{saveWarning}</div>}
           <button className="btn" onClick={onClose} style={{ padding: "9px 20px", fontSize: 13, borderRadius: 10 }}>Annuler</button>
           <button className="btn btn-accent" onClick={save} disabled={saving || loadingCfg || Boolean(loadError)} style={{ padding: "9px 26px", fontSize: 13, borderRadius: 10, minWidth: 110 }}>
             {loadError ? "Chargement requis" : loadingCfg ? "Chargement..." : saved ? "Enregistré" : saving ? "Enregistrement..." : "Enregistrer"}

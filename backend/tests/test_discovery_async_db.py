@@ -73,3 +73,44 @@ async def test_run_scan_reads_db_off_event_loop(monkeypatch):
     assert repo.profile_thread != main_thread
     # And it short-circuited as expected.
     assert any(e.get("event") == "scan_skipped" for e in manager.events)
+
+
+def test_discovery_activity_messages_are_localized():
+    lead = {"title": "Engineer"}
+    messages = [
+        discovery._scan_failed_message(RuntimeError("timeout")),
+        discovery._reeval_start_message(3, "openai"),
+        discovery._reeval_stopped_message(1, 3),
+        discovery._reeval_scored_message(2, 3, lead, 82),
+        discovery._reeval_error_message(lead, RuntimeError("timeout")),
+        discovery._reeval_summary_message(
+            scored=2,
+            total=3,
+            failed=1,
+            fallback_count=1,
+            fallback_errors=["LLM indisponible"],
+            triaged_count=2,
+        ),
+        discovery._reeval_failed_message(RuntimeError("timeout")),
+    ]
+
+    assert messages == [
+        "Scan échoué : timeout",
+        "Réévaluation de 3 offre(s) via openai",
+        "Réévaluation arrêtée après 1/3 offre(s).",
+        "[2/3] Score recalculé pour Engineer = 82/100",
+        "Réévaluation échouée pour Engineer : timeout",
+        "Réévaluation terminée - 2/3 offre(s) scorée(s), 1 échec(s), 1 score local (LLM indisponible), 2 tris locaux",
+        "Réévaluation échouée : timeout",
+    ]
+    combined = "\n".join(messages)
+    for fragment in (
+        "Scan failed",
+        "Re-evaluating",
+        "Re-evaluation stopped",
+        "Re-scored",
+        "Re-eval failed",
+        "Re-evaluation complete",
+        "Re-evaluation failed",
+    ):
+        assert fragment not in combined

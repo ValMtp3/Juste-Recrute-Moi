@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Icon from "../../../shared/components/Icon";
 import { settingsApi } from "../../../api/settings";
 import type { ApiFetch } from "../../../types";
 import { MODEL_HINTS, PROVIDERS, SECRET_MASKS, isSubscriptionProvider, type CatalogRow, type Cfg, type StepConfig, type SubStatus } from "./config";
+import { readJsonResponse, responseErrorMessage } from "../../../shared/lib/httpError";
 const SECRET_DISPLAY_MASK = "••••••••••••••••";
 
 /* helpers */
@@ -68,6 +69,25 @@ function fmtMeta(c?: CatalogRow): string {
   return parts.join("  ·  ");
 }
 
+function readableSettingsPanelError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("catalogue") || lower.includes("model")) return fallback;
+  if (lower.includes("unknown secret") || lower.includes("secret inconnu")) {
+    return "Secret inconnu. Rechargez les réglages puis réessayez.";
+  }
+  if (lower.includes("secret not configured") || lower.includes("aucun secret")) {
+    return "Aucun secret n'est enregistré pour ce champ.";
+  }
+  if (lower.includes("secret")) return fallback;
+  return trimmed;
+}
+
 /**
  * Model picker backed by the always-current models.dev catalog (fetched live and
  * cached server-side, with an offline snapshot) plus whatever the user's own key
@@ -84,8 +104,11 @@ export function ModelChips({ provider, value, onChange, api, cfg }: {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [open, setOpen] = useState(false);
+  const requestRef = useRef(0);
 
   const reload = useCallback(() => {
+    const requestId = requestRef.current + 1;
+    requestRef.current = requestId;
     if (!api || !provider || isSubscriptionProvider(provider) || provider === "ollama") {
       setModels([]); setCatalog([]); setLoadError(""); return;
     }
@@ -94,22 +117,28 @@ export function ModelChips({ provider, value, onChange, api, cfg }: {
     settingsApi.models(api, provider, cfg || {})
       .then(async r => {
         if (!r.ok) {
-          const data = await r.json().catch(() => ({}));
-          throw new Error(String(data.detail || `Catalogue indisponible (${r.status})`));
+          throw new Error(await responseErrorMessage(r, `Catalogue indisponible (${r.status})`));
         }
-        return r.json();
+        return readJsonResponse<Record<string, unknown>>(
+          r,
+          "Catalogue modèles illisible. Saisissez l'id du modèle manuellement ou réessayez.",
+        );
       })
       .then(d => {
+        if (requestRef.current !== requestId) return;
         setModels(Array.isArray(d.models) ? d.models : []);
         setCatalog(Array.isArray(d.catalog) ? d.catalog : []);
       })
       .catch(err => {
+        if (requestRef.current !== requestId) return;
         setModels([]);
         setCatalog([]);
-        const message = err instanceof Error && err.message ? err.message : "Catalogue modèles indisponible.";
+        const message = readableSettingsPanelError(err, "Catalogue modèles indisponible.");
         setLoadError(`${message} Saisissez l'id du modèle manuellement ou réessayez après avoir enregistré la clé.`);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (requestRef.current === requestId) setLoading(false);
+      });
     // cfg intentionally excluded: reload on provider change, not every keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api, provider]);
@@ -237,14 +266,17 @@ export function SecretInput({ value, onChange, placeholder, disabled = false, ap
     try {
       const response = await settingsApi.revealSecret(api, String(secretKey));
       if (response.ok) {
-        const data = await response.json();
+        const data = await readJsonResponse<{ value?: unknown }>(
+          response,
+          "Réponse de révélation illisible. Rechargez les réglages puis réessayez.",
+        );
         setRevealed(typeof data.value === "string" ? data.value : "");
       } else {
-        const data = await response.json().catch(() => ({}));
-        setRevealError(String(data.detail || `Le secret enregistré n'a pas pu être affiché (${response.status}).`));
+        const message = await responseErrorMessage(response, `Le secret enregistré n'a pas pu être affiché (${response.status}).`);
+        setRevealError(readableSettingsPanelError(message, "Le backend local n'a pas pu révéler ce secret."));
       }
-    } catch {
-      setRevealError("Le backend local n'a pas pu révéler ce secret.");
+    } catch (error) {
+      setRevealError(readableSettingsPanelError(error, "Le backend local n'a pas pu révéler ce secret."));
     } finally {
       setRevealing(false);
     }

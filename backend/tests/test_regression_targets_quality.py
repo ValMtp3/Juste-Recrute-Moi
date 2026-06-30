@@ -246,7 +246,7 @@ class RegressionTests(unittest.TestCase):
 
         self.assertEqual(
             targets_from_settings("data, paris", ""),
-            ["france_travail:data;lieu=paris;range=0-49"],
+            ["france_travail:data;lieu=Paris;range=0-49"],
         )
 
 class TestScoringEngineCaps(unittest.TestCase):

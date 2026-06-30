@@ -319,9 +319,9 @@ def _second_pass_allowed(baseline: dict, settings: dict | None) -> tuple[bool, s
 
     if mode == "thorough":
         return True, mode
-    if cap is not None and cap <= 38:
+    if mode == "lean" and cap is not None and cap <= 38:
         return False, mode
-    threshold = 60 if mode == "lean" else 45
+    threshold = 60 if mode == "lean" else 0
     return score >= threshold, mode
 
 

@@ -22,6 +22,8 @@ describe("ActivityView UX contracts", () => {
 
   it("does not expose raw clipboard errors", () => {
     expect(source).toContain("activityCopyErrorMessage");
+    expect(source).toContain("copyTimerRef");
+    expect(source).toContain("window.clearTimeout(copyTimerRef.current)");
     expect(source).toContain("Sélectionnez le texte du flux manuellement");
     expect(source).not.toContain("setCopyError(error instanceof Error");
   });

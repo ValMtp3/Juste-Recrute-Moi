@@ -46,6 +46,8 @@ FRANCE_JOB_TARGETS = [
     "site:cadremploi.fr/emploi France",
     "site:meteojob.com/jobs France",
     "site:lesjeudis.com/jobs France",
+    "site:welcometothejungle.com/fr/jobs France",
+    "site:apec.fr/candidat/recherche-emploi.html/emploi France",
     "site:linkedin.com/jobs France",
     "site:fr.indeed.com/emplois France",
     "site:talent.com/fr France",
@@ -207,6 +209,14 @@ def _norm_token(value: str) -> str:
     return re.sub(r"[^\w%]+", " ", str(value or "").lower(), flags=re.UNICODE).strip()
 
 
+def _canonical_france_location(value: str) -> str:
+    cleaned = _clean_france_travail_value(value, "France")
+    key = _norm_token(cleaned)
+    if key in FRANCE_LOCATION_HINTS:
+        return " ".join(part.capitalize() for part in cleaned.split())
+    return cleaned
+
+
 def _extract_contract(chunks: list[str]) -> tuple[str, list[str]]:
     for chunk in chunks:
         norm = _norm_token(chunk)
@@ -260,7 +270,7 @@ def parse_search_intent(parts: list[str], fallback_location: str = "France") -> 
         for word in words:
             key = _norm_token(word)
             if key in FRANCE_LOCATION_HINTS:
-                location = word
+                location = _canonical_france_location(word)
             elif key not in SEARCH_STOPWORDS:
                 kept.append(word)
             else:
@@ -269,7 +279,7 @@ def parse_search_intent(parts: list[str], fallback_location: str = "France") -> 
             role_chunks.append(" ".join(kept))
 
     role = _clean_france_travail_value(" ".join(role_chunks), "developpeur")
-    location = _clean_france_travail_value(location, "France")
+    location = _canonical_france_location(location)
     return SearchIntent(role=role, location=location, contract=contract, remote=remote)
 
 
@@ -347,7 +357,7 @@ def job_targets(
         filtered.append(target)
 
     if focus == "global" and filtered and all(is_hn_target(target) for target in filtered):
-        filtered.extend(target for target in DEFAULT_JOB_TARGETS if not is_hn_target(target))
+        filtered.extend(["https://remoteok.com/api", "site:jobs.lever.co", *[target for target in DEFAULT_JOB_TARGETS if not is_hn_target(target)]])
 
     if focus == "india":
         india_markers = (

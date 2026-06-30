@@ -5,6 +5,20 @@ import type { ApiFetch, Lead, LogLine, OperationProgress, View } from "../../typ
 import { getMark, getTone, leadDisplayHeading, leadSignal, leadStatusLabel } from "../../shared/lib/leadUtils";
 import { DebugResetButton } from "../../shared/components/DebugResetButton";
 import { settingsApi } from "../../api/settings";
+import { readJsonResponse, responseErrorMessage } from "../../shared/lib/httpError";
+
+function readableDashboardError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("unexpected token") || lower.includes("json")) return fallback;
+  if (lower.includes("préférences") || lower.includes("preferences")) return fallback;
+  return trimmed;
+}
 
 /**
  * "Ce que vous recherchez" — free-text preferences the agent uses to target the
@@ -15,28 +29,49 @@ function PreferencesBox({ api }: { api: ApiFetch | null }) {
   const [value, setValue] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [status, setStatus] = useState<"" | "saving" | "saved" | "error">("");
+  const [errorMessage, setErrorMessage] = useState("");
   const lastSaved = useRef("");
+  const statusTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!api) return;
     let alive = true;
-    settingsApi.getPreferences(api).then(r => r.json()).then(d => {
+    settingsApi.getPreferences(api).then(async r => {
+      if (!r.ok) throw new Error(await responseErrorMessage(r, "Les préférences n'ont pas pu être chargées."));
+      return readJsonResponse<Record<string, unknown>>(
+        r,
+        "Les préférences ont répondu dans un format illisible.",
+      );
+    }).then(d => {
       if (!alive) return;
       const v = String(d?.preferences || "");
       setValue(v); lastSaved.current = v; setLoaded(true);
-    }).catch(() => { if (alive) setLoaded(true); });
-    return () => { alive = false; };
+    }).catch(err => {
+      if (!alive) return;
+      setErrorMessage(readableDashboardError(err, "Les préférences n'ont pas pu être chargées."));
+      setLoaded(true);
+    });
+    return () => {
+      alive = false;
+      if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
+    };
   }, [api]);
 
   const save = async () => {
     if (!api || value === lastSaved.current) return;
     setStatus("saving");
+    setErrorMessage("");
     try {
       const r = await settingsApi.savePreferences(api, value);
-      if (!r.ok) throw new Error();
+      if (!r.ok) throw new Error(await responseErrorMessage(r, "Les préférences n'ont pas pu être enregistrées."));
       lastSaved.current = value;
-      setStatus("saved"); window.setTimeout(() => setStatus(""), 1800);
-    } catch { setStatus("error"); }
+      setStatus("saved");
+      if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = window.setTimeout(() => setStatus(""), 1800);
+    } catch (err: unknown) {
+      setErrorMessage(readableDashboardError(err, "Les préférences n'ont pas pu être enregistrées."));
+      setStatus("error");
+    }
   };
 
   return (
@@ -62,6 +97,7 @@ function PreferencesBox({ api }: { api: ApiFetch | null }) {
         onBlur={save}
         style={{ width: "100%", resize: "vertical", fontSize: 13, lineHeight: 1.55 }}
       />
+      {errorMessage && <div role="alert" style={{ marginTop: 8, fontSize: 12, color: "var(--bad)", lineHeight: 1.45 }}>{errorMessage}</div>}
     </section>
   );
 }
@@ -187,6 +223,7 @@ export function DashboardView({
   onStopScan: () => void; onReevaluate: () => void; onStopReevaluate: () => void; onCleanup: () => void; scanErr: string | null;
   api?: ApiFetch | null;
 }) {
+  const [cleanupConfirm, setCleanupConfirm] = useState(false);
   const active = leads.filter(l => l.status !== "discarded");
   const counts = {
     total: active.length,
@@ -216,6 +253,14 @@ export function DashboardView({
   const nowLabel = busy
     ? (scanning ? "Scan des sources configurées..." : reevaluating ? "Re-score des offres sauvegardées..." : "Nettoyage des lignes faibles...")
     : (hasLeads ? "Prêt pour la prochaine action." : "Aucune offre en base pour l'instant.");
+  const requestCleanup = () => {
+    if (cleanupConfirm) {
+      setCleanupConfirm(false);
+      onCleanup();
+      return;
+    }
+    setCleanupConfirm(true);
+  };
 
   return (
     <div className="scroll" style={{ padding: 24, flex: 1, height: "100%", minHeight: 0 }}>
@@ -442,9 +487,17 @@ export function DashboardView({
                 <Icon name="pulse" size={13} /> Re-scorer les offres
               </SecondaryButton>
             )}
-            <SecondaryButton onClick={onCleanup} disabled={busy || leads.length === 0}>
-              <Icon name="trash" size={13} /> {cleaning ? "Nettoyage..." : "Nettoyer les données"}
+            <SecondaryButton onClick={requestCleanup} disabled={busy || leads.length === 0} danger={cleanupConfirm}>
+              <Icon name="trash" size={13} /> {cleaning ? "Nettoyage..." : cleanupConfirm ? "Confirmer le nettoyage" : "Nettoyer les données"}
             </SecondaryButton>
+            {cleanupConfirm && (
+              <div style={{ padding: 10, borderRadius: 8, border: "1px solid var(--yellow)", background: "var(--yellow-soft)", color: "var(--yellow-ink)", fontSize: 12, lineHeight: 1.45 }}>
+                Les lignes hors sujet seront masquées, pas supprimées. Cliquez à nouveau pour confirmer.
+                <button className="btn btn-ghost" onClick={() => setCleanupConfirm(false)} style={{ marginTop: 8, minHeight: 28, padding: "4px 8px", color: "inherit" }}>
+                  Annuler
+                </button>
+              </div>
+            )}
             <button className="btn btn-ghost" onClick={() => setView("activity")} style={{ justifyContent: "center", fontSize: 12 }}>
               Journal d'activité <Icon name="arrow-right" size={12} />
             </button>

@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Icon from "../../shared/components/Icon";
 import type { ApiFetch, View } from "../../types";
 import { emitAppEvent } from "../../shared/lib/appEvents";
 import { ONBOARDING_KEY } from "../../shared/lib/leadUtils";
+import { writeLocalStorage } from "../../shared/lib/storage";
+import { readJsonResponse, responseErrorMessage as sharedResponseErrorMessage } from "../../shared/lib/httpError";
 
 type ResultStats = {
   skills?: number;
@@ -46,25 +48,21 @@ type IngestionResult = {
   imported?: { stats?: ResultStats };
 };
 
+type ActiveOperation =
+  | "template"
+  | "manual"
+  | "resume"
+  | "raw"
+  | "linkedin"
+  | "github"
+  | "portfolio-scan"
+  | "portfolio-import"
+  | "json-import";
+
 const asRecord = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
 const asResult = (value: unknown): IngestionResult => asRecord(value) as IngestionResult;
-
-function detailToMessage(detail: unknown) {
-  if (typeof detail === "string") return detail.trim();
-  if (Array.isArray(detail)) {
-    const lines = detail.map(item => {
-      const record = asRecord(item);
-      const loc = Array.isArray(record.loc) ? record.loc.filter(Boolean).join(".") : "";
-      const msg = typeof record.msg === "string" ? record.msg : "";
-      return [loc, msg].filter(Boolean).join(" : ");
-    }).filter(Boolean);
-    return lines.join(" · ");
-  }
-  if (detail) return JSON.stringify(detail);
-  return "";
-}
 
 function readableIngestionError(message: string, status?: number) {
   const trimmed = String(message || "").trim();
@@ -110,31 +108,26 @@ async function responseErrorMessage(response: Response, fallback: string) {
       return `Trop de requêtes. Patientez ${retryAfter} seconde${retryAfter === 1 ? "" : "s"}, puis réessayez.`;
     }
   }
-  try {
-    const data = await response.clone().json();
-    const source = asRecord(data);
-    const detail = source.detail ?? source.error;
-    const message = detailToMessage(detail);
-    if (message) return readableIngestionError(message, response.status);
-  } catch {
-    // Fall through to text/plain error bodies.
-  }
-  try {
-    const text = await response.text();
-    if (text.trim()) return readableIngestionError(text, response.status);
-  } catch {
-    // Fall through to the caller-provided fallback.
-  }
-  return readableIngestionError(fallback, response.status);
+  const message = await sharedResponseErrorMessage(response, fallback);
+  return readableIngestionError(message, response.status);
 }
 
 function requestErrorMessage(error: unknown, fallback: string) {
   return readableIngestionError(error instanceof Error && error.message ? error.message : fallback);
 }
 
+async function parseSuccessfulIngestionJson(response: Response) {
+  return readJsonResponse(
+    response,
+    "Réponse du backend illisible. Relancez Juste Recrute Moi puis réessayez.",
+  );
+}
+
 export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view: View) => void }) {
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activeOperation, setActiveOperation] = useState<ActiveOperation | null>(null);
+  const operationInFlightRef = useRef(false);
   const [activeTab, setActiveTab] = useState<"resume" | "manual" | "raw" | "template" | "linkedin" | "github" | "portfolio" | "json-import">("resume");
 
   // Forms
@@ -170,13 +163,38 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
   useEffect(() => {
     if (activeTab !== "template" || templateLoaded) return;
     api(`/api/v1/template`)
-      .then(r => r.json())
-      .then(d => { setTemplate(d.template || ""); setTemplateLoaded(true); })
-      .catch(() => {});
+      .then(async r => {
+        if (!r.ok) throw new Error(await responseErrorMessage(r, "Le modèle de CV n'a pas pu être chargé."));
+        return readJsonResponse<{ template?: string }>(
+          r,
+          "Le modèle de CV a répondu dans un format illisible.",
+        );
+      })
+      .then(d => { setTemplate(d.template || ""); setTemplateLoaded(true); setErrorMessage(null); })
+      .catch(err => {
+        setTemplateLoaded(true);
+        setErrorMessage(requestErrorMessage(err, "Le modèle de CV n'a pas pu être chargé."));
+      });
   }, [activeTab, api, templateLoaded]);
 
-  const saveTemplate = async () => {
+  const startOperation = (operation: ActiveOperation) => {
+    if (operationInFlightRef.current) return false;
+    operationInFlightRef.current = true;
+    setActiveOperation(operation);
     setStatus("loading");
+    return true;
+  };
+
+  const finishOperation = (nextStatus: "idle" | "done" | "error") => {
+    operationInFlightRef.current = false;
+    setActiveOperation(null);
+    setStatus(nextStatus);
+  };
+
+  const isActiveOperation = (operation: ActiveOperation) => status === "loading" && activeOperation === operation;
+
+  const saveTemplate = async () => {
+    if (!startOperation("template")) return;
     setErrorMessage(null);
     try {
       const r = await api(`/api/v1/template`, {
@@ -185,19 +203,19 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         body: JSON.stringify({ template }),
       });
       if (r.ok) {
-        setStatus("done");
+        finishOperation("done");
       } else {
         setErrorMessage(await responseErrorMessage(r, "Le modèle de CV n'a pas pu être enregistré."));
-        setStatus("error");
+        finishOperation("error");
       }
     } catch (err) {
       setErrorMessage(requestErrorMessage(err, "Le modèle de CV n'a pas pu être enregistré."));
-      setStatus("error");
+      finishOperation("error");
     }
   };
 
   const addManual = async (type: string, data: Record<string, string>) => {
-    setStatus("loading");
+    if (!startOperation("manual")) return;
     setErrorMessage(null);
     try {
       const endpointType = type === "exp" ? "experience" : type;
@@ -205,8 +223,8 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         method: type === "identity" ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
       });
       if (r.ok) {
-        setStatus("done");
-        localStorage.setItem(ONBOARDING_KEY, "done");
+        finishOperation("done");
+        writeLocalStorage(ONBOARDING_KEY, "done");
         if (type === "skill")   setSkillForm({ n: "", cat: "technical" });
         if (type === "exp")     setExpForm({ role: "", co: "", period: "", d: "" });
         if (type === "project") setProjForm({ title: "", stack: "", repo: "", impact: "" });
@@ -218,40 +236,40 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         emitAppEvent("graph-refresh");
       } else {
         setErrorMessage(await responseErrorMessage(r, "Le contexte du profil n'a pas pu être enregistré."));
-        setStatus("error");
+        finishOperation("error");
       }
     } catch (err) {
       setErrorMessage(requestErrorMessage(err, "Le contexte du profil n'a pas pu être enregistré."));
-      setStatus("error");
+      finishOperation("error");
     }
   };
 
   const ingestResume = async (file: File) => {
-    setStatus("loading");
+    if (!startOperation("resume")) return;
     setErrorMessage(null);
     const fd = new FormData();
     fd.append("file", file);
     try {
       const r = await api(`/api/v1/ingest`, { method: "POST", body: fd, timeoutMs: 0 });
       if (r.ok) {
-        await r.json().catch(() => ({}));
-        localStorage.setItem(ONBOARDING_KEY, "done");
+        await parseSuccessfulIngestionJson(r);
+        writeLocalStorage(ONBOARDING_KEY, "done");
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
-        setStatus("done");
+        finishOperation("done");
       } else {
         setErrorMessage(await responseErrorMessage(r, "Ce CV n'a pas pu être importé."));
-        setStatus("error");
+        finishOperation("error");
       }
     } catch (err) {
       setErrorMessage(requestErrorMessage(err, "Ce CV n'a pas pu être importé."));
-      setStatus("error");
+      finishOperation("error");
     }
   };
 
   const ingestLinkedin = async () => {
     if (!linkedinFile) return;
-    setStatus("loading");
+    if (!startOperation("linkedin")) return;
     setLinkedinResult(null);
     const fd = new FormData();
     fd.append("file", linkedinFile);
@@ -259,7 +277,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
       const isPdf = linkedinFile.name.toLowerCase().endsWith(".pdf");
       const r = await api(isPdf ? `/api/v1/ingest` : `/api/v1/ingest/linkedin`, { method: "POST", body: fd, timeoutMs: 0 });
       if (r.ok) {
-        const data = asResult(await r.json());
+        const data = asResult(await parseSuccessfulIngestionJson(r));
         setLinkedinResult(isPdf ? {
           status: "ok",
           source: "pdf",
@@ -272,21 +290,20 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         } : data);
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
-        localStorage.setItem(ONBOARDING_KEY, "done");
-        setStatus("idle");
+        writeLocalStorage(ONBOARDING_KEY, "done");
+        finishOperation("idle");
       } else {
-        const data = asRecord(await r.json().catch(() => ({})));
-        setLinkedinResult({ errorMsg: readableIngestionError(detailToMessage(data.detail) || `Import échoué (${r.status})`, r.status) });
-        setStatus("idle");
+        setLinkedinResult({ errorMsg: await responseErrorMessage(r, "Le contexte LinkedIn n'a pas pu être importé.") });
+        finishOperation("idle");
       }
     } catch (err: unknown) {
       setLinkedinResult({ errorMsg: requestErrorMessage(err, "Le contexte LinkedIn n'a pas pu être importé.") });
-      setStatus("idle");
+      finishOperation("idle");
     }
   };
 
   const ingestGithub = async () => {
-    setStatus("loading");
+    if (!startOperation("github")) return;
     setGithubResult(null);
     try {
       const r = await api(`/api/v1/ingest/github`, {
@@ -296,25 +313,24 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         timeoutMs: 0,
       });
       if (r.ok) {
-        const data = asResult(await r.json());
+        const data = asResult(await parseSuccessfulIngestionJson(r));
         setGithubResult(data);
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
-        localStorage.setItem(ONBOARDING_KEY, "done");
-        setStatus("idle");
+        writeLocalStorage(ONBOARDING_KEY, "done");
+        finishOperation("idle");
       } else {
-        const data = asRecord(await r.json().catch(() => ({})));
-        setGithubResult({ errorMsg: readableIngestionError(detailToMessage(data.detail) || `Import GitHub échoué (${r.status})`, r.status) });
-        setStatus("idle");
+        setGithubResult({ errorMsg: await responseErrorMessage(r, "Import GitHub échoué.") });
+        finishOperation("idle");
       }
     } catch (err: unknown) {
       setGithubResult({ errorMsg: requestErrorMessage(err, "Le backend local est injoignable.") });
-      setStatus("idle");
+      finishOperation("idle");
     }
   };
 
   const scanPortfolio = async (autoImport = false) => {
-    setStatus("loading");
+    if (!startOperation("portfolio-scan")) return;
     if (!autoImport) setPortfolioResult(null);
     try {
       const r = await api(`/api/v1/ingest/portfolio`, {
@@ -323,24 +339,23 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         body: JSON.stringify({ url: portfolioUrl, auto_import: autoImport }),
         timeoutMs: 0,
       });
-      const data = asResult(await r.json().catch(() => ({})));
       if (r.ok) {
+        const data = asResult(await parseSuccessfulIngestionJson(r));
         setPortfolioResult(data);
-        setStatus("idle");
+        finishOperation("idle");
       } else {
-        const detail = asRecord(data).detail;
-        setPortfolioResult({ errorMsg: readableIngestionError(detailToMessage(detail) || "Impossible de récupérer le portfolio.", r.status) });
-        setStatus("idle");
+        setPortfolioResult({ errorMsg: await responseErrorMessage(r, "Impossible de récupérer le portfolio.") });
+        finishOperation("idle");
       }
     } catch (err: unknown) {
       setPortfolioResult({ errorMsg: requestErrorMessage(err, "Impossible de récupérer le portfolio.") });
-      setStatus("idle");
+      finishOperation("idle");
     }
   };
 
   const importPortfolioResult = async () => {
     if (!portfolioResult || portfolioResult.errorMsg || portfolioResult.error) return;
-    setStatus("loading");
+    if (!startOperation("portfolio-import")) return;
     setPortfolioResult({ ...portfolioResult, importError: null });
     const payload = {
       candidate: portfolioResult.candidate,
@@ -359,29 +374,32 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         body: JSON.stringify(payload),
         timeoutMs: 0,
       });
-      const data = asResult(await r.json().catch(() => ({})));
       if (!r.ok) {
-        const detail = asRecord(data).detail;
-        setPortfolioResult({ ...portfolioResult, importError: readableIngestionError(detailToMessage(detail) || `Import échoué (${r.status})`, r.status) });
-        setStatus("idle");
+        setPortfolioResult({ ...portfolioResult, importError: await responseErrorMessage(r, "Le portfolio n'a pas pu être importé.") });
+        finishOperation("idle");
         return;
       }
+      const data = asResult(await parseSuccessfulIngestionJson(r));
       setPortfolioResult({ ...portfolioResult, imported: data });
-      localStorage.setItem(ONBOARDING_KEY, "done");
+      writeLocalStorage(ONBOARDING_KEY, "done");
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
-      setStatus("idle");
+      finishOperation("idle");
     } catch (err: unknown) {
       setPortfolioResult({ ...portfolioResult, importError: requestErrorMessage(err, "Le portfolio n'a pas pu être importé.") });
-      setStatus("idle");
+      finishOperation("idle");
     }
   };
 
   const downloadProfileTemplate = async () => {
+    setJsonError(null);
     try {
       const r = await api(`/api/v1/ingest/profile/template`);
-      if (!r.ok) throw new Error(`Téléchargement du modèle échoué (${r.status})`);
-      const data = await r.json();
+      if (!r.ok) throw new Error(await responseErrorMessage(r, "Le modèle n'a pas pu être téléchargé."));
+      const data = await readJsonResponse(
+        r,
+        "Le modèle de profil a répondu dans un format illisible.",
+      );
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -389,8 +407,8 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
       a.download = "jhm_profile_template.json";
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      setJsonError("Le modèle n'a pas pu être téléchargé.");
+    } catch (err: unknown) {
+      setJsonError(requestErrorMessage(err, "Le modèle n'a pas pu être téléchargé."));
     }
   };
 
@@ -404,7 +422,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
       setJsonError(readableIngestionError(requestErrorMessage(err, "JSON invalide.")));
       return;
     }
-    setStatus("loading");
+    if (!startOperation("json-import")) return;
     try {
       const r = await api(`/api/v1/ingest/profile`, {
         method: "POST",
@@ -412,26 +430,25 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
         body: JSON.stringify(parsed),
         timeoutMs: 0,
       });
-      const data = asResult(await r.json().catch(() => ({})));
       if (r.ok) {
+        const data = asResult(await parseSuccessfulIngestionJson(r));
         setJsonResult(data);
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
-        localStorage.setItem(ONBOARDING_KEY, "done");
-        setStatus("idle");
+        writeLocalStorage(ONBOARDING_KEY, "done");
+        finishOperation("idle");
       } else {
-        const detail = asRecord(data).detail;
-        setJsonError(readableIngestionError(detailToMessage(detail) || `Import échoué (${r.status})`, r.status));
-        setStatus("idle");
+        setJsonError(await responseErrorMessage(r, "Le profil JSON n'a pas pu être importé."));
+        finishOperation("idle");
       }
-    } catch {
-      setJsonError("Le profil JSON n'a pas pu être importé.");
-      setStatus("idle");
+    } catch (err: unknown) {
+      setJsonError(requestErrorMessage(err, "Le profil JSON n'a pas pu être importé."));
+      finishOperation("idle");
     }
   };
 
   const ingestRaw = async () => {
-    setStatus("loading");
+    if (!startOperation("raw")) return;
     setErrorMessage(null);
     const fd = new FormData();
     fd.append("raw", rawText);
@@ -440,16 +457,16 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
       if (r.ok) {
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
-        localStorage.setItem(ONBOARDING_KEY, "done");
-        setStatus("done");
+        writeLocalStorage(ONBOARDING_KEY, "done");
+        finishOperation("done");
         setRawText("");
       } else {
         setErrorMessage(await responseErrorMessage(r, "Impossible de synchroniser le contexte brut."));
-        setStatus("error");
+        finishOperation("error");
       }
     } catch (err) {
       setErrorMessage(requestErrorMessage(err, "Impossible de synchroniser le contexte brut."));
-      setStatus("error");
+      finishOperation("error");
     }
   };
 
@@ -520,10 +537,16 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
 
         <div className="ingestion-tabs" role="tablist" aria-label="Sources de contexte">
           {TABS.map(t => (
-            <button key={t.id} onClick={() => { setActiveTab(t.id); setStatus("idle"); setErrorMessage(null); }}
+            <button key={t.id} onClick={() => {
+              if (isBusy) return;
+              setActiveTab(t.id);
+              setStatus("idle");
+              setErrorMessage(null);
+            }}
               className={`ingestion-tab ingestion-accent-${t.accent} ${activeTab === t.id ? "active" : ""}`}
               role="tab"
-              aria-selected={activeTab === t.id}>
+              aria-selected={activeTab === t.id}
+              disabled={isBusy}>
               <span className="ingestion-tab-icon"><Icon name={t.icon} size={15} /></span>
               <span className="ingestion-tab-copy">
                 <strong>{t.label}</strong>
@@ -566,7 +589,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
             <div style={{ fontSize: 14, color: "var(--ink-3)", maxWidth: 360, lineHeight: 1.5 }}>PDF, DOCX, TXT ou Markdown. L'agent détecte compétences, rôles et projets, puis les ajoute au graphe.</div>
             <input type="file" accept=".pdf,.docx,.txt,.md" onChange={e => { importResumeFile(e.target.files?.[0]); e.currentTarget.value = ""; }} style={{ display: "none" }} id="resume-in" />
             <button className="btn btn-primary" style={{ marginTop: 16, padding: "12px 32px", fontSize: 15 }} onClick={() => document.getElementById("resume-in")?.click()} disabled={isBusy}>Choisir un fichier CV</button>
-            {status === "loading" && <div className="mono pulse" style={{ fontSize: 12, marginTop: 16 }}>Analyse du CV, enregistrement du profil, synchronisation du graphe...</div>}
+            {isActiveOperation("resume") && <div className="mono pulse" style={{ fontSize: 12, marginTop: 16 }}>Analyse du CV, enregistrement du profil, synchronisation du graphe...</div>}
           </motion.div>
         )}
 
@@ -637,7 +660,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
             <div className="eyebrow">Agrégateur de texte brut</div>
             <textarea className="field-input" placeholder="Collez du texte non structuré depuis LinkedIn, un site personnel ou des notes..." rows={16} value={rawText} onChange={v => setRawText(v.target.value)} style={{ fontSize: 14, lineHeight: 1.6 }} />
             <button className="btn btn-primary" style={{ padding: 16, fontSize: 15 }} onClick={ingestRaw} disabled={isBusy || !rawText.trim()}>
-              {status === "loading" ? "Traitement..." : "Synchroniser le contexte brut"}
+              {isActiveOperation("raw") ? "Traitement..." : "Synchroniser le contexte brut"}
             </button>
           </motion.div>
         )}
@@ -671,7 +694,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
             <button className="btn btn-primary" style={{ padding: 16, fontSize: 15 }}
               disabled={!linkedinFile || isBusy}
               onClick={ingestLinkedin}>
-              {status === "loading" ? "Import..." : linkedinFile?.name.toLowerCase().endsWith(".pdf") ? "Importer le PDF LinkedIn" : "Importer les données LinkedIn"}
+              {isActiveOperation("linkedin") ? "Import..." : linkedinFile?.name.toLowerCase().endsWith(".pdf") ? "Importer le PDF LinkedIn" : "Importer les données LinkedIn"}
             </button>
             {linkedinResult?.errorMsg && (
               <div style={{ padding: 16, background: "var(--bad-soft)", color: "var(--bad)", borderRadius: 12, border: "1px solid var(--bad)", fontSize: 14 }}>
@@ -729,9 +752,9 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
             <button className="btn btn-primary" style={{ padding: 16, fontSize: 15 }}
               disabled={!githubUsername.trim() || isBusy}
               onClick={ingestGithub}>
-              {status === "loading" ? "Scan GitHub et synchronisation du graphe..." : "Scanner le profil GitHub"}
+              {isActiveOperation("github") ? "Scan GitHub et synchronisation du graphe..." : "Scanner le profil GitHub"}
             </button>
-            {status === "loading" && (
+            {isActiveOperation("github") && (
               <div className="ingestion-progress-card" role="status" aria-live="polite">
                 <div className="ingestion-progress-head">
                   <span className="ingestion-progress-spinner" aria-hidden="true" />
@@ -792,7 +815,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
               <button className="btn btn-primary" style={{ alignSelf: "flex-start", padding: "10px 24px" }}
                 disabled={!portfolioUrl.trim() || isBusy}
                 onClick={() => scanPortfolio(false)}>
-                {status === "loading" ? "Lecture du site..." : "Scanner le portfolio"}
+                {isActiveOperation("portfolio-scan") ? "Lecture du site..." : "Scanner le portfolio"}
               </button>
             </div>
             {portfolioResult?.errorMsg && (
@@ -853,7 +876,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
                       <button className="btn btn-primary" style={{ alignSelf: "flex-start", padding: "10px 24px" }}
                         disabled={isBusy}
                         onClick={importPortfolioResult}>
-                        {status === "loading" ? "Import..." : "Importer les éléments affichés dans Profil"}
+                        {isActiveOperation("portfolio-import") ? "Import..." : "Importer les éléments affichés dans Profil"}
                       </button>
                     )}
                     {portfolioResult.importError && (
@@ -889,7 +912,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
               <button className="btn btn-primary" style={{ alignSelf: "flex-start", padding: "10px 24px" }}
                 disabled={!jsonText.trim() || isBusy}
                 onClick={importProfileJson}>
-                {status === "loading" ? "Import..." : "Importer le profil"}
+                {isActiveOperation("json-import") ? "Import..." : "Importer le profil"}
               </button>
             </div>
             {jsonError && (
@@ -939,7 +962,7 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
               />
               <div className="row gap-3" style={{ alignItems: "center" }}>
                 <button className="btn btn-primary" style={{ padding: "12px 28px", fontSize: 14 }} onClick={saveTemplate} disabled={isBusy}>
-                  {status === "loading" ? "Enregistrement..." : "Enregistrer le modèle"}
+                  {isActiveOperation("template") ? "Enregistrement..." : "Enregistrer le modèle"}
                 </button>
                 {template && (
                   <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => { setTemplate(""); }}>

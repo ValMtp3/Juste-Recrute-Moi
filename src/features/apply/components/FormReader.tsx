@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiFetch, FormField, FormReadResult } from "../../../types";
+import { copyTextToClipboard } from "../../../shared/lib/clipboard";
+import { readJsonResponse, responseErrorMessage } from "../../../shared/lib/httpError";
 
 const FIELD_LABELS: Record<string, string> = {
   city: "Ville",
@@ -31,12 +33,19 @@ function readablePlatformLabel(result: FormReadResult) {
   return result.platform_label || "Formulaire générique";
 }
 
-function readableFormError(message: string) {
-  const trimmed = String(message || "").trim();
-  if (!trimmed) return "La lecture du formulaire a échoué.";
+function readableFormError(error: unknown, fallback = "La lecture du formulaire a échoué.") {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
   const lower = trimmed.toLowerCase();
   if (lower.includes("no url available")) {
     return "Aucune URL exploitable n'est disponible pour cette offre.";
+  }
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("aborted") || lower.includes("signal is aborted")) {
+    return "Lecture arrêtée. Relancez la lecture du formulaire si nécessaire.";
   }
   if (lower.includes("timeout") || lower.includes("timed out")) {
     return "La page met trop longtemps à répondre. Vérifiez l'URL ou réessayez plus tard.";
@@ -63,14 +72,19 @@ export function FormReader({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<FormReadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [expandedCl, setExpandedCl] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+  const copyErrorTimerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => () => {
     mountedRef.current = false;
     requestRef.current?.abort();
+    if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+    if (copyErrorTimerRef.current) window.clearTimeout(copyErrorTimerRef.current);
   }, []);
 
   const readForm = async () => {
@@ -87,24 +101,37 @@ export function FormReader({
         signal: controller.signal,
       });
       if (!r.ok) {
-        const detail = await r.json()
-          .then((d: { detail?: unknown }) => typeof d.detail === "string" ? d.detail : "")
-          .catch(() => "");
-        throw new Error(readableFormError(detail || `Le serveur a renvoyé ${r.status}`));
+        throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`));
       }
-      setResult(await r.json());
+      setResult(await readJsonResponse<FormReadResult>(
+        r,
+        "La lecture du formulaire a répondu dans un format illisible. Consultez Activité, puis réessayez.",
+      ));
     } catch (err) {
-      if (mountedRef.current) setError(readableFormError(err instanceof Error ? err.message : "La lecture du formulaire a échoué"));
+      if (mountedRef.current && requestRef.current === controller && !controller.signal.aborted) {
+        setError(readableFormError(err));
+      }
     } finally {
-      if (requestRef.current === controller) requestRef.current = null;
-      if (mountedRef.current) setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        if (mountedRef.current) setLoading(false);
+      }
     }
   };
 
-  const copy = (text: string, key: string) => {
-    navigator.clipboard?.writeText(text);
+  const copy = async (text: string, key: string) => {
+    const ok = await copyTextToClipboard(text);
+    if (!ok) {
+      setCopied(null);
+      setCopyError("Copie impossible. Sélectionnez le texte manuellement.");
+      if (copyErrorTimerRef.current) window.clearTimeout(copyErrorTimerRef.current);
+      copyErrorTimerRef.current = window.setTimeout(() => setCopyError(null), 2200);
+      return;
+    }
+    setCopyError(null);
     setCopied(key);
-    setTimeout(() => setCopied(null), 1500);
+    if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopied(null), 1500);
   };
 
   const copyAll = () => {
@@ -182,6 +209,11 @@ export function FormReader({
       {error && (
         <div style={{ fontSize: 12, color: "var(--bad)", padding: "6px 10px", background: "var(--bad-soft)", border: "1px solid var(--bad)", borderRadius: 8 }}>
           {error}
+        </div>
+      )}
+      {copyError && (
+        <div style={{ fontSize: 12, color: "var(--bad)", padding: "6px 10px", background: "var(--bad-soft)", border: "1px solid var(--bad)", borderRadius: 8 }}>
+          {copyError}
         </div>
       )}
 

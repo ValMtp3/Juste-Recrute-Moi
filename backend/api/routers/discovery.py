@@ -28,6 +28,55 @@ _log = get_logger(__name__)
 REEVALUATION_STATUS_LOCKS = {"approved", "applied", "interviewing", "rejected", "accepted", "discarded"}
 
 
+def _scan_failed_message(exc: Exception) -> str:
+    return f"Scan échoué : {exc}"
+
+
+def _reeval_start_message(total: int, provider: str) -> str:
+    return f"Réévaluation de {total} offre(s) via {provider}"
+
+
+def _reeval_stopped_message(scored: int, total: int) -> str:
+    return f"Réévaluation arrêtée après {scored}/{total} offre(s)."
+
+
+def _reeval_scored_message(index: int, total: int, lead: dict, score: int) -> str:
+    title = lead.get("title") or "offre sans titre"
+    return f"[{index}/{total}] Score recalculé pour {title} = {score}/100"
+
+
+def _reeval_error_message(lead: dict, exc: Exception) -> str:
+    title = lead.get("title") or "offre sans titre"
+    return f"Réévaluation échouée pour {title} : {exc}"
+
+
+def _reeval_summary_message(
+    *,
+    scored: int,
+    total: int,
+    failed: int,
+    fallback_count: int,
+    fallback_errors: list[str],
+    triaged_count: int,
+) -> str:
+    summary = f"Réévaluation terminée - {scored}/{total} offre(s) scorée(s)"
+    if failed:
+        summary += f", {failed} échec(s)"
+    if fallback_count:
+        score_label = "score local" if fallback_count == 1 else "scores locaux"
+        summary += f", {fallback_count} {score_label}"
+        if fallback_errors:
+            summary += f" ({fallback_errors[0]})"
+    if triaged_count:
+        triage_label = "tri local" if triaged_count == 1 else "tris locaux"
+        summary += f", {triaged_count} {triage_label}"
+    return summary
+
+
+def _reeval_failed_message(exc: Exception) -> str:
+    return f"Réévaluation échouée : {exc}"
+
+
 def _target_label(target: str) -> str:
     value = str(target or "").strip()
     lower = value.lower()
@@ -509,7 +558,7 @@ async def run_scan_task(
         )
     except Exception as exc:
         logger.error("scan failed: %s", exc)
-        await manager.broadcast({"type": "agent", "event": "eval_done", "msg": f"Scan failed: {exc}"})
+        await manager.broadcast({"type": "agent", "event": "eval_done", "msg": _scan_failed_message(exc)})
 
 
 async def run_reevaluate_jobs(
@@ -563,7 +612,7 @@ async def _run_reevaluate_jobs_inner(
     await manager.broadcast({
         "type": "agent",
         "event": "reeval_start",
-        "msg": f"Re-evaluating {total} job leads via {cfg.get('llm_provider', 'ollama')}",
+        "msg": _reeval_start_message(total, cfg.get("llm_provider", "ollama")),
     })
 
     for index, lead in enumerate(jobs, start=1):
@@ -571,7 +620,7 @@ async def _run_reevaluate_jobs_inner(
             await manager.broadcast({
                 "type": "agent",
                 "event": "reeval_done",
-                "msg": f"Re-evaluation stopped after {scored}/{total} jobs.",
+                "msg": _reeval_stopped_message(scored, total),
             })
             return
 
@@ -603,25 +652,24 @@ async def _run_reevaluate_jobs_inner(
             await manager.broadcast({
                 "type": "agent",
                 "event": "reeval_scored",
-                "msg": f"[{index}/{total}] Re-scored {lead.get('title','')} = {result['score']}/100",
+                "msg": _reeval_scored_message(index, total, lead, result["score"]),
             })
         except Exception as exc:
             failed += 1
             await manager.broadcast({
                 "type": "agent",
                 "event": "reeval_error",
-                "msg": f"Re-eval failed for {lead.get('title','')}: {exc}",
+                "msg": _reeval_error_message(lead, exc),
             })
 
-    summary = f"Re-evaluation complete - {scored}/{total} jobs scored"
-    if failed:
-        summary += f", {failed} failed"
-    if fallback_count:
-        summary += f", {fallback_count} fallback"
-        if fallback_errors:
-            summary += f" ({fallback_errors[0]})"
-    if triaged_count:
-        summary += f", {triaged_count} local triage"
+    summary = _reeval_summary_message(
+        scored=scored,
+        total=total,
+        failed=failed,
+        fallback_count=fallback_count,
+        fallback_errors=fallback_errors,
+        triaged_count=triaged_count,
+    )
     await manager.broadcast({"type": "agent", "event": "reeval_done", "msg": summary})
     job_store.update(job.job_id, status="succeeded", progress=100, result={"scored": scored, "failed": failed, "total": total})
 
@@ -638,7 +686,7 @@ async def run_reevaluate_jobs_task(
         await run_reevaluate_jobs(manager, repo=repo, ranking_service=ranking_service, stop_event=stop_event)
     except Exception as exc:
         logger.error("reevaluate failed: %s", exc)
-        await manager.broadcast({"type": "agent", "event": "reeval_done", "msg": f"Re-evaluation failed: {exc}"})
+        await manager.broadcast({"type": "agent", "event": "reeval_done", "msg": _reeval_failed_message(exc)})
 
 
 def create_router(
@@ -669,7 +717,7 @@ def create_router(
         )
         if not started:
             status = await TASKS.status()
-            detail = "Re-evaluation already running" if status["reevaluating"] else "Scan already running"
+            detail = "Réévaluation déjà en cours" if status["reevaluating"] else "Scan déjà en cours"
             raise HTTPException(status_code=409, detail=detail)
         return {"status": "scanning"}
 
@@ -681,7 +729,7 @@ def create_router(
     async def stop_scan():
         if not await TASKS.stop("scan"):
             return {"status": "idle"}
-        await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Scan stopped by user."})
+        await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Scan arrêté par l'utilisateur."})
         return {"status": "stopping"}
 
     @router.post("/leads/reevaluate")

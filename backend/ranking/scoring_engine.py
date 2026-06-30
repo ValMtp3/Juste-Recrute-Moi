@@ -453,6 +453,12 @@ _PHRASE_STOPWORDS = {
     "ability", "etc", "various", "other", "general", "basic", "advanced",
 }
 
+_GENERIC_ROLE_WORDS = {
+    "engineer", "developer", "manager", "specialist", "coordinator", "assistant",
+    "executive", "representative", "agent", "associate", "consultant",
+    "systems",
+}
+
 
 def _normalize_phrase(value: str) -> str:
     text = re.sub(r"[^a-z0-9+#./ -]", " ", str(value or "").lower())
@@ -508,7 +514,7 @@ def _same_wrong_field_as_candidate(candidate_data: dict, wrong_terms: Iterable[s
         parts = [
             part
             for part in normalized.split()
-            if len(part) >= 5 and part not in _PHRASE_STOPWORDS
+            if len(part) >= 5 and part not in _PHRASE_STOPWORDS and part not in _GENERIC_ROLE_WORDS
         ]
         if parts and any(_contains_phrase(candidate_text, part) for part in parts):
             return True

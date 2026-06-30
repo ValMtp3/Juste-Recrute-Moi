@@ -4,6 +4,7 @@ import Icon from "../../shared/components/Icon";
 import type { ApiFetch, GraphStats, View } from "../../types";
 import { applyProfileDeleteMarkers, entryTitle, mergeProfileWithGraphFallback, normalizeProfileResponse, profileDeleteKey, profileDeletePath, profileHasDeleteMarker, removeProfileItem, type ProfileDeleteMarker } from "./profileUtils";
 import { emitAppEvent, onAppEvent } from "../../shared/lib/appEvents";
+import { readJsonResponse, responseErrorMessage } from "../../shared/lib/httpError";
 
 type ProfileData = ReturnType<typeof normalizeProfileResponse>;
 type ProfileRecord = Record<string, unknown>;
@@ -13,13 +14,57 @@ const asRecord = (value: unknown): ProfileRecord =>
 
 const textValue = (value: unknown): string => String(value || "");
 
-const errorMessage = (err: unknown, fallback: string): string =>
-  err instanceof Error && err.message ? err.message : fallback;
+function readableProfileError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("ne connaît pas encore le nettoyage")) return trimmed;
+  if (lower.includes("chargement")) {
+    return "Le profil n'a pas pu être chargé. Vérifiez le backend local, puis réessayez.";
+  }
+  if (lower.includes("suppression")) {
+    return "La suppression n'a pas pu être appliquée. Vérifiez le profil, puis réessayez.";
+  }
+  if (lower.includes("nettoyage")) {
+    return "Le nettoyage du profil a échoué. Vérifiez Activité, puis réessayez.";
+  }
+  if (lower.includes("name or summary is required")) {
+    return "Ajoutez au moins un nom ou un résumé de profil.";
+  }
+  if (lower.includes("skill name is required")) {
+    return "Le nom de la compétence est obligatoire.";
+  }
+  if (lower.includes("project title is required")) {
+    return "Le titre du projet est obligatoire.";
+  }
+  if (lower.includes("education title is required")) {
+    return "Le titre de la formation est obligatoire.";
+  }
+  if (lower.includes("certification title is required")) {
+    return "Le titre de la certification est obligatoire.";
+  }
+  if (lower.includes("achievement title is required")) {
+    return "Le titre de la réalisation est obligatoire.";
+  }
+  if (lower.includes("export")) {
+    return fallback;
+  }
+  if (lower.includes("enregistrement") || lower.includes("validation")) {
+    return fallback;
+  }
+  return trimmed;
+}
 
-const detailFromBody = (body: unknown): string => {
-  const detail = asRecord(body).detail;
-  return typeof detail === "string" ? detail : "";
-};
+async function parseSuccessfulProfileJson(response: Response) {
+  return readJsonResponse(
+    response,
+    "Réponse du backend illisible. Relancez Juste Recrute Moi puis réessayez.",
+  );
+}
 
 const stackItems = (stack: unknown): string[] =>
   (Array.isArray(stack) ? stack : String(stack || "").split(","))
@@ -77,15 +122,15 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
   const fetchProfile = useCallback(async (options?: { errorPrefix?: string; suppressError?: boolean }) => {
     try {
       const r = await api(`/api/v1/profile`);
-      if (!r.ok) throw new Error(`Chargement du profil échoué (${r.status})`);
-      const data = await r.json();
+      if (!r.ok) throw new Error(await responseErrorMessage(r, `Chargement du profil échoué (${r.status})`));
+      const data = await parseSuccessfulProfileJson(r);
       setProfile(applyLocalDeletes(mergeProfileWithGraphFallback(data, stats), true));
       setProfileErr(null);
       setProfileNotice(null);
       return true;
     } catch (err: unknown) {
       console.error("Chargement du profil échoué :", err);
-      const message = errorMessage(err, "Chargement du profil échoué");
+      const message = readableProfileError(err, "Chargement du profil échoué");
       if (!options?.suppressError) {
         setProfileErr(options?.errorPrefix ? `${options.errorPrefix}: ${message}` : message);
       }
@@ -102,11 +147,15 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
     return onAppEvent("profile-refresh", onProfileRefresh);
   }, [fetchProfile]);
   useEffect(() => { setExpandedProfileList(false); }, [activeProfileTab]);
-  useEffect(() => {
-    const exportProfile = async () => {
-      if (!profile) return;
+  const exportProfile = useCallback(async () => {
+    if (!profile) return;
+    let url: string | null = null;
+    let revokeDelay = 0;
+    try {
+      setProfileErr(null);
+      setProfileNotice(null);
       const blob = new Blob([JSON.stringify(profile, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
+      url = URL.createObjectURL(blob);
       // WebKitGTK (Tauri's Linux webview) silently ignores programmatic
       // `<a download>` clicks, so the anchor approach never produces a file
       // there — the button looked dead on Linux (issue #92). Inside the Tauri
@@ -116,22 +165,34 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       const inTauri = typeof window !== "undefined"
         && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
       if (inTauri) {
-        try {
-          await openUrl(url);
-        } finally {
-          setTimeout(() => URL.revokeObjectURL(url), 10_000);
-        }
+        await openUrl(url);
+        revokeDelay = 10_000;
+        setProfileNotice("Export du profil ouvert.");
         return;
       }
       const a = document.createElement("a");
       a.href = url;
       a.download = `${profile.n || "identity-graph"}.json`.replace(/[^\w.-]+/g, "-");
       a.click();
-      URL.revokeObjectURL(url);
-    };
+      setProfileNotice("Export du profil téléchargé.");
+    } catch (err: unknown) {
+      console.error("Export du profil échoué :", err);
+      setProfileErr(readableProfileError(err, "L'export du profil a échoué. Réessayez ou relancez l'application."));
+    } finally {
+      if (url) {
+        const objectUrl = url;
+        if (revokeDelay > 0) {
+          window.setTimeout(() => URL.revokeObjectURL(objectUrl), revokeDelay);
+        } else {
+          URL.revokeObjectURL(objectUrl);
+        }
+      }
+    }
+  }, [profile]);
+  useEffect(() => {
     window.addEventListener("profile-export", exportProfile);
     return () => window.removeEventListener("profile-export", exportProfile);
-  }, [profile]);
+  }, [exportProfile]);
 
   const deleteItem = useCallback(async (type: string, id: string) => {
     const key = `${type}:${id}`;
@@ -142,8 +203,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
     setProfileErr(null);
     try {
       const res = await api(profileDeletePath(type, id), { method: "DELETE", timeoutMs: 120000 });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(detailFromBody(body) || `Suppression échouée (${res.status})`);
+      if (!res.ok) throw new Error(await responseErrorMessage(res, `Suppression échouée (${res.status})`));
       const markers = addDeleteMarker(marker);
       setProfile(prev => prev ? applyProfileDeleteMarkers(removeProfileItem(prev, type, id), markers) : prev);
       const refreshed = await fetchProfile({ suppressError: true });
@@ -156,7 +216,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
     } catch (err: unknown) {
       console.error("Delete error:", err);
       removeDeleteMarker(marker);
-      setProfileErr(errorMessage(err, "Suppression échouée"));
+      setProfileErr(readableProfileError(err, "Suppression échouée"));
     } finally {
       deleteInFlightRef.current = false;
       setDeletingItem(null);
@@ -172,8 +232,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       const res = await api(`/api/v1/profile/${type}/${id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(editData || {}),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(detailFromBody(body) || `Enregistrement échoué (${res.status})`);
+      if (!res.ok) throw new Error(await responseErrorMessage(res, `Enregistrement échoué (${res.status})`));
       setEditId(null);
       setEditData(null);
       setProfileErr(null);
@@ -181,7 +240,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
     } catch (err: unknown) {
-      setProfileErr(errorMessage(err, "L'enregistrement du profil a échoué"));
+      setProfileErr(readableProfileError(err, "L'enregistrement du profil a échoué"));
     }
   };
 
@@ -190,8 +249,8 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       const res = await api(`/api/v1/profile/candidate`, {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(candForm),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(detailFromBody(body) || `Enregistrement échoué (${res.status})`);
+      if (!res.ok) throw new Error(await responseErrorMessage(res, `Enregistrement échoué (${res.status})`));
+      const body = await parseSuccessfulProfileJson(res);
       const bodyRecord = asRecord(body);
       setProfile(prev => normalizeProfileResponse({ ...asRecord(prev), n: bodyRecord.n ?? candForm.n, s: bodyRecord.s ?? candForm.s }));
       setEditingCandidate(false);
@@ -200,7 +259,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
     } catch (err: unknown) {
-      setProfileErr(errorMessage(err, "L'enregistrement du contexte d'identité a échoué"));
+      setProfileErr(readableProfileError(err, "L'enregistrement du contexte d'identité a échoué"));
     }
   };
 
@@ -209,8 +268,8 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       const res = await api(`/api/v1/profile/identity`, {
       method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(identityForm),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(detailFromBody(body) || `Enregistrement échoué (${res.status})`);
+      if (!res.ok) throw new Error(await responseErrorMessage(res, `Enregistrement échoué (${res.status})`));
+      const body = await parseSuccessfulProfileJson(res);
       setProfile(prev => {
         const prevRecord = asRecord(prev);
         return normalizeProfileResponse({ ...prevRecord, identity: { ...asRecord(prevRecord.identity), ...asRecord(body) } });
@@ -221,7 +280,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
     } catch (err: unknown) {
-      setProfileErr(errorMessage(err, "L'enregistrement du contact a échoué"));
+      setProfileErr(readableProfileError(err, "L'enregistrement du contact a échoué"));
     }
   };
 
@@ -237,11 +296,11 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
         body: JSON.stringify({ confirm: "CLEAN" }),
         timeoutMs: 120000,
       });
-      const body = await res.json().catch(() => ({}));
       if (res.status === 404) {
         throw new Error("Le backend actif ne connaît pas encore le nettoyage du profil. Relancez l'application ou le backend local pour charger la nouvelle route.");
       }
-      if (!res.ok) throw new Error(detailFromBody(body) || `Nettoyage échoué (${res.status})`);
+      if (!res.ok) throw new Error(await responseErrorMessage(res, `Nettoyage échoué (${res.status})`));
+      const body = await parseSuccessfulProfileJson(res);
       const bodyRecord = asRecord(body);
       const cleanedProfile = bodyRecord.profile ? mergeProfileWithGraphFallback(bodyRecord.profile, stats, { fillEmptyBuckets: false }) : profile;
       setProfile(applyLocalDeletes(cleanedProfile, true));
@@ -253,7 +312,7 @@ export function ProfileView({ api, setView, stats }: { api: ApiFetch; setView: (
       setProfileNotice(`Nettoyage terminé : ${removed} doublon(s)/ligne(s) vide(s) retiré(s), ${corrected} correction(s) appliquée(s), ${purged} noeud(s) graphe purgé(s).`);
       emitAppEvent("graph-refresh");
     } catch (err: unknown) {
-      setProfileErr(errorMessage(err, "Le nettoyage du profil a échoué"));
+      setProfileErr(readableProfileError(err, "Le nettoyage du profil a échoué"));
     } finally {
       setCleaningProfile(false);
     }

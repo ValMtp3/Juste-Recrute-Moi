@@ -3,6 +3,30 @@ import { motion } from "framer-motion";
 import Icon from "./Icon";
 import type { ApiFetch } from "../../types";
 import { emitAppEvent } from "../lib/appEvents";
+import { responseErrorMessage } from "../lib/httpError";
+
+function readableOnboardingError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Relancez Juste Recrute Moi puis réessayez.";
+  }
+  if (lower.includes("format") || lower.includes("unsupported")) {
+    return "Format non supporté. Importez un CV en PDF, DOCX, TXT ou Markdown.";
+  }
+  if (lower.includes("api key") || lower.includes("llm")) {
+    return "La clé IA ou le modèle n'est pas utilisable. Vérifiez les réglages IA avant de continuer.";
+  }
+  if (lower.includes("ingest") || lower.includes("import") || lower.includes("cv")) {
+    return "L'import du CV a échoué. Vérifiez le fichier ou collez le texte du CV, puis réessayez.";
+  }
+  if (lower.includes("préférences") || lower.includes("settings")) {
+    return "Les préférences n'ont pas pu être enregistrées. Vérifiez les champs, puis réessayez.";
+  }
+  return trimmed;
+}
 
 export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFetch; onFinish: (draft: string) => void; onOpenSettings: () => void }) {
   const [step, setStep] = useState(0);
@@ -126,15 +150,13 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
     try {
       const r = await api(`/api/v1/ingest`, { method: "POST", body: fd, timeoutMs: 0 });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `L'import du CV a renvoyé ${r.status}`);
+        throw new Error(await responseErrorMessage(r, `L'import du CV a renvoyé ${r.status}`));
       }
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
       setStep(1);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "L'import du CV a échoué";
-      setErr(message === "Failed to fetch" ? "Backend local injoignable. Relancez Juste Recrute Moi puis réessayez." : message);
+      setErr(readableOnboardingError(e, "L'import du CV a échoué"));
     } finally {
       setBusy(false);
     }
@@ -168,10 +190,10 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!r.ok) throw new Error(`Les préférences ont renvoyé ${r.status}`);
+      if (!r.ok) throw new Error(await responseErrorMessage(r, `Les préférences ont renvoyé ${r.status}`));
       setStep(2);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Les préférences n'ont pas pu être enregistrées");
+      setErr(readableOnboardingError(e, "Les préférences n'ont pas pu être enregistrées"));
     } finally {
       setBusy(false);
     }

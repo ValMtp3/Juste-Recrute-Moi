@@ -5,10 +5,34 @@ import { PipelineJobCard, PipelineSkeleton } from "./components/JobCard";
 import type { ApiFetch, Lead, LeadSort, OperationProgress, PipelineTab, SeniorityFilter, View } from "../../types";
 import { PAGE_SIZE, leadSearchText, sortLeads, seniorityMatches, uniqueLeadValues } from "../../shared/lib/leadUtils";
 import { emitAppEvent } from "../../shared/lib/appEvents";
+import { responseErrorMessage } from "../../shared/lib/httpError";
+
+function readablePipelineError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("invalid job id format") || lower.includes("identifiant d'offre invalide")) {
+    return "Identifiant d'offre invalide. Rechargez la liste puis réessayez.";
+  }
+  if (lower.includes("export échoué")) {
+    return "L'export CSV n'a pas pu être préparé. Vérifiez Activité, puis réessayez.";
+  }
+  if (lower.includes("suppression")) {
+    return "La suppression de l'offre a échoué. Vérifiez la connexion au backend local, puis réessayez.";
+  }
+  if (lower.includes("marquage échoué")) {
+    return "Le marquage des offres a échoué. Vérifiez la connexion au backend local, puis réessayez.";
+  }
+  return trimmed;
+}
 
 export function PipelineView({ leads, openDrawer, deleteLead, port, api, scanning, reevaluating, cleaning, progress, onScan, scanSpeed, setScanSpeed, onReevaluate, onStopReevaluate, onCleanup, setView, loading, error, tab }: {
   leads: Lead[]; openDrawer: (l: Lead) => void;
-  deleteLead: (id: string) => void; port: number | null; api: ApiFetch | null;
+  deleteLead: (id: string) => Promise<void>; port: number | null; api: ApiFetch | null;
   scanning: boolean; reevaluating: boolean; cleaning: boolean;
   progress: OperationProgress;
   onScan: (speed?: "rapide" | "moyen" | "max") => void;
@@ -30,12 +54,15 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
   const [bulkBusy, setBulkBusy] = useState<"delete" | "applied" | null>(null);
   const [bulkConfirmDelete, setBulkConfirmDelete] = useState(false);
   const [bulkNotice, setBulkNotice] = useState<{ tone: "success" | "warning" | "error"; message: string } | null>(null);
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
+  const [cleanupConfirm, setCleanupConfirm] = useState(false);
 
   useEffect(() => setVisibleCount(PAGE_SIZE), [tab, search, platform, sort, seniority]);
   useEffect(() => {
     setBulkSelecting(false);
     setSelected(new Set());
     setBulkConfirmDelete(false);
+    setCleanupConfirm(false);
     setBulkNotice(null);
   }, [tab]);
 
@@ -110,19 +137,26 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
     setBulkBusy("applied");
     setBulkNotice({ tone: "warning", message: `Marquage de ${ids.length} offre${ids.length > 1 ? "s" : ""} en postulée${ids.length > 1 ? "s" : ""}...` });
     try {
-      const results = await Promise.allSettled(ids.map(id => api(`/api/v1/leads/${id}/status`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "applied" }),
-      })));
-      const failed = results.filter(r => r.status === "rejected" || (r.status === "fulfilled" && !r.value.ok)).length;
-      const succeeded = ids.length - failed;
+      const results = await Promise.allSettled(ids.map(async id => {
+        const response = await api(`/api/v1/leads/${id}/status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "applied" }),
+        });
+        if (!response.ok) throw new Error(await responseErrorMessage(response, `Marquage échoué (${response.status})`));
+        return id;
+      }));
+      const failedResults = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+      const failed = failedResults.length;
+      const succeededIds = results.flatMap(r => r.status === "fulfilled" ? [r.value] : []);
+      const succeeded = succeededIds.length;
       if (failed > 0) {
-        setBulkNotice({ tone: "error", message: `${failed} offre${failed > 1 ? "s" : ""} sur ${ids.length} n'ont pas pu être marquées comme postulées.` });
+        const detail = readablePipelineError(failedResults[0].reason, "Le marquage des offres a échoué.");
+        setBulkNotice({ tone: "error", message: `${failed} offre${failed > 1 ? "s" : ""} sur ${ids.length} n'ont pas pu être marquées comme postulées. ${detail}` });
       } else {
         setBulkNotice({ tone: "success", message: `${succeeded} offre${succeeded > 1 ? "s" : ""} marquée${succeeded > 1 ? "s" : ""} comme postulée${succeeded > 1 ? "s" : ""}.` });
       }
-      ids.forEach(job_id => emitAppEvent("lead-updated", { job_id, status: "applied" }));
+      succeededIds.forEach(job_id => emitAppEvent("lead-updated", { job_id, status: "applied" }));
       setSelected(new Set());
       setBulkSelecting(false);
       setBulkConfirmDelete(false);
@@ -132,13 +166,45 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
     }
   };
 
+  const handleDeleteLead = async (jobId: string) => {
+    if (deletingLeadId || bulkBusy) return;
+    setDeletingLeadId(jobId);
+    setBulkNotice({ tone: "warning", message: "Suppression de l'offre en cours..." });
+    try {
+      await deleteLead(jobId);
+      setBulkNotice({ tone: "success", message: "Offre supprimée." });
+      setSelected(prev => {
+        if (!prev.has(jobId)) return prev;
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
+      emitAppEvent("leads-refresh");
+    } catch (err) {
+      setBulkNotice({ tone: "error", message: readablePipelineError(err, "La suppression de l'offre a échoué.") });
+    } finally {
+      setDeletingLeadId(null);
+    }
+  };
+
+  const requestCleanup = () => {
+    if (cleanupConfirm) {
+      setCleanupConfirm(false);
+      setBulkNotice(null);
+      onCleanup();
+      return;
+    }
+    setCleanupConfirm(true);
+    setBulkNotice({ tone: "warning", message: "Le nettoyage masque les lignes hors sujet sans les supprimer. Cliquez encore pour confirmer." });
+  };
+
   const exportCsv = async () => {
     if (!api || exporting) return;
     setExporting(true);
     setExportErr(null);
     try {
       const res = await api("/api/v1/leads/export.csv");
-      if (!res.ok) throw new Error(`Export échoué (${res.status})`);
+      if (!res.ok) throw new Error(await responseErrorMessage(res, `Export échoué (${res.status})`));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -147,7 +213,7 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setExportErr(e instanceof Error ? e.message : "Export échoué");
+      setExportErr(readablePipelineError(e, "Export échoué"));
     } finally {
       setExporting(false);
     }
@@ -218,8 +284,8 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
                   <Icon name="pulse" size={13} /> Re-scorer
                 </button>
               )}
-              <button className="btn danger-soft" onClick={onCleanup} disabled={leads.length === 0 || scanning || reevaluating || cleaning || loading}>
-                <Icon name="trash" size={13} /> {cleaning ? "Nettoyage" : "Nettoyer"}
+              <button className="btn danger-soft" onClick={requestCleanup} disabled={leads.length === 0 || scanning || reevaluating || cleaning || loading}>
+                <Icon name="trash" size={13} /> {cleaning ? "Nettoyage" : cleanupConfirm ? "Confirmer nettoyer" : "Nettoyer"}
               </button>
               {tab === "discarded" && (
                 bulkSelecting ? (
@@ -334,7 +400,8 @@ export function PipelineView({ leads, openDrawer, deleteLead, port, api, scannin
                 <PipelineJobCard
                   lead={lead}
                   onOpen={openDrawer}
-                  onDelete={deleteLead}
+                  onDelete={handleDeleteLead}
+                  deleting={deletingLeadId === lead.job_id}
                   showGenerate={tab === "evaluated"}
                   port={port}
                   api={api}

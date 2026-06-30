@@ -176,6 +176,39 @@ class TestProfileEndpoints(unittest.TestCase):
         self.assertEqual(data["status"], "ok")
         self.assertEqual(data["stats"]["deduplicated"], 2)
 
+    def test_profile_validation_errors_are_localized(self):
+        cases = [
+            put("/api/v1/profile/candidate", json={"n": "", "s": ""}),
+            post("/api/v1/profile/skill", json={"n": "", "cat": "technical"}),
+            post("/api/v1/profile/project", json={"title": ""}),
+            post("/api/v1/profile/education", json={"title": ""}),
+            post("/api/v1/profile/certification", json={"title": ""}),
+            post("/api/v1/profile/achievement", json={"title": ""}),
+        ]
+
+        expected = [
+            "Ajoutez au moins un nom ou un résumé de profil.",
+            "Le nom de la compétence est obligatoire.",
+            "Le titre du projet est obligatoire.",
+            "Le titre de la formation est obligatoire.",
+            "Le titre de la certification est obligatoire.",
+            "Le titre de la réalisation est obligatoire.",
+        ]
+        forbidden = [
+            "Name or summary is required",
+            "Skill name is required",
+            "Project title is required",
+            "Education title is required",
+            "Certification title is required",
+            "Achievement title is required",
+        ]
+
+        for resp, message, old_message in zip(cases, expected, forbidden, strict=True):
+            self.assertEqual(resp.status_code, 422)
+            detail = resp.json().get("detail", "")
+            self.assertEqual(detail, message)
+            self.assertNotIn(old_message, detail)
+
 
 class TestGraphEndpoint(unittest.TestCase):
     def test_graph_endpoint_reads_snapshot_without_blocking_on_repairs(self):
@@ -364,6 +397,22 @@ class TestLeadsEndpoints(unittest.TestCase):
         # get_lead_by_id returns {} (falsy) → route raises 404
         resp = get("/api/v1/leads/nonexistent-job-id")
         self.assertEqual(resp.status_code, 404)
+
+    def test_get_lead_invalid_id_error_is_localized(self):
+        resp = get("/api/v1/leads/bad%20id")
+
+        self.assertEqual(resp.status_code, 400)
+        detail = resp.json().get("detail", "")
+        self.assertEqual(detail, "Identifiant d'offre invalide. Rechargez la liste puis réessayez.")
+        self.assertNotIn("Invalid job ID format", detail)
+
+    def test_manual_generation_failure_message_is_localized(self):
+        from api.routers import leads
+
+        message = leads._manual_generation_failed_message({"title": "Engineer"}, RuntimeError("timeout"))
+
+        self.assertEqual(message, "Génération échouée pour Engineer : timeout")
+        self.assertNotIn("Generation failed", message)
 
     def test_delete_lead_not_found(self):
         resp = delete("/api/v1/leads/nonexistent-job-id")
@@ -583,6 +632,36 @@ class TestSettingsEndpoints(unittest.TestCase):
         resp = post("/api/v1/template", json={"template": "x" * 25000})
         self.assertEqual(resp.status_code, 422)
 
+    def test_resume_template_not_found_errors_are_localized(self):
+        from api.dependencies import get_repository
+
+        class FakeResumeTemplates:
+            def get_template(self, _template_id):
+                return None
+
+            def set_default_template(self, _template_id):
+                return False
+
+            def delete_template(self, _template_id):
+                return False
+
+        fake_repo = types.SimpleNamespace(resume_templates=FakeResumeTemplates())
+        app.dependency_overrides[get_repository] = lambda: fake_repo
+        try:
+            responses = [
+                get("/api/v1/templates/missing-template"),
+                post("/api/v1/templates/missing-template/default"),
+                delete("/api/v1/templates/missing-template"),
+            ]
+        finally:
+            app.dependency_overrides.pop(get_repository, None)
+
+        for resp in responses:
+            self.assertEqual(resp.status_code, 404)
+            detail = resp.json().get("detail", "")
+            self.assertIn("Modèle de CV introuvable", detail)
+            self.assertNotIn("Template not found", detail)
+
     def test_validate_endpoint_exists(self):
         resp = get("/api/v1/settings/validate")
         self.assertEqual(resp.status_code, 200)
@@ -613,6 +692,36 @@ class TestSettingsEndpoints(unittest.TestCase):
         self.assertEqual(revealed.json()["value"], "sk-test-secret")
         self.assertEqual(public.status_code, 404)
 
+    def test_secret_reveal_errors_are_localized(self):
+        from api.dependencies import get_repository
+
+        class FakeSettings:
+            def get_settings(self):
+                return {"openai_api_key": "", "public_setting": "visible"}
+
+        fake_repo = types.SimpleNamespace(settings=FakeSettings())
+        app.dependency_overrides[get_repository] = lambda: fake_repo
+        try:
+            missing_value = get("/api/v1/settings/secrets/openai_api_key")
+            unknown_key = get("/api/v1/settings/secrets/public_setting")
+        finally:
+            app.dependency_overrides.pop(get_repository, None)
+
+        self.assertEqual(missing_value.status_code, 404)
+        self.assertEqual(unknown_key.status_code, 404)
+        self.assertIn("Aucun secret n'est enregistré", missing_value.json().get("detail", ""))
+        self.assertIn("Secret inconnu", unknown_key.json().get("detail", ""))
+        self.assertNotIn("secret not configured", missing_value.json().get("detail", ""))
+        self.assertNotIn("unknown secret", unknown_key.json().get("detail", ""))
+
+    def test_unknown_subscription_provider_error_is_localized(self):
+        resp = post("/api/v1/settings/subscription-login/unknown-provider")
+
+        self.assertEqual(resp.status_code, 400)
+        detail = resp.json().get("detail", "")
+        self.assertIn("Fournisseur d'abonnement inconnu", detail)
+        self.assertNotIn("unknown subscription provider", detail)
+
     def test_rebuild_vectors_endpoint_requires_confirmation_and_returns_summary(self):
         from api.routers import settings as settings_router
 
@@ -634,6 +743,27 @@ class TestFollowupsEndpoint(unittest.TestCase):
 
 
 class TestFormReaderEndpoints(unittest.TestCase):
+    def test_automation_activity_messages_are_localized(self):
+        from api.routers import automation
+
+        lead = {"title": "Engineer", "company": "Test Co"}
+        messages = [
+            automation._submission_blocked_message("job-1", "CV manquant"),
+            automation._opening_browser_message(lead),
+            automation._application_submitted_message("job-1"),
+            automation._submission_failed_message("job-1", "navigateur indisponible"),
+        ]
+
+        self.assertEqual(messages[0], "Candidature automatique bloquée pour l'offre job-1 : CV manquant")
+        self.assertEqual(messages[1], "Ouverture du navigateur pour Engineer chez Test Co")
+        self.assertEqual(messages[2], "Candidature envoyée pour l'offre job-1")
+        self.assertEqual(messages[3], "Échec de la soumission automatique pour l'offre job-1 : navigateur indisponible")
+        combined = "\n".join(messages)
+        self.assertNotIn("Submission blocked", combined)
+        self.assertNotIn("Opening browser", combined)
+        self.assertNotIn("Application submitted", combined)
+        self.assertNotIn("Submission failed", combined)
+
     def test_form_read_not_found(self):
         resp = post(
             "/api/v1/leads/nonexistent/form/read",
@@ -665,6 +795,9 @@ class TestFormReaderEndpoints(unittest.TestCase):
         finally:
             app.dependency_overrides.pop(get_repository, None)
         self.assertEqual(resp.status_code, 400)
+        detail = resp.json().get("detail", "")
+        self.assertEqual(detail, "Aucune URL exploitable n'est disponible pour cette offre.")
+        self.assertNotIn("no url available", detail)
 
     def test_identity_endpoint(self):
         resp = get("/api/v1/identity")
@@ -681,6 +814,21 @@ class TestFormReaderEndpoints(unittest.TestCase):
 
 
 class TestPipelineRunEndpoint(unittest.TestCase):
+    def test_pipeline_activity_messages_are_localized(self):
+        from api.routers import generation
+
+        success = generation._pipeline_result_message("job-1", {"score": 82, "error": None})
+        failed = generation._pipeline_result_message("job-1", {"score": 12, "error": "timeout"})
+        crashed = generation._pipeline_failed_message("job-1", RuntimeError("timeout"))
+
+        self.assertEqual(success, "Analyse terminée pour l'offre job-1 : score=82")
+        self.assertEqual(failed, "Analyse échouée pour l'offre job-1 : score=12, erreur=timeout")
+        self.assertEqual(crashed, "Analyse échouée pour l'offre job-1 : timeout")
+        combined = "\n".join([success, failed, crashed])
+        self.assertNotIn("Pipeline done", combined)
+        self.assertNotIn("Pipeline failed", combined)
+        self.assertNotIn("error=None", combined)
+
     def test_pipeline_run_not_found(self):
         # With fake db, get_lead_by_id returns {} → route raises 404
         resp = post("/api/v1/leads/nonexistent/pipeline/run")
@@ -834,7 +982,7 @@ class TestGenerateEndpoint(unittest.TestCase):
 
         # save_asset_package is the write that makes the generation real; if it
         # fails the endpoint must report failure, not "ready".
-        with self.assertRaises(HTTPException):
+        with self.assertRaises(HTTPException) as ctx:
             asyncio.run(generation.generate_one(
                 "job-1",
                 manager,
@@ -843,8 +991,33 @@ class TestGenerateEndpoint(unittest.TestCase):
                 job_store=job_store,
             ))
 
+        self.assertEqual(ctx.exception.detail, "La génération du dossier a échoué. Consultez Activité pour le détail, puis réessayez.")
+        self.assertNotIn("Generation failed", str(ctx.exception.detail))
         self.assertIn("discovered", statuses)  # reverted, not left as approved
         self.assertTrue(any(b.get("event") == "gen_error" for b in broadcasts))
+        self.assertTrue(any("Génération échouée" in b.get("msg", "") for b in broadcasts))
+
+    def test_generate_one_missing_lead_broadcast_is_localized(self):
+        from fastapi import HTTPException
+        from api.routers import generation
+
+        manager, job_store, repo, service, broadcasts = self._generation_fixtures({
+            "get_lead_by_id": lambda _job_id: None,
+        })
+
+        with self.assertRaises(HTTPException) as ctx:
+            asyncio.run(generation.generate_one(
+                "missing-job",
+                manager,
+                repo=repo,
+                service=service,
+                job_store=job_store,
+            ))
+
+        self.assertEqual(ctx.exception.status_code, 404)
+        self.assertEqual(ctx.exception.detail, "Offre introuvable")
+        self.assertTrue(any("Offre introuvable pour la génération" in b.get("msg", "") for b in broadcasts))
+        self.assertFalse(any("Lead missing-job not found" in b.get("msg", "") for b in broadcasts))
 
     def test_generate_one_rejects_url_only_lead(self):
         from fastapi import HTTPException

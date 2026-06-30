@@ -286,10 +286,10 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
     async def reveal_secret(key: str, repo: Repository = Depends(get_repository)):
         settings = await asyncio.to_thread(repo.settings.get_settings)
         if key not in sensitive_keys(settings):
-            raise HTTPException(status_code=404, detail="unknown secret")
+            raise HTTPException(status_code=404, detail="Secret inconnu. Rechargez les réglages puis réessayez.")
         value = str(settings.get(key) or "")
         if not value:
-            raise HTTPException(status_code=404, detail="secret not configured")
+            raise HTTPException(status_code=404, detail="Aucun secret n'est enregistré pour ce champ.")
         _log.info("settings secret revealed through local UI: %s", key)
         return {"key": key, "value": value}
 
@@ -363,12 +363,12 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
         """Launch the CLI's own browser sign-in; the UI then polls subscription-status."""
         from llm import SUBSCRIPTION_CLI_PROVIDERS, subscription_cli
         if provider not in SUBSCRIPTION_CLI_PROVIDERS:
-            raise HTTPException(status_code=400, detail="unknown subscription provider")
+            raise HTTPException(status_code=400, detail="Fournisseur d'abonnement inconnu. Rechargez les réglages puis réessayez.")
         try:
             return subscription_cli.login(provider)
         except subscription_cli.CliNotInstalled:
             return {"started": False, "error": "not_installed",
-                    "hint": subscription_cli.install_hint(provider), "detail": "CLI provider is not installed"}
+                    "hint": subscription_cli.install_hint(provider), "detail": "Le CLI de ce fournisseur n'est pas installé."}
 
     @router.post("/settings")
     async def save_cfg(body: SettingsBody, repo: Repository = Depends(get_repository)):
