@@ -222,7 +222,8 @@ function bump(versionRaw) {
   check(version);
 }
 
-const [command, value] = process.argv.slice(2);
+const args = process.argv.slice(2).filter((arg) => arg !== "--");
+const [command, value] = args;
 
 try {
   if (command === "check") {
