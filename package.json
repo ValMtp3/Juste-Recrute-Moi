@@ -1,7 +1,7 @@
 {
   "name": "juste-recrute-moi",
   "private": true,
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Agrégateur local-first d'offres d'emploi pour le marché français.",
   "packageManager": "pnpm@10.33.2",
   "license": "AGPL-3.0-only",
