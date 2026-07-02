@@ -24,7 +24,7 @@ _INVALID_JOB_ID = "Identifiant d'offre invalide. Rechargez la liste puis réessa
 
 def _manual_generation_failed_message(lead: dict, exc: Exception) -> str:
     title = lead.get("title") or "offre sans titre"
-    return f"Génération échouée pour {title} : {exc}"
+    return f"Génération échouée pour {title} : {type(exc).__name__}"
 
 
 def _track_background_task(task: asyncio.Task) -> None:
@@ -95,10 +95,10 @@ def create_router(manager) -> APIRouter:
             try:
                 return await import_job_url(body.url.strip())
             except Exception as exc:
-                logging.getLogger(__name__).warning("URL import failed, falling back to manual lead: %s", exc)
+                logging.getLogger(__name__).warning("URL import failed, falling back to manual lead: %s", type(exc).__name__)
                 lead = manual_lead_from_text(body.text, body.url, "job")
                 meta = dict(lead.get("source_meta") or {})
-                meta["url_import_error"] = str(exc) or type(exc).__name__
+                meta["url_import_error"] = type(exc).__name__
                 lead["source_meta"] = meta
                 return lead
         return manual_lead_from_text(body.text, body.url, "job")
@@ -202,7 +202,7 @@ def create_router(manager) -> APIRouter:
         except LookupError as exc:
             raise HTTPException(status_code=404, detail="Offre introuvable") from exc
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=400, detail="Statut invalide") from exc
 
     @router.put("/leads/{job_id}/feedback")
     async def update_feedback(job_id: str, body: FeedbackBody, repo: Repository = Depends(get_repository)):
@@ -210,7 +210,7 @@ def create_router(manager) -> APIRouter:
         try:
             lead = await asyncio.to_thread(repo.leads.save_lead_feedback, job_id, body.feedback, body.note)
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=400, detail="Feedback invalide") from exc
         if not lead:
             raise HTTPException(status_code=404, detail="Offre introuvable")
         await manager.broadcast({"type": "LEAD_UPDATED", "data": lead})
@@ -247,9 +247,9 @@ def create_router(manager) -> APIRouter:
                 timeout=MANUAL_FEEDBACK_TIMEOUT_SECONDS,
             )
         except Exception as exc:
-            logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/leads.py:create_manual_lead: %s', exc)
+            logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/leads.py:create_manual_lead: %s', type(exc).__name__)
             meta = dict(raw_lead.get("source_meta") or {})
-            meta["feedback_learning_error"] = str(exc) or "délai d'attente dépassé"
+            meta["feedback_learning_error"] = type(exc).__name__ or "délai d'attente dépassé"
             lead = {**raw_lead, "source_meta": meta}
         if lead.get("kind") != "job":
             raise HTTPException(status_code=422, detail="Seules les offres d'emploi sont acceptées pour le moment")
@@ -297,10 +297,10 @@ def create_router(manager) -> APIRouter:
                 await manager.broadcast({"type": "LEAD_UPDATED", "data": saved or queued_lead})
                 await generate_one(lead["job_id"], manager, repo=repo, service=service, job_store=job_store)
             except Exception as exc:
-                logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/leads.py:_run: %s', exc)
+                logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/leads.py:_run: %s', type(exc).__name__)
                 failed = {**queued_lead, "status": "discovered"}
                 meta = dict(failed.get("source_meta") or {})
-                meta["generation_error"] = str(exc)
+                meta["generation_error"] = type(exc).__name__
                 failed["source_meta"] = meta
                 await manager.broadcast({"type": "LEAD_UPDATED", "data": failed})
                 await manager.broadcast({
@@ -327,6 +327,8 @@ def create_router(manager) -> APIRouter:
         repo: Repository = Depends(get_repository),
     ):
         job_id = _safe_job_id(job_id)
+        if version is not None and version < 1:
+            raise HTTPException(status_code=400, detail="Version invalide")
         lead = await asyncio.to_thread(repo.leads.get_lead_by_id, job_id)
         if not lead:
             raise HTTPException(status_code=404, detail="Offre introuvable")
@@ -340,7 +342,7 @@ def create_router(manager) -> APIRouter:
             if not base_dir:
                 base_dir = default_assets_dir()
             filename = f"{job_id}_cl_v{version}.pdf" if is_cover else f"{job_id}_v{version}.pdf"
-            path = os.path.join(_asset_path(base_dir), filename)
+            path = _asset_path(os.path.join(base_dir, filename))
             missing = "Lettre pas encore générée" if is_cover else "CV pas encore généré"
         elif is_cover:
             path = _asset_path(lead.get("cover_letter_asset") or "") if lead.get("cover_letter_asset") else ""

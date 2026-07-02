@@ -326,6 +326,26 @@ def test_url_import_prefers_jsonld_jobposting():
     assert offer.reliability == "manual"
 
 
+def test_url_import_fallback_ignores_script_and_style_text():
+    html = """
+    <html>
+      <head><style>.title { display: none; }</style></head>
+      <body>
+        <script>const secret = "internal token";</script>
+        <h1>Developpeur Python</h1>
+        <p>Construire des APIs utiles.</p>
+      </body>
+    </html>
+    """
+
+    offer = url_import.offer_from_html("https://example.com/careers/python", html)
+
+    assert "Developpeur Python" in offer.description
+    assert "Construire des APIs utiles" in offer.description
+    assert "internal token" not in offer.description
+    assert "display: none" not in offer.description
+
+
 def test_jobspy_connector_normalizes_dataframe_like_rows(monkeypatch):
     fake_module = SimpleNamespace(
         scrape_jobs=lambda **kwargs: SimpleNamespace(

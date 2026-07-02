@@ -12,6 +12,10 @@ from api.dependencies import get_repository
 from data.repository import Repository
 
 
+def _public_error(exc: BaseException, message: str) -> str:
+    return f"{message} ({type(exc).__name__})"
+
+
 def _details_authorized(request: Request) -> bool:
     auth = request.headers.get("authorization", "")
     if not auth.startswith("Bearer "):
@@ -31,7 +35,7 @@ def _check_sqlite(repo: Repository) -> dict:
         leads = repo.leads.get_all_leads()
         return {"status": "ok", "lead_count": len(leads)}
     except Exception as exc:
-        return {"status": "error", "error": str(exc)}
+        return {"status": "error", "error": _public_error(exc, "SQLite indisponible")}
 
 
 def _check_graph(repo: Repository) -> dict:
@@ -41,7 +45,7 @@ def _check_graph(repo: Repository) -> dict:
         counts = repo.graph.graph_counts()
         return {"status": "ok", "counts": counts}
     except Exception as exc:
-        return {"status": "error", "error": str(exc)}
+        return {"status": "error", "error": _public_error(exc, "Graphe indisponible")}
 
 
 async def _check_graph_service(repo: Repository) -> dict:
@@ -68,7 +72,7 @@ def _check_vector(repo: Repository) -> dict:
         tables = list(module.vec.list_tables() or [])
         return {"status": "ok", "tables": tables}
     except Exception as exc:
-        return {"status": "error", "error": str(exc)}
+        return {"status": "error", "error": _public_error(exc, "Recherche vectorielle indisponible")}
 
 
 def _check_profile(repo: Repository) -> dict:
@@ -85,7 +89,7 @@ def _check_profile(repo: Repository) -> dict:
             ),
         }
     except Exception as exc:
-        return {"status": "error", "error": str(exc)}
+        return {"status": "error", "error": _public_error(exc, "Profil indisponible")}
 
 
 async def _check_profile_service(repo: Repository) -> dict:
@@ -117,7 +121,7 @@ def _check_llm(repo: Repository) -> dict:
             "key_source": source,
         }
     except Exception as exc:
-        return {"status": "error", "error": str(exc)}
+        return {"status": "error", "error": _public_error(exc, "Configuration LLM indisponible")}
 
 
 def _check_embeddings() -> dict:
@@ -126,7 +130,7 @@ def _check_embeddings() -> dict:
 
         return embedding_status()
     except Exception as exc:
-        return {"status": "unavailable", "error": str(exc)}
+        return {"status": "unavailable", "error": _public_error(exc, "Embeddings indisponibles")}
 
 
 def _as_subsystem_status(name: str, payload: dict) -> dict:
