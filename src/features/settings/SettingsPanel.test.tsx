@@ -58,6 +58,12 @@ describe("Settings UI contracts", () => {
   it("keeps dangerous maintenance errors actionable", () => {
     expect(modal).toContain("La réinitialisation n'a pas pu être lancée");
     expect(modal).toContain("La reconstruction des vecteurs a échoué");
+    expect(modal).toContain("L'export des données a échoué");
+    expect(modal).toContain("La restauration de la sauvegarde a échoué");
+    expect(modal).toContain("settingsApi.exportData(api)");
+    expect(modal).toContain("settingsApi.importData(api, importFile)");
+    expect(modal).toContain("Tapez IMPORT pour confirmer");
+    expect(modal).toContain("Réponse de restauration illisible");
     expect(modal).toContain("parseVectorRebuildSummary");
     expect(modal).toContain("readJsonResponse");
     expect(modal).toContain("Réponse de reconstruction illisible");
@@ -141,6 +147,10 @@ describe("Settings UI contracts", () => {
   it("keeps discovery scan limit fields visible", () => {
     expect(discoveryPanel).toContain("x_max_requests_per_scan");
     expect(discoveryPanel).toContain("free_source_max_requests");
+    expect(discoveryPanel).toContain("job_location");
+    expect(discoveryPanel).toContain("job_search_radius_km");
+    expect(discoveryPanel).toContain("Recherche ciblée");
+    expect(discoveryPanel).toContain("Localisation cible");
     expect(discoveryPanel).toContain("siteFeedback");
     expect(discoveryPanel).toContain("Source ajoutée");
     expect(discoveryPanel).toContain("Cette source est déjà présente");
@@ -151,6 +161,10 @@ describe("Settings UI contracts", () => {
     expect(discoveryPanel).toContain("Revenir au défaut");
     expect(discoveryPanel).toContain("Le champ peut rester vide");
     expect(discoveryPanel).toContain("Remplacer par ");
+    expect(discoveryPanel).toContain("wttj:query=developpeur&aroundQuery=France");
+    expect(discoveryPanel).toContain("apec:developpeur;location=France");
+    expect(discoveryPanel).toContain("adzuna:developpeur;location=France;results=50");
+    expect(discoveryPanel).toContain("jooble:developpeur;location=France");
   });
 
   it("keeps resume template management safe and localized", () => {
