@@ -576,7 +576,7 @@ def _github_repo_links(pages: list[PageSnapshot]) -> list[str]:
         for link in page.links:
             href = link.get("href", "")
             parsed = urlparse(href)
-            if parsed.netloc.lower().endswith("github.com"):
+            if _url_host_is(href, "github.com"):
                 parts = [part for part in parsed.path.split("/") if part]
                 if len(parts) >= 2:
                     out.append(urlunparse((parsed.scheme, parsed.netloc, "/" + "/".join(parts[:2]), "", "", "")))
