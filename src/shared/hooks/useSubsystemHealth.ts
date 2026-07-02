@@ -19,6 +19,10 @@ function readableHealthError(error: unknown) {
   return message;
 }
 
+function isDocumentVisible() {
+  return typeof document === "undefined" || document.visibilityState !== "hidden";
+}
+
 export function useSubsystemHealth(api: ApiFetch | null) {
   const [subsystems, setSubsystems] = useState<SubsystemHealth | null>(null);
 
@@ -29,6 +33,7 @@ export function useSubsystemHealth(api: ApiFetch | null) {
     }
     let stopped = false;
     const load = async () => {
+      if (!isDocumentVisible()) return;
       try {
         const response = await api("/api/v1/health/subsystems", { timeoutMs: 10000 });
         if (!response.ok) {
@@ -50,13 +55,22 @@ export function useSubsystemHealth(api: ApiFetch | null) {
         }
       }
     };
+    const refreshWhenVisible = () => {
+      if (isDocumentVisible()) void load();
+    };
     load();
     const timer = window.setInterval(load, 30000);
     const offSubsystemsRefresh = onAppEvent("subsystems-refresh", load);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", refreshWhenVisible);
+    }
     return () => {
       stopped = true;
       offSubsystemsRefresh();
       window.clearInterval(timer);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", refreshWhenVisible);
+      }
     };
   }, [api]);
 

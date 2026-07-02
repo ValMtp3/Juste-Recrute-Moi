@@ -93,6 +93,23 @@ async function parseVectorRebuildSummary(response: Response) {
   return { dropped, synced };
 }
 
+async function parseBackupImportSummary(response: Response) {
+  const data = await readJsonResponse(
+    response,
+    "Réponse de restauration illisible. Relancez Juste Recrute Moi puis réessayez.",
+  );
+  const summary = data && typeof data === "object" ? (data as { summary?: unknown }).summary : null;
+  const summaryRecord = summary && typeof summary === "object" ? summary as { files_restored?: unknown } : {};
+  const restored = typeof summaryRecord.files_restored === "number" ? summaryRecord.files_restored : 0;
+  return { restored };
+}
+
+function backupFilename(response: Response) {
+  const disposition = response.headers.get("content-disposition") || "";
+  const match = disposition.match(/filename="?([^";]+)"?/i);
+  return match?.[1] || "juste-recrute-moi-backup.zip";
+}
+
 const THEME_OPTIONS: { value: ThemePref; label: string; icon: string }[] = [
   { value: "light", label: "Clair", icon: "sun" },
   { value: "dark", label: "Sombre", icon: "moon" },
@@ -238,6 +255,16 @@ function SettingsReadiness({ cfg }: { cfg: Cfg }) {
 }
 
 function DangerZone({ api }: { api: ApiFetch }) {
+  const backupInputRef = useRef<HTMLInputElement | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportResult, setExportResult] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importConfirm, setImportConfirm] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [clearSettings, setClearSettings] = useState(false);
@@ -250,7 +277,57 @@ function DangerZone({ api }: { api: ApiFetch }) {
   const [vectorError, setVectorError] = useState<string | null>(null);
 
   const armed = confirmText.trim().toUpperCase() === "DELETE";
+  const importArmed = importConfirm.trim().toUpperCase() === "IMPORT" && Boolean(importFile);
   const vectorsArmed = vectorConfirm.trim().toUpperCase() === "VECTORS";
+
+  const exportData = async () => {
+    setExportBusy(true);
+    setExportError(null);
+    setExportResult(null);
+    try {
+      const response = await settingsApi.exportData(api);
+      if (!response.ok) {
+        throw new Error(await responseErrorMessage(response, "L'export des données a échoué"));
+      }
+      const blob = await response.blob();
+      if (!blob.size) {
+        throw new Error("Archive de sauvegarde vide");
+      }
+      const filename = backupFilename(response);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setExportResult(`Sauvegarde téléchargée : ${filename}`);
+    } catch (e) {
+      setExportError(readableSettingsError(e, "L'export des données a échoué"));
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const importData = async () => {
+    if (!importFile || !importArmed) return;
+    setImportBusy(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const response = await settingsApi.importData(api, importFile);
+      if (!response.ok) {
+        throw new Error(await responseErrorMessage(response, "La restauration de la sauvegarde a échoué"));
+      }
+      const { restored } = await parseBackupImportSummary(response);
+      setImportResult(`${restored} fichier(s) restauré(s). Rechargement...`);
+      window.setTimeout(() => window.location.reload(), 700);
+    } catch (e) {
+      setImportError(readableSettingsError(e, "La restauration de la sauvegarde a échoué"));
+      setImportBusy(false);
+    }
+  };
 
   const reset = async () => {
     if (!armed) return;
@@ -295,6 +372,53 @@ function DangerZone({ api }: { api: ApiFetch }) {
     <div>
       <SectionLabel label="Zone dangereuse" sub="Effacez les données locales pour repartir à zéro : action irréversible" />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ border: "1px solid var(--line)", background: "var(--paper-2)", borderRadius: 12, padding: 14 }}>
+        {!importOpen ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)", maxWidth: 460 }}>
+              Exporte une archive complète : réglages, clés API locales, profil, CV/LinkedIn, expériences, offres, scores, suivi, graphe, vecteurs et documents générés.
+              {exportResult && <div style={{ marginTop: 6, color: "var(--green-ink)", fontWeight: 700 }}>{exportResult}</div>}
+              {importResult && <div style={{ marginTop: 6, color: "var(--green-ink)", fontWeight: 700 }}>{importResult}</div>}
+              {exportError && <div style={{ marginTop: 6, color: "var(--bad)", fontWeight: 700 }}>{exportError}</div>}
+              {importError && <div style={{ marginTop: 6, color: "var(--bad)", fontWeight: 700 }}>{importError}</div>}
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button className="btn" onClick={exportData} disabled={exportBusy}
+                style={{ fontSize: 13, padding: "8px 16px", whiteSpace: "nowrap", opacity: exportBusy ? 0.65 : 1 }}>
+                <Icon name="download" size={13} /> {exportBusy ? "Export..." : "Exporter les données"}
+              </button>
+              <button className="btn" onClick={() => { setImportOpen(true); setImportError(null); setImportResult(null); }}
+                style={{ fontSize: 13, padding: "8px 16px", whiteSpace: "nowrap" }}>
+                <Icon name="upload" size={13} /> Importer une sauvegarde
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 12.5, color: "var(--ink-2)" }}>
+              <Icon name="alert" size={13} /> La restauration remplace les réglages, clés API, profil, offres, scores, suivi et fichiers locaux actuels par le contenu de l'archive. Exportez d'abord une sauvegarde si vous voulez garder l'état actuel.
+            </div>
+            <input ref={backupInputRef} type="file" accept=".zip,application/zip"
+              onChange={e => { setImportFile(e.target.files?.[0] || null); setImportError(null); }} />
+            <input type="text" value={importConfirm} onChange={e => setImportConfirm(e.target.value)}
+              placeholder="Tapez IMPORT pour confirmer" className="field-input" style={{ fontSize: 13 }} />
+            {importFile && <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Archive sélectionnée : {importFile.name}</div>}
+            {importError && <div style={{ color: "var(--bad)", fontSize: 12, fontWeight: 700 }}>{importError}</div>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn" disabled={importBusy}
+                onClick={() => {
+                  setImportOpen(false); setImportConfirm(""); setImportFile(null); setImportError(null);
+                  if (backupInputRef.current) backupInputRef.current.value = "";
+                }}
+                style={{ fontSize: 13, padding: "8px 16px" }}>Annuler</button>
+              <button className="btn" onClick={importData} disabled={importBusy || !importArmed}
+                style={{ background: "var(--bad)", color: "#fff", borderColor: "var(--bad)", fontSize: 13, padding: "8px 18px", opacity: (importBusy || !importArmed) ? 0.55 : 1 }}>
+                <Icon name="upload" size={13} /> {importBusy ? "Restauration..." : "Restaurer"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
       <div style={{ border: "1px solid var(--yellow)", background: "var(--yellow-soft)", borderRadius: 12, padding: 14 }}>
         {!vectorOpen ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>

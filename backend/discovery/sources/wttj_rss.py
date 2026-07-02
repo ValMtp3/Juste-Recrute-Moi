@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
 from time import monotonic
 
 import httpx
@@ -46,10 +45,10 @@ def offer_from_result(item: ET.Element) -> JobOffer | None:
     link = _xml_text(item, "link")
     description = _xml_text(item, "description")
     pub_date = _xml_text(item, "pubDate")
-    
+
     if not title or not link:
         return None
-        
+
     company = ""
     # Usually "Job Title - Company Name" or "Company Name is hiring: Job Title"
     if " chez " in title:
@@ -90,17 +89,17 @@ async def scrape_target(target: str) -> list[dict]:
     now = monotonic()
     if cached and cached[0] > now:
         return list(cached[1])
-        
+
     try:
         xml_content = await _fetch_rss(url)
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 404:
             return []
         raise
-        
+
     root = ET.fromstring(xml_content)
     items = root.findall(".//item")
-    
+
     leads = []
     for item in items:
         offer = offer_from_result(item)
@@ -108,6 +107,6 @@ async def scrape_target(target: str) -> list[dict]:
             if offer.posted_at and not is_recent(offer.posted_at):
                 continue
             leads.append(offer_to_lead(offer))
-            
+
     _SEARCH_CACHE[cache_key] = (now + _CACHE_TTL_SECONDS, leads)
     return leads
