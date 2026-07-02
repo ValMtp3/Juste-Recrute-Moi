@@ -14,7 +14,7 @@ dependencies = [
     "instructor~=1.15.3",
     "kuzu~=0.11.3",
     "lancedb~=0.30.2",
-    "langchain-core~=1.4.0",
+    "langchain-core~=1.4.8",
     "langgraph~=1.2.0",
     # Python 3.13 Windows must use a wheel-backed NumPy. Older 1.26.x resolves
     # from sdist, gets built with MinGW on GitHub Actions, then crashes during
