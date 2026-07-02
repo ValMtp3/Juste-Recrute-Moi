@@ -22,10 +22,11 @@ env:
     PYSEC-2026-139 PYSEC-2025-191 PYSEC-2025-197 PYSEC-2025-189 PYSEC-2025-190
     PYSEC-2025-217 PYSEC-2025-214 PYSEC-2025-218 PYSEC-2025-211 PYSEC-2025-212 PYSEC-2025-213
     PYSEC-2025-215 PYSEC-2025-216
-  # glib 0.18 is pulled by the current Tauri/wry GTK stack. Keep this scoped and
-  # remove it once Tauri can move Linux GTK deps to glib >= 0.20.
+  # glib 0.18 is pulled by the current Tauri/wry GTK stack. quick-xml < 0.41 is
+  # still pinned by the latest Tauri plist/notification stack. Keep this scoped
+  # and remove entries as upstream Tauri deps publish compatible fixes.
   CARGO_AUDIT_IGNORE_VULNS: >-
-    RUSTSEC-2024-0429
+    RUSTSEC-2024-0429 RUSTSEC-2026-0194 RUSTSEC-2026-0195
 
 jobs:
   dependency-audit:
