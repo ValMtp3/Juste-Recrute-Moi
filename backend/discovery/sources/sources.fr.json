@@ -2,22 +2,22 @@
   "market_focus": "france",
   "free_source_targets": [
     "france_travail:developpeur;lieu=France;range=0-149",
-    "ats:greenhouse:mistralai",
-    "ats:greenhouse:doctolib",
-    "ats:greenhouse:contentsquare",
-    "ats:greenhouse:algolia",
-    "ats:greenhouse:criteo",
-    "ats:lever:qonto",
-    "ats:lever:datadog",
-    "ats:lever:blablacar",
-    "ats:lever:swile",
-    "ats:lever:payfit",
-    "ats:smartrecruiters:Ubisoft2",
-    "ats:teamtailor:alan"
+    "ats:greenhouse:mistralai;query=developpeur;location=France",
+    "ats:greenhouse:doctolib;query=developpeur;location=France",
+    "ats:greenhouse:contentsquare;query=developpeur;location=France",
+    "ats:greenhouse:algolia;query=developpeur;location=France",
+    "ats:greenhouse:criteo;query=developpeur;location=France",
+    "ats:lever:qonto;query=developpeur;location=France",
+    "ats:lever:datadog;query=developpeur;location=France",
+    "ats:lever:blablacar;query=developpeur;location=France",
+    "ats:lever:swile;query=developpeur;location=France",
+    "ats:lever:payfit;query=developpeur;location=France",
+    "ats:smartrecruiters:Ubisoft2;query=developpeur;location=France",
+    "ats:teamtailor:alan;query=developpeur;location=France"
   ],
   "notes": [
     "France Travail est la source stable et nécessite FRANCE_TRAVAIL_CLIENT_ID/SECRET.",
     "JobSpy reste une source optionnelle si python-jobspy est installé hors build desktop.",
-    "Les slugs ATS sont des exemples ; les utilisateurs peuvent les remplacer ou étendre cette liste sans changement de code."
+    "Les slugs ATS par défaut utilisent query/location et restent filtrés par le poste et la région du scan."
   ]
 }

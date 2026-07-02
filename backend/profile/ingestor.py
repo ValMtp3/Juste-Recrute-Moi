@@ -20,9 +20,8 @@ def run(raw: str = "", pdf: str | None = None) -> C:
 
     if provider_needs_key(p) and not k:
         _log.warning(
-            "provider='%s' but no API key set - using local parser. "
-            "Ajoutez une cle API dans les parametres pour activer l'extraction IA.",
-            p,
+            "fournisseur IA configuré sans clé - utilisation du parseur local. "
+            "Ajoutez une cle dans les parametres pour activer l'extraction IA."
         )
         return _parse_local(txt)
 
@@ -116,8 +115,7 @@ def run(raw: str = "", pdf: str | None = None) -> C:
             step="ingestor",
         )
         _log.info(
-            "LLM extraction OK via '%s' - %s skills, %s roles, %s projects, %s certifications",
-            p,
+            "LLM extraction OK - %s skills, %s roles, %s projects, %s certifications",
             len(result.skills),
             len(result.exp),
             len(result.projects),
@@ -126,9 +124,9 @@ def run(raw: str = "", pdf: str | None = None) -> C:
         return result
     except Exception as exc:
         if p != "ollama":
-            _log.error("LLM call failed (%s)", p)
+            _log.error("LLM call failed")
             raise RuntimeError(f"{p} extraction failed") from exc
-        _log.warning("LLM call failed (%s) - falling back to local parser", p)
+        _log.warning("LLM call failed - falling back to local parser")
         return _parse_local(txt)
 
 
@@ -149,7 +147,7 @@ def _autoset_location(loc: str) -> None:
         update_identity({"city": loc})
         _log.info("discovery location auto-set from resume: %s", loc)
     except Exception as exc:
-        _log.warning("location auto-set skipped: %s", exc)
+        _log.warning("location auto-set skipped: %s", type(exc).__name__)
 
 
 def ingest(raw: str = "", pdf: str | None = None) -> C:
@@ -168,7 +166,7 @@ def ingest(raw: str = "", pdf: str | None = None) -> C:
         # adds them without overwriting what the LLM extracted.
         p = _merge_candidate_data(p, deterministic)
     except Exception as exc:
-        _log.warning("deterministic resume merge skipped: %s", exc)
+        _log.warning("deterministic resume merge skipped: %s", type(exc).__name__)
     from profile.normalization import normalize_candidate_model
 
     p = normalize_candidate_model(p)
@@ -176,9 +174,9 @@ def ingest(raw: str = "", pdf: str | None = None) -> C:
     try:
         _graph(p)
     except Exception as exc:
-        _log.warning("graph write skipped: %s", exc)
+        _log.warning("graph write skipped: %s", type(exc).__name__)
     try:
         _vectors(p)
     except Exception as exc:
-        _log.warning("vector write skipped: %s", exc)
+        _log.warning("vector write skipped: %s", type(exc).__name__)
     return p

@@ -2,12 +2,35 @@ from __future__ import annotations
 
 import json
 import re
+from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
 from discovery.job_offer import JobOffer, offer_to_lead
 from discovery.normalizer import clean_text, strip_html_text
 from discovery.sources.net import guarded_async_client
+
+
+class _VisibleTextParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._hidden_depth = 0
+        self._parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() in {"script", "style"}:
+            self._hidden_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() in {"script", "style"} and self._hidden_depth:
+            self._hidden_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self._hidden_depth == 0:
+            self._parts.append(data)
+
+    def text(self) -> str:
+        return strip_html_text(" ".join(self._parts))
 
 
 async def fetch_html(url: str) -> str:
@@ -115,8 +138,7 @@ def _fallback_offer(url: str, html: str) -> JobOffer:
         title = strip_html_text(match.group(1)) if match else ""
     description = _meta_content(html, "og:description") or _meta_content(html, "description")
     if not description:
-        body = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html or "", flags=re.I | re.S)
-        description = strip_html_text(body)[:1600]
+        description = _visible_html_text(html)[:1600]
     host = urlparse(url).netloc.replace("www.", "")
     return JobOffer(
         source="url_import",
@@ -129,6 +151,13 @@ def _fallback_offer(url: str, html: str) -> JobOffer:
         reliability="manual",
         tags=["html_fallback"],
     )
+
+
+def _visible_html_text(html: str) -> str:
+    parser = _VisibleTextParser()
+    parser.feed(html or "")
+    parser.close()
+    return parser.text()
 
 
 def offer_from_html(url: str, html: str) -> JobOffer:

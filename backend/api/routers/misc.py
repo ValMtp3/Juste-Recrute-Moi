@@ -21,6 +21,10 @@ _help_limiter = RateLimiter(20, 60)
 _background_tasks: set[asyncio.Task] = set()
 
 
+def _public_error(exc: BaseException, label: str) -> str:
+    return f"{label}: {type(exc).__name__}"
+
+
 def _track_background_task(task: asyncio.Task) -> None:
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
@@ -96,7 +100,7 @@ def _apply_graph_deletions(graph: dict) -> dict:
 
         return filter_graph_deletions(graph)
     except Exception as exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_apply_graph_deletions: %s', exc)
+        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_apply_graph_deletions: %s', type(exc).__name__)
         return graph
 
 
@@ -107,7 +111,7 @@ def _apply_embedding_deletions(embedding: dict) -> dict:
 
         return filter_embedding_deletions(embedding)
     except Exception as exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_apply_embedding_deletions: %s', exc)
+        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_apply_embedding_deletions: %s', type(exc).__name__)
         return embedding
 
 
@@ -115,22 +119,22 @@ def _safe_graph_step(fn, label: str, errors: list[str], default=None):
     try:
         return fn()
     except Exception as exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_safe_graph_step: %s', exc)
-        errors.append(f"{label}: {exc}")
+        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_safe_graph_step: %s', type(exc).__name__)
+        errors.append(_public_error(exc, label))
         if default is not None:
             return default
-        return {"status": "error", "error": str(exc)}
+        return {"status": "error", "error": _public_error(exc, label)}
 
 
 async def _safe_graph_step_async(fn, label: str, errors: list[str], default=None):
     try:
         return await run_graph(fn)
     except Exception as exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_safe_graph_step_async: %s', exc)
-        errors.append(f"{label}: {exc}")
+        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_safe_graph_step_async: %s', type(exc).__name__)
+        errors.append(_public_error(exc, label))
         if default is not None:
             return default
-        return {"status": "error", "error": str(exc)}
+        return {"status": "error", "error": _public_error(exc, label)}
 
 
 def _sync_vectors_from_graph() -> dict:
@@ -139,8 +143,8 @@ def _sync_vectors_from_graph() -> dict:
 
         return sync_vectors_from_graph()
     except Exception as exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_sync_vectors_from_graph: %s', exc)
-        return {"status": "error", "synced": 0, "error": str(exc)}
+        logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/misc.py:_sync_vectors_from_graph: %s', type(exc).__name__)
+        return {"status": "error", "synced": 0, "error": _public_error(exc, "vector sync")}
 
 
 def _embedding_space(repo: Repository, limit: int = 80) -> dict:
@@ -151,8 +155,8 @@ def _embedding_space(repo: Repository, limit: int = 80) -> dict:
             if name in {"profile", "candidates", "skills", "projects", "experiences", "credentials"}
         ]
     except Exception as exc:
-        logging.getLogger(__name__).debug("exception ignorée dans _embedding_space : %s", exc)
-        return {"available": False, "points": points, "error": str(exc)}
+        logging.getLogger(__name__).debug("exception ignorée dans _embedding_space : %s", type(exc).__name__)
+        return {"available": False, "points": points, "error": _public_error(exc, "embedding")}
 
     for table_name in tables:
         try:

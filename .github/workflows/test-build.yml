@@ -26,6 +26,9 @@ concurrency:
   group: test-build-${{ github.ref_name }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: "3.13"
   NODE_VERSION: "24"
@@ -41,7 +44,7 @@ jobs:
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: ${{ env.PNPM_VERSION }}
 
@@ -111,7 +114,7 @@ jobs:
           Write-Host "Built installer: $($exe.FullName) ($([math]::Round($exe.Length/1MB,1)) MB)"
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Juste Recrute Moi-test-windows-installer
           path: ${{ steps.find.outputs.installer }}
