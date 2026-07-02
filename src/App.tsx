@@ -12,6 +12,7 @@ import { useDueFollowups } from "./shared/hooks/useDueFollowups";
 import { useGraphStats } from "./shared/hooks/useGraphStats";
 import { useKeyboardShortcuts } from "./shared/hooks/useKeyboardShortcuts";
 import { useSubsystemHealth, type SubsystemHealth } from "./shared/hooks/useSubsystemHealth";
+import { profileHasContent } from "./features/profile/profileUtils";
 import { Sidebar } from "./shared/components/Sidebar";
 import { Topbar } from "./shared/components/Topbar";
 import ErrorBoundary from "./shared/components/ErrorBoundary";
@@ -129,6 +130,8 @@ export default function App() {
   const liveSel = sel ? (leads.find(l => l.job_id === sel.job_id) ?? sel) : null;
   const [startupSeconds, setStartupSeconds] = useState(0);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readLocalStorage("jhm-sidebar-collapsed") === "1");
+  const [onboardingAutoCheckDone, setOnboardingAutoCheckDone] = useState(() => readLocalStorage(ONBOARDING_KEY) === "done");
+  const onboardingAutoCheckRef = useRef(false);
   const subsystems = useSubsystemHealth(api);
 
   useEffect(() => {
@@ -167,6 +170,40 @@ export default function App() {
     }, 1000);
     return () => window.clearInterval(timer);
   }, [api]);
+
+  useEffect(() => {
+    if (!api || onboardingAutoCheckRef.current) return;
+    onboardingAutoCheckRef.current = true;
+    if (readLocalStorage(ONBOARDING_KEY) === "done") {
+      setOnboardingAutoCheckDone(true);
+      return;
+    }
+    let cancelled = false;
+    setOnboardingAutoCheckDone(false);
+    const checkExistingProfile = async () => {
+      try {
+        const response = await api(`/api/v1/profile`);
+        if (!response.ok) return;
+        const profile = await readJsonResponse(
+          response,
+          "Réponse profil illisible pendant la vérification du démarrage.",
+        );
+        if (profileHasContent(profile)) {
+          writeLocalStorage(ONBOARDING_KEY, "done");
+          if (!cancelled) setShowOnboarding(false);
+        }
+      } catch {
+        // Si le profil n'est pas lisible, garder le comportement existant :
+        // afficher le guide au lieu de masquer une configuration potentiellement nécessaire.
+      } finally {
+        if (!cancelled) setOnboardingAutoCheckDone(true);
+      }
+    };
+    void checkExistingProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, setShowOnboarding]);
 
   useKeyboardShortcuts({
     onEscape: closeDrawer,
@@ -354,7 +391,7 @@ export default function App() {
             {showSettings && api && (
               <SettingsModal key="settings" api={api} onClose={() => setShowSettings(false)} />
             )}
-            {showOnboarding && api && (
+            {showOnboarding && onboardingAutoCheckDone && api && (
               <OnboardingWizard
                 key="onboarding"
                 api={api}
@@ -496,7 +533,7 @@ function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; po
           {browserOnly
             ? "Le frontend est ouvert seul dans le navigateur. Pour utiliser les scans, la base locale et la génération, lancez l'application desktop avec son backend intégré."
             : "L'application desktop démarre son backend intégré, ouvre la base locale et attend le jeton privé de l'API."}
-          {!browserOnly && " Le guide de configuration s'affichera automatiquement dès que le backend sera prêt."}
+          {!browserOnly && " Le guide de configuration s'affichera seulement si aucun profil existant n'est détecté."}
         </p>
         <div className="row gap-2" style={{ flexWrap: "wrap" }}>
           <span className="pill">Backend : {connLabel(conn)}</span>

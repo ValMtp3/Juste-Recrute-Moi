@@ -106,7 +106,8 @@ def _ensure_macos_app_executables(path: Path) -> None:
 
 
 def _clear_macos_extended_attrs(path: Path) -> None:
-    if not hasattr(os, "listxattr"):
+    removexattr = getattr(os, "removexattr", None)
+    if not hasattr(os, "listxattr") or removexattr is None:
         return
     for candidate in (path, *path.rglob("*")):
         try:
@@ -116,7 +117,7 @@ def _clear_macos_extended_attrs(path: Path) -> None:
         for attr in attrs:
             if attr.startswith("com.apple."):
                 try:
-                    os.removexattr(candidate, attr)
+                    removexattr(candidate, attr)
                 except OSError:
                     continue
 

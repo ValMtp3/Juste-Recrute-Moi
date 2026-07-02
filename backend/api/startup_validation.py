@@ -67,7 +67,7 @@ def configuration_warnings(cfg: dict) -> list[str]:
     if raw_job_boards.strip():
         for target in job_targets(raw_job_boards, cfg.get("job_market_focus", "global")):
             lower = target.lower()
-            if lower.startswith(("site:", "ats:", "france_travail:", "jobspy:", "import:", "github:", "hn:", "reddit:", "http://", "https://")):
+            if lower.startswith(("site:", "ats:", "france_travail:", "jobspy:", "adzuna:", "jooble:", "wttj:", "apec:", "import:", "github:", "hn:", "reddit:", "http://", "https://")):
                 if lower.startswith(("http://", "https://")) and not urlparse(target).netloc:
                     warnings.append(f"La cible d'offres ressemble à une URL invalide : {target}")
                 continue

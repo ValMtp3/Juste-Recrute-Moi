@@ -64,6 +64,7 @@ def create_ghost_tick(manager):
             cfg.get("job_market_focus", "france"),
             search_text=str(profile.get("_discovery_search_text") or profile.get("desired_position") or profile.get("s") or ""),
             location=str(profile.get("_discovery_location") or ""),
+            radius_km=str(profile.get("_discovery_radius_km") or ""),
         )
         has_x = has_x_token(cfg)
         has_free = free_sources_enabled(cfg)
