@@ -168,6 +168,11 @@ class ResetDataBody(StrictBody):
     clear_settings: bool = False
 
 
+class RebuildVectorsBody(StrictBody):
+    # Explicit confirmation: drops and recreates local LanceDB embedding tables.
+    confirm: Literal["VECTORS"]
+
+
 class ProfileCleanupBody(StrictBody):
     # Explicit confirmation: cleanup can remove duplicate/malformed profile rows.
     confirm: Literal["CLEAN"]

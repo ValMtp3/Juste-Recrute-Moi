@@ -106,10 +106,10 @@ def test_ci_enforces_manifest_guardrails():
     assert "uv run ruff check ." in ci
     assert "uv run mypy" in ci
     assert "--cov-fail-under=60" in ci
-    assert "npm run lint" in ci
-    assert "npm run test:coverage" in ci
+    assert "pnpm lint" in ci
+    assert "pnpm test:coverage" in ci
     assert "Release smoke" in ci
-    assert "npm run release:smoke" in ci
+    assert "pnpm release:smoke" in ci
     assert "ubuntu-latest" in ci
     assert "windows-latest" in ci
     assert "macos-latest" in ci

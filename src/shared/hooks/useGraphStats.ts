@@ -2,6 +2,21 @@ import { useEffect, useState } from "react";
 import { isAbortLikeError } from "../../api/client";
 import type { ApiFetch, GraphStats } from "../../types";
 import { onAppEvent } from "../lib/appEvents";
+import { readJsonResponse, responseErrorMessage } from "../lib/httpError";
+
+function readableGraphError(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return "Le graphe n'a pas pu être chargé.";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("graph request failed") || lower.includes("graphe")) {
+    return "Le graphe n'a pas pu être chargé. Vérifiez Activité, puis réessayez.";
+  }
+  return trimmed;
+}
 
 export function useGraphStats(api: ApiFetch | null) {
   const [stats, setStats] = useState<GraphStats>({ candidate: 0, skill: 0, project: 0, experience: 0, joblead: 0, loaded: false, loading: false });
@@ -17,15 +32,17 @@ export function useGraphStats(api: ApiFetch | null) {
       try {
         const response = await api(`/api/v1/graph${repair ? "?repair=true" : ""}`, { signal: controller.signal, timeoutMs: repair ? 45000 : undefined });
         if (!response.ok) {
-          const detail = await response.text().catch(() => "");
-          throw new Error(`Graph request failed (${response.status})${detail ? `: ${detail.slice(0, 240)}` : ""}`);
+          throw new Error(await responseErrorMessage(response, `Graph request failed (${response.status})`));
         }
-        const data = await response.json();
+        const data = await readJsonResponse<GraphStats>(
+          response,
+          "Le graphe a répondu dans un format illisible.",
+        );
         if (!alive) return;
         setStats({ ...data, loaded: true, loading: false, request_error: "" });
       } catch (error) {
         if (!alive || controller.signal.aborted || isAbortLikeError(error)) return;
-        const message = error instanceof Error ? error.message : "Graph request failed";
+        const message = readableGraphError(error);
         setStats(prev => ({ ...prev, loaded: true, loading: false, request_error: message }));
       }
     };

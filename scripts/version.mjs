@@ -13,24 +13,14 @@ const files = [
     read: jsonVersion,
     write: writeJsonVersion,
   },
-  {
-    name: "package-lock.json",
-    path: join(repoRoot, "package-lock.json"),
-    read: jsonVersion,
-    write: writeJsonVersion,
-  },
+
   {
     name: "website/package.json",
     path: join(repoRoot, "website", "package.json"),
     read: jsonVersion,
     write: writeJsonVersion,
   },
-  {
-    name: "website/package-lock.json",
-    path: join(repoRoot, "website", "package-lock.json"),
-    read: jsonVersion,
-    write: writeJsonVersion,
-  },
+
   {
     name: "src-tauri/tauri.conf.json",
     path: join(repoRoot, "src-tauri", "tauri.conf.json"),
@@ -232,7 +222,8 @@ function bump(versionRaw) {
   check(version);
 }
 
-const [command, value] = process.argv.slice(2);
+const args = process.argv.slice(2).filter((arg) => arg !== "--");
+const [command, value] = args;
 
 try {
   if (command === "check") {

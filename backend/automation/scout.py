@@ -106,6 +106,120 @@ def _target_label(target: str) -> str:
     return value
 
 
+def _apify_actor_queries(targets: list[str], queries: list[str] | None = None) -> list[str]:
+    if queries:
+        return [str(query).strip() for query in queries if str(query).strip()]
+    return [
+        str(target).strip()
+        for target in targets
+        if str(target).strip().lower().startswith("site:")
+    ]
+
+
+def _clamp_int(value, default: int, lo: int, hi: int) -> int:
+    try:
+        parsed = int(value if value not in (None, "") else default)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(lo, min(parsed, hi))
+
+
+def _is_disabled(value) -> bool:
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"0", "false", "no", "off"}
+
+
+def _normal_scan_mode(value: str | None) -> str:
+    mode = str(value or "balanced").strip().lower()
+    return mode if mode in {"lean", "balanced", "thorough"} else "balanced"
+
+
+def _is_keyless_or_structured_target(target: str) -> bool:
+    lower = target.lower()
+    return (
+        "news.ycombinator.com" in lower
+        or "hn-hiring" in lower
+        or "hackernews" in lower
+        or "remoteok.com/api" in lower
+        or "remotive.com/api" in lower
+        or "jobicy.com/api" in lower
+        or _is_rss_target(target)
+    )
+
+
+def _annotate_source_meta(
+    item: dict,
+    *,
+    target: str,
+    actual_source: str,
+    extraction_mode: str,
+    llm_scan_mode: str,
+) -> dict:
+    meta = dict(item.get("source_meta") or {})
+    meta.setdefault("source", item.get("platform") or _target_label(target))
+    meta.setdefault("source_target", target)
+    meta.setdefault("source_actual", actual_source)
+    meta.setdefault("source_reliability", "best_effort")
+    meta["extraction_mode"] = extraction_mode
+    meta["llm_scan_mode"] = llm_scan_mode
+    if target.lower().startswith("site:"):
+        meta.setdefault("query", target)
+    return {**item, "source_meta": meta}
+
+
+def _scrape_browser_target(target: str, *, headed: bool, llm_scan_mode: str) -> list[dict]:
+    crawl_target = target
+    if "wellfound.com" in target or "angel.co" in target:
+        batch = web_sources.scrape_wellfound_target(target, headed=headed)
+        extraction_mode = "browser_llm_wellfound"
+    elif "github.com" in target and "jobs" in target.lower():
+        batch = web_sources.scrape_github_jobs_target(target, headed=headed)
+        extraction_mode = "browser_llm_github_jobs"
+    elif target.startswith("site:"):
+        crawl_target = web_sources.google_past_week_url(target)
+        batch = web_sources.scrape(crawl_target, headed=headed)
+        extraction_mode = "browser_google_qdr_week"
+    else:
+        batch = scrape(target, headed=headed)
+        extraction_mode = "browser_llm_page"
+    return [
+        _annotate_source_meta(
+            item,
+            target=target,
+            actual_source=crawl_target,
+            extraction_mode=extraction_mode,
+            llm_scan_mode=llm_scan_mode,
+        )
+        for item in batch
+    ]
+
+
+async def _scrape_browser_targets(
+    targets: list[str],
+    *,
+    headed: bool,
+    concurrency: int,
+    llm_scan_mode: str,
+) -> list[tuple[str, list[dict] | None, Exception | None]]:
+    semaphore = asyncio.Semaphore(max(1, concurrency))
+
+    async def one(target: str) -> tuple[str, list[dict] | None, Exception | None]:
+        async with semaphore:
+            try:
+                batch = await asyncio.to_thread(
+                    _scrape_browser_target,
+                    target,
+                    headed=headed,
+                    llm_scan_mode=llm_scan_mode,
+                )
+                return target, batch, None
+            except Exception as exc:
+                return target, None, exc
+
+    return await asyncio.gather(*(one(target) for target in targets))
+
+
 def _cutoff() -> datetime:
     return datetime.now(timezone.utc) - timedelta(days=_MAX_AGE_DAYS)
 
@@ -527,13 +641,20 @@ def run(
     apify_actor: str | None = None,
     headed: bool = False,
     min_quality: int = MIN_DEFAULT_QUALITY,
+    browser_scan_enabled: bool = True,
+    browser_scan_concurrency: int = 4,
+    browser_scan_max_targets: int = 32,
+    llm_scan_mode: str = "balanced",
 ) -> list:
     errors: list[str] = []
     leads = []
 
     # Handle Special Targets (RSS/API)
-    all_targets = urls or []
+    all_targets = [_ensure_scheme(target) for target in (urls or [])]
     processed_leads = []
+    llm_scan_mode = _normal_scan_mode(llm_scan_mode)
+    browser_concurrency = _clamp_int(browser_scan_concurrency, 4, 1, 8)
+    browser_cap = _clamp_int(browser_scan_max_targets, 32, 1, 80)
     usage: dict[str, Any] = {
         "configured": len(all_targets),
         "executed": 0,
@@ -543,35 +664,43 @@ def run(
         "filtered": 0,
         "missing_url": 0,
         "errors": 0,
+        "browser_configured": 0,
+        "browser_executed": 0,
+        "browser_skipped": 0,
+        "browser_concurrency": browser_concurrency,
+        "llm_scan_mode": llm_scan_mode,
         "by_source": {},
     }
 
+    browser_targets: list[str] = []
     for target in all_targets:
-        target = _ensure_scheme(target)
+        if not _is_keyless_or_structured_target(target):
+            browser_targets.append(target)
+            continue
         try:
             before = len(processed_leads)
             if "news.ycombinator.com" in target or "hn-hiring" in target.lower() or "hackernews" in target.lower():
-                processed_leads.extend(asyncio.run(_scrape_hn_hiring()))
-            elif "wellfound.com" in target or "angel.co" in target:
-                processed_leads.extend(web_sources.scrape_wellfound_target(target, headed=headed))
-            elif "github.com" in target and "jobs" in target.lower():
-                processed_leads.extend(web_sources.scrape_github_jobs_target(target, headed=headed))
+                batch = asyncio.run(_scrape_hn_hiring())
             elif "remoteok.com/api" in target:
-                processed_leads.extend(asyncio.run(_scrape_remoteok()))
+                batch = asyncio.run(_scrape_remoteok())
             elif "remotive.com/api" in target:
-                processed_leads.extend(asyncio.run(_scrape_remotive(target)))
+                batch = asyncio.run(_scrape_remotive(target))
             elif "jobicy.com/api" in target:
-                processed_leads.extend(asyncio.run(_scrape_jobicy_api(target)))
+                batch = asyncio.run(_scrape_jobicy_api(target))
             elif _is_rss_target(target):
-                processed_leads.extend(asyncio.run(_scrape_rss(target)))
-            elif target.startswith("site:"):
-                # Google Dork — qdr:w = past week (7 days)
-                google_url = web_sources.google_past_week_url(target)
-                for item in web_sources.scrape(google_url, headed=headed):
-                    processed_leads.append(item)
+                batch = asyncio.run(_scrape_rss(target))
             else:
-                # Standard Web Scrape
-                processed_leads.extend(scrape(target, headed=headed))
+                batch = []
+            processed_leads.extend(
+                _annotate_source_meta(
+                    item,
+                    target=target,
+                    actual_source=target,
+                    extraction_mode="keyless_structured",
+                    llm_scan_mode=llm_scan_mode,
+                )
+                for item in batch
+            )
             usage["executed"] += 1
             source_count = len(processed_leads) - before
             usage["candidates"] += max(0, source_count)
@@ -582,49 +711,112 @@ def run(
             errors.append(f"{label}: {_source_error_detail(_e)}")
             _log.warning("Cible ignorée %s : %s", label, _source_error_detail(_e))
 
+    usage["browser_configured"] = len(browser_targets)
+    if browser_targets and _is_disabled(browser_scan_enabled):
+        usage["browser_skipped"] = len(browser_targets)
+        for target in browser_targets:
+            usage["by_source"][target] = 0
+        errors.append(f"scan navigateur désactivé : {len(browser_targets)} cible(s) ignorée(s)")
+    else:
+        runnable_browser_targets = browser_targets[:browser_cap]
+        skipped = max(0, len(browser_targets) - len(runnable_browser_targets))
+        usage["browser_skipped"] += skipped
+        if skipped:
+            errors.append(f"Browser-source cap hit: ran {browser_cap} of {len(browser_targets)} browser targets")
+            for target in browser_targets[browser_cap:]:
+                usage["by_source"][target] = 0
+        if runnable_browser_targets:
+            for target, batch, exc in asyncio.run(_scrape_browser_targets(
+                runnable_browser_targets,
+                headed=headed,
+                concurrency=browser_concurrency,
+                llm_scan_mode=llm_scan_mode,
+            )):
+                if exc is not None:
+                    usage["errors"] += 1
+                    usage["by_source"][target] = 0
+                    label = _target_label(target)
+                    errors.append(f"{label}: {_source_error_detail(exc)}")
+                    _log.warning("Cible navigateur ignorée %s : %s", label, _source_error_detail(exc))
+                    continue
+                batch = batch or []
+                processed_leads.extend(batch)
+                usage["executed"] += 1
+                usage["browser_executed"] += 1
+                usage["candidates"] += len(batch)
+                usage["by_source"][target] = len(batch)
+
     # Apify fallback (gated: requires apify_token + apify_actor). When configured,
     # hand the actor the search queries it needs. Previously `queries` was never
     # populated by any caller, so this branch was dead and the actor never ran.
     # Derive queries from the `site:` dork targets — exactly the targets the
     # keyless API/RSS path cannot serve — so Apify becomes the engine for them.
     if apify_token and apify_actor:
-        actor_queries = queries or [
-            target[len("site:"):].strip()
-            for target in all_targets
-            if target.lower().startswith("site:")
-        ]
+        actor_queries = _apify_actor_queries(all_targets, queries)
         if actor_queries:
             raw = asyncio.run(apify(apify_actor, {"queries": actor_queries}, apify_token))
+            apify_source = f"apify:{apify_actor}"
+            usage["executed"] += 1
+            usage["candidates"] += len(raw)
+            usage["by_source"][apify_source] = len(raw)
             for item in raw:
-                processed_leads.append({
+                processed_leads.append(_annotate_source_meta({
                     "title": item.get("title", ""),
                     "company": item.get("company", ""),
                     "url": item.get("url", ""),
-                    "platform": "apify"
-                })
+                    "platform": "apify",
+                    "description": item.get("description", ""),
+                    "posted_date": item.get("posted_date", ""),
+                }, target=apify_source, actual_source=apify_source, extraction_mode="apify_actor", llm_scan_mode=llm_scan_mode))
 
     # Save and Deduplicate
+    seen: set[str] = set()
     for item in processed_leads:
         u = item.get("url", "")
         if not u:
             usage["missing_url"] += 1
             continue
         jid = canonical_lead_id(u)
-        if url_exists(jid):
+        if jid in seen or url_exists(jid):
             usage["duplicates"] += 1
             continue
+        seen.add(jid)
         t    = item.get("title", "")
         co   = item.get("company", "")
         plat = item.get("platform", "scout")
         desc = item.get("description", "")
+        raw_meta = item.get("source_meta") if isinstance(item.get("source_meta"), dict) else {}
         source_meta = {
-            "posted_date": item.get("posted_date", ""),
-            "fresh_source": item.get("_fresh_source", ""),
+            "posted_date": item.get("posted_date", "") or raw_meta.get("posted_date", ""),
+            "fresh_source": item.get("_fresh_source", "") or raw_meta.get("fresh_source", ""),
             "seniority_level": classify_job_seniority(item),
             "is_fresh": _is_fresh_lead(item),
         }
-        item = {**item, "source_meta": {**(item.get("source_meta") or {}), **source_meta}}
-        quality = evaluate_lead_quality(item, min_quality=min_quality)
+        item = {**item, "source_meta": {**raw_meta, **source_meta}}
+
+        target_str = raw_meta.get("source_target", "")
+        target_loc = ""
+        if target_str and ":" in target_str:
+            try:
+                from core.config import FRANCE_LOCATION_HINTS
+            except ImportError:
+                FRANCE_LOCATION_HINTS = set()
+            raw = target_str.split(":", 1)[1]
+            parts = [p.strip() for p in raw.replace("|", ";").split(";") if p.strip()]
+            for part in parts:
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    if k.strip().lower() in {"lieu", "location", "where", "aroundquery"}:
+                        target_loc = v.strip()
+                        break
+            if not target_loc and parts and "=" not in parts[0]:
+                kw = parts[0].lower()
+                for hint in FRANCE_LOCATION_HINTS:
+                    if hint in kw.split():
+                        target_loc = hint
+                        break
+
+        quality = evaluate_lead_quality(item, min_quality=min_quality, target_location=target_loc)
         item = attach_quality_metadata(item, quality)
         if not quality.get("accepted"):
             usage["filtered"] += 1

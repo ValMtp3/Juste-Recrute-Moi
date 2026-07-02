@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from typing import Any
 
 from discovery.targets import (
     free_sources_enabled,
     has_profile_discovery_signal,
     has_x_token,
     int_cfg,
+    job_market_focus,
     profile_free_source_targets,
     profile_x_queries,
     truthy,
@@ -39,7 +41,7 @@ class DiscoveryService:
 
         leads: list[dict] = []
         errors: list[str] = []
-        usage: dict = {"configured": len(urls), "executed": 0, "candidates": 0, "saved": 0, "duplicates": 0, "filtered": 0, "missing_url": 0, "errors": 0, "by_source": {}}
+        usage: dict = {"configured": len(urls), "executed": 0, "candidates": 0, "saved": 0, "duplicates": 0, "filtered": 0, "missing_url": 0, "empty": 0, "errors": 0, "by_source": {}}
 
         if free_targets:
             free_result = await asyncio.to_thread(
@@ -73,6 +75,7 @@ class DiscoveryService:
         kind_filter: str | None = None,
         profile: dict | None = None,
         force: bool = False,
+        progress_callback: Any | None = None,
     ) -> DiscoveryRunResult:
         if not force and not free_sources_enabled(cfg):
             return DiscoveryRunResult()
@@ -89,9 +92,14 @@ class DiscoveryService:
                 message = "Scan des sources gratuites ignoré : ajoutez un poste cible, des compétences, des cibles source ou une liste d'entreprises."
             return DiscoveryRunResult(errors=[message])
 
+        loop = asyncio.get_running_loop()
+        def sync_progress(current: int, total: int, target: str):
+            if progress_callback:
+                asyncio.run_coroutine_threadsafe(progress_callback(current, total, target), loop)
+
         result = await asyncio.to_thread(
             run_free_scout,
-            raw_targets=raw_targets,
+            raw_targets=_filter_free_targets_for_market(raw_targets, cfg.get("job_market_focus", "france")),
             raw_watchlist=cfg.get("company_watchlist", ""),
             raw_custom_connectors=cfg.get("custom_connectors", ""),
             raw_custom_headers=cfg.get("custom_connector_headers", ""),
@@ -99,6 +107,7 @@ class DiscoveryService:
             kind_filter=kind_filter or "job",
             max_requests=int_cfg(cfg, "free_source_max_requests", 20, 1, 80),
             min_signal_score=int_cfg(cfg, "free_source_min_signal_score", 60, 0, 100),
+            progress_callback=sync_progress,
         )
         return DiscoveryRunResult(
             leads=result.leads,
@@ -121,7 +130,7 @@ class DiscoveryService:
         result = await asyncio.to_thread(
             run_x_scan,
             bearer_token=cfg.get("x_bearer_token") or None,
-            raw_queries=cfg.get("x_search_queries", "") or profile_x_queries(profile or {}, cfg.get("job_market_focus", "global")),
+            raw_queries=cfg.get("x_search_queries", "") or profile_x_queries(profile or {}, cfg.get("job_market_focus", "france")),
             raw_watchlist=cfg.get("x_watchlist", ""),
             kind_filter=kind_filter,
             max_requests=int_cfg(cfg, "x_max_requests_per_scan", 5, 1, 50),
@@ -139,16 +148,27 @@ def create_discovery_service() -> DiscoveryService:
     return DiscoveryService()
 
 
+def _filter_free_targets_for_market(raw_targets: str, market_focus: str) -> str:
+    if job_market_focus(market_focus) != "france":
+        return str(raw_targets or "")
+    lines = []
+    for line in str(raw_targets or "").splitlines():
+        if line.strip().lower().startswith("reddit:"):
+            continue
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _is_direct_free_target(target: str) -> bool:
     lower = str(target or "").strip().lower()
-    return lower.startswith(("france_travail:", "jobspy:", "import:", "ats:"))
+    return lower.startswith(("france_travail:", "jobspy:", "adzuna:", "jooble:", "wttj:", "apec:", "import:", "ats:"))
 
 
 def _merge_usage(out: dict, incoming: dict | None, *, configured: int) -> None:
     incoming = incoming or {}
     out["configured"] = int(out.get("configured") or 0)
     out["executed"] = int(out.get("executed") or 0) + int(incoming.get("executed") or incoming.get("targets") or configured or 0)
-    for key in ("candidates", "saved", "duplicates", "filtered", "missing_url", "errors"):
+    for key in ("candidates", "saved", "duplicates", "filtered", "missing_url", "empty", "errors"):
         out[key] = int(out.get(key) or 0) + int(incoming.get(key) or 0)
     by_source = out.setdefault("by_source", {})
     for key, value in (incoming.get("by_source") or {}).items():

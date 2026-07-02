@@ -49,6 +49,16 @@ def test_web_source_target_helpers():
     )
 
 
+def test_web_source_compacts_large_markdown_for_llm():
+    large = "a" * (web._MAX_SCOUT_MARKDOWN_CHARS + 1000)
+    compacted = web._compact_llm_markdown(large)
+
+    assert len(compacted) < len(large)
+    assert "contenu tronqué" in compacted
+    assert compacted.startswith("aaa")
+    assert compacted.endswith("aaa")
+
+
 def test_web_source_github_jobs_marks_platform():
     with mock.patch("discovery.sources.web.scrape", return_value=[{"platform": "scout"}]):
         leads = web.scrape_github_jobs_target("https://github.com/example/jobs")

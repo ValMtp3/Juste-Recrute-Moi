@@ -2,12 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import Icon from "../../shared/components/Icon";
 import type React from "react";
 import type { ApiFetch, Lead, LogLine, OperationProgress, View } from "../../types";
-import { getMark, getTone, leadDisplayHeading, leadSignal } from "../../shared/lib/leadUtils";
+import { getMark, getTone, leadDisplayHeading, leadSignal, leadStatusLabel } from "../../shared/lib/leadUtils";
 import { DebugResetButton } from "../../shared/components/DebugResetButton";
 import { settingsApi } from "../../api/settings";
+import { readJsonResponse, responseErrorMessage } from "../../shared/lib/httpError";
+
+function readableDashboardError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("unexpected token") || lower.includes("json")) return fallback;
+  if (lower.includes("préférences") || lower.includes("preferences")) return fallback;
+  return trimmed;
+}
 
 /**
- * "Ce que tu recherches" — free-text preferences the agent uses to target the
+ * "Ce que vous recherchez" — free-text preferences the agent uses to target the
  * scan and rank matching jobs higher. Loads + saves the job_preferences setting
  * directly (on blur), so it survives restarts and feeds the next scan/evaluation.
  */
@@ -15,37 +29,58 @@ function PreferencesBox({ api }: { api: ApiFetch | null }) {
   const [value, setValue] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [status, setStatus] = useState<"" | "saving" | "saved" | "error">("");
+  const [errorMessage, setErrorMessage] = useState("");
   const lastSaved = useRef("");
+  const statusTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (!api) return;
     let alive = true;
-    settingsApi.getPreferences(api).then(r => r.json()).then(d => {
+    settingsApi.getPreferences(api).then(async r => {
+      if (!r.ok) throw new Error(await responseErrorMessage(r, "Les préférences n'ont pas pu être chargées."));
+      return readJsonResponse<Record<string, unknown>>(
+        r,
+        "Les préférences ont répondu dans un format illisible.",
+      );
+    }).then(d => {
       if (!alive) return;
       const v = String(d?.preferences || "");
       setValue(v); lastSaved.current = v; setLoaded(true);
-    }).catch(() => { if (alive) setLoaded(true); });
-    return () => { alive = false; };
+    }).catch(err => {
+      if (!alive) return;
+      setErrorMessage(readableDashboardError(err, "Les préférences n'ont pas pu être chargées."));
+      setLoaded(true);
+    });
+    return () => {
+      alive = false;
+      if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
+    };
   }, [api]);
 
   const save = async () => {
     if (!api || value === lastSaved.current) return;
     setStatus("saving");
+    setErrorMessage("");
     try {
       const r = await settingsApi.savePreferences(api, value);
-      if (!r.ok) throw new Error();
+      if (!r.ok) throw new Error(await responseErrorMessage(r, "Les préférences n'ont pas pu être enregistrées."));
       lastSaved.current = value;
-      setStatus("saved"); window.setTimeout(() => setStatus(""), 1800);
-    } catch { setStatus("error"); }
+      setStatus("saved");
+      if (statusTimerRef.current) window.clearTimeout(statusTimerRef.current);
+      statusTimerRef.current = window.setTimeout(() => setStatus(""), 1800);
+    } catch (err: unknown) {
+      setErrorMessage(readableDashboardError(err, "Les préférences n'ont pas pu être enregistrées."));
+      setStatus("error");
+    }
   };
 
   return (
     <section className="card" style={{ padding: 16, marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
         <div style={{ minWidth: 0 }}>
-          <span className="eyebrow">Ce que tu recherches</span>
+          <span className="eyebrow">Ce que vous recherchez</span>
           <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 3, lineHeight: 1.5 }}>
-            Décris ton poste idéal en français simple : l'agent l'utilise pour <b>cibler la recherche</b> et <b>remonter les offres les plus pertinentes</b>.
+            Décrivez votre poste idéal en français simple : l'agent l'utilise pour <b>cibler la recherche</b> et <b>remonter les offres les plus pertinentes</b>.
           </div>
         </div>
         {status === "saved" && <span className="pill" style={{ background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" }}>Enregistré</span>}
@@ -62,6 +97,7 @@ function PreferencesBox({ api }: { api: ApiFetch | null }) {
         onBlur={save}
         style={{ width: "100%", resize: "vertical", fontSize: 13, lineHeight: 1.55 }}
       />
+      {errorMessage && <div role="alert" style={{ marginTop: 8, fontSize: 12, color: "var(--bad)", lineHeight: 1.45 }}>{errorMessage}</div>}
     </section>
   );
 }
@@ -138,7 +174,7 @@ const LeadRow = ({ lead, openDrawer }: { lead: Lead; openDrawer: (l: Lead) => vo
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 750, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{role}</div>
         <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {company} / {lead.platform || "source"} / {lead.status}
+          {company} / {lead.platform || "source"} / {leadStatusLabel(lead.status)}
         </div>
       </div>
       <span className="mono tabular" style={{
@@ -175,14 +211,19 @@ const SecondaryButton = ({ children, onClick, disabled, danger }: { children: Re
 
 export function DashboardView({
   leads, dueFollowups, logs, setView, openDrawer,
-  scanning, reevaluating, cleaning, progress, onScan, onStopScan, onReevaluate, onStopReevaluate, onCleanup, scanErr, api = null,
+  scanning, reevaluating, cleaning, progress, onScan, scanSpeed, setScanSpeed, onStopScan, onReevaluate, onStopReevaluate, onCleanup, scanErr, api = null,
 }: {
-  leads: Lead[]; dueFollowups: Lead[]; logs: LogLine[]; setView: (v: View) => void; openDrawer: (l: Lead) => void;
+  leads: Lead[]; dueFollowups: Lead[]; logs: LogLine[];
+  setView: (view: View) => void; openDrawer: (lead: Lead) => void;
   scanning: boolean; reevaluating: boolean; cleaning: boolean;
-  progress?: OperationProgress;
-  onScan: () => void; onStopScan: () => void; onReevaluate: () => void; onStopReevaluate: () => void; onCleanup: () => void; scanErr: string | null;
+  progress: OperationProgress;
+  onScan: (speed?: "rapide" | "moyen" | "max") => void;
+  scanSpeed?: "rapide" | "moyen" | "max";
+  setScanSpeed?: (speed: "rapide" | "moyen" | "max") => void;
+  onStopScan: () => void; onReevaluate: () => void; onStopReevaluate: () => void; onCleanup: () => void; scanErr: string | null;
   api?: ApiFetch | null;
 }) {
+  const [cleanupConfirm, setCleanupConfirm] = useState(false);
   const active = leads.filter(l => l.status !== "discarded");
   const counts = {
     total: active.length,
@@ -196,6 +237,30 @@ export function DashboardView({
     .slice(0, 4);
   const busy = scanning || reevaluating || cleaning;
   const latest = logs[0];
+  const hasLeads = leads.length > 0;
+  const heroTitle = scanning
+    ? "Recherche en cours."
+    : reevaluating
+      ? "Re-score en cours."
+      : cleaning
+        ? "Nettoyage en cours."
+        : hasLeads
+          ? "Offres à traiter."
+          : "Prêt à chercher.";
+  const heroSubtitle = hasLeads
+    ? <><b>{leads.length} offres</b> récupérées, <b>{counts.scored}</b> évaluées avec un score, <b>{counts.tailoring + counts.ready} dossiers</b> adaptés.</>
+    : <>Décrivez ce que vous recherchez, vérifiez les sources, puis lancez un premier scan ou collez directement une offre.</>;
+  const nowLabel = busy
+    ? (scanning ? "Scan des sources configurées..." : reevaluating ? "Re-score des offres sauvegardées..." : "Nettoyage des lignes faibles...")
+    : (hasLeads ? "Prêt pour la prochaine action." : "Aucune offre en base pour l'instant.");
+  const requestCleanup = () => {
+    if (cleanupConfirm) {
+      setCleanupConfirm(false);
+      onCleanup();
+      return;
+    }
+    setCleanupConfirm(true);
+  };
 
   return (
     <div className="scroll" style={{ padding: 24, flex: 1, height: "100%", minHeight: 0 }}>
@@ -214,10 +279,10 @@ export function DashboardView({
           <div style={{ minWidth: 0 }}>
             <div className="eyebrow">Agent actif</div>
             <h1 style={{ fontSize: 44, marginTop: 8 }}>
-              La recherche est <span className="italic-serif" style={{ color: "var(--ink-2)" }}>lancée.</span>
+              {heroTitle}
             </h1>
             <div style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.55, maxWidth: 560, marginTop: 10 }}>
-              <b>{leads.length} offres</b> récupérées, <b>{counts.scored}</b> évaluées avec un score, <b>{counts.tailoring + counts.ready} dossiers</b> adaptés.
+              {heroSubtitle}
             </div>
             <div className="row gap-2" style={{ flexWrap: "wrap", marginTop: 16 }}>
               {scanning ? (
@@ -240,24 +305,64 @@ export function DashboardView({
                   <Icon name="x" size={13} color="var(--bad)" /> Arrêter
                 </button>
               ) : (
-                <button onClick={onScan} disabled={reevaluating || cleaning} style={{
-                  minHeight: 48,
-                  padding: "10px 22px",
-                  borderRadius: 8,
-                  fontSize: 12,
-                  fontWeight: 850,
-                  letterSpacing: "0.10em",
-                  textTransform: "uppercase",
-                  background: reevaluating || cleaning ? "var(--ink-4)" : "var(--ink)",
-                  color: "var(--paper)",
-                  border: "1px solid var(--ink)",
-                  cursor: reevaluating || cleaning ? "not-allowed" : "pointer",
-                  display: "inline-flex",
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button onClick={() => onScan(scanSpeed)} disabled={reevaluating || cleaning} style={{
+                    minHeight: 48,
+                    padding: "10px 22px",
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 850,
+                    letterSpacing: "0.10em",
+                    textTransform: "uppercase",
+                    background: reevaluating || cleaning ? "var(--ink-4)" : "var(--ink)",
+                    color: "var(--paper)",
+                    border: "1px solid var(--ink)",
+                    cursor: reevaluating || cleaning ? "not-allowed" : "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 8,
+                    boxShadow: reevaluating || cleaning ? "none" : "0 4px 12px rgba(0,0,0,0.15)",
+                    transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                  }}>
+                    <Icon name="spark" size={13} color="var(--paper)" /> Lancer le scan
+                  </button>
+                  {setScanSpeed && (
+                    <select
+                      value={scanSpeed || "moyen"}
+                      onChange={e => setScanSpeed(e.target.value as "rapide" | "moyen" | "max")}
+                      disabled={reevaluating || cleaning}
+                      style={{
+                        height: 48,
+                        padding: "0 12px",
+                        borderRadius: 8,
+                        border: "1px solid var(--line)",
+                        background: "var(--paper-2)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "var(--ink-2)",
+                        cursor: reevaluating || cleaning ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      <option value="rapide">Rapide (±5)</option>
+                      <option value="moyen">Moyen (±20)</option>
+                      <option value="max">Max (toutes)</option>
+                    </select>
+                  )}
+                </div>
+              )}
+              {!scanning && scanSpeed === "max" && (
+                <div style={{
+                  fontSize: 11,
+                  color: "var(--bad)",
+                  marginTop: 8,
+                  display: "flex",
                   alignItems: "center",
-                  gap: 8,
+                  gap: 6,
+                  fontWeight: 500,
                 }}>
-                  <Icon name="search" size={13} color="var(--paper)" /> Scanner les sources
-                </button>
+                  <Icon name="alert-circle" size={13} color="var(--bad)" />
+                  <span>Attention : le mode Max (150 offres/source) augmente le risque de bannissement par les fournisseurs d'API.</span>
+                </div>
               )}
               <SecondaryButton onClick={() => setView("apply")} disabled={busy}>
                 <Icon name="spark" size={13} /> Adapter une offre
@@ -266,6 +371,22 @@ export function DashboardView({
                 Pipeline <Icon name="arrow-right" size={13} />
               </SecondaryButton>
             </div>
+            {scanning && progress.active && progress.total > 0 && (
+              <div style={{ marginTop: 16, maxWidth: 560 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--ink-3)", marginBottom: 6 }}>
+                  <span>{progress.current || "Recherche..."}</span>
+                  <span className="mono">{progress.completed} / {progress.total}</span>
+                </div>
+                <div style={{ height: 4, background: "var(--line)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%",
+                    background: "var(--ink)",
+                    width: `${Math.min(100, Math.max(0, (progress.completed / progress.total) * 100))}%`,
+                    transition: "width 0.3s ease-out"
+                  }} />
+                </div>
+              </div>
+            )}
             {scanErr && <div style={{ marginTop: 10, fontSize: 12, color: "var(--bad)", fontWeight: 700 }}>{scanErr}</div>}
           </div>
 
@@ -278,7 +399,7 @@ export function DashboardView({
           }}>
             <div className="eyebrow">Maintenant</div>
             <div style={{ marginTop: 8, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.5 }}>
-              {busy ? (scanning ? "Scan des sources configurées..." : reevaluating ? "Re-score des offres sauvegardées..." : "Nettoyage des lignes faibles...") : "Prêt pour la prochaine action."}
+              {nowLabel}
             </div>
             {progress?.active && (
               <div style={{ marginTop: 12 }}>
@@ -339,7 +460,7 @@ export function DashboardView({
           <div className="col gap-2">
             {queue.length === 0 ? (
               <div style={{ padding: 14, fontSize: 12.5, color: "var(--ink-3)", borderRadius: 8, border: `1px solid ${warmBorder}`, background: warmSurface }}>
-                Lance un scan pour remplir cette liste.
+                Lancez un scan pour remplir cette liste.
               </div>
             ) : queue.map(lead => <LeadRow key={lead.job_id} lead={lead} openDrawer={openDrawer} />)}
           </div>
@@ -366,9 +487,17 @@ export function DashboardView({
                 <Icon name="pulse" size={13} /> Re-scorer les offres
               </SecondaryButton>
             )}
-            <SecondaryButton onClick={onCleanup} disabled={busy || leads.length === 0}>
-              <Icon name="trash" size={13} /> {cleaning ? "Nettoyage..." : "Nettoyer les données"}
+            <SecondaryButton onClick={requestCleanup} disabled={busy || leads.length === 0} danger={cleanupConfirm}>
+              <Icon name="trash" size={13} /> {cleaning ? "Nettoyage..." : cleanupConfirm ? "Confirmer le nettoyage" : "Nettoyer les données"}
             </SecondaryButton>
+            {cleanupConfirm && (
+              <div style={{ padding: 10, borderRadius: 8, border: "1px solid var(--yellow)", background: "var(--yellow-soft)", color: "var(--yellow-ink)", fontSize: 12, lineHeight: 1.45 }}>
+                Les lignes hors sujet seront masquées, pas supprimées. Cliquez à nouveau pour confirmer.
+                <button className="btn btn-ghost" onClick={() => setCleanupConfirm(false)} style={{ marginTop: 8, minHeight: 28, padding: "4px 8px", color: "inherit" }}>
+                  Annuler
+                </button>
+              </div>
+            )}
             <button className="btn btn-ghost" onClick={() => setView("activity")} style={{ justifyContent: "center", fontSize: 12 }}>
               Journal d'activité <Icon name="arrow-right" size={12} />
             </button>

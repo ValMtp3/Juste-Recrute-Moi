@@ -28,6 +28,24 @@ def test_startup_validation_reports_actionable_configuration_warnings(monkeypatc
     assert "Cible d'offres possiblement invalide ou trop large : example" in warnings
 
 
+def test_startup_validation_accepts_structured_job_targets(monkeypatch):
+    from api.startup_validation import startup_warnings
+
+    monkeypatch.setenv("FRANCE_TRAVAIL_CLIENT_ID", "client")
+    monkeypatch.setenv("FRANCE_TRAVAIL_CLIENT_SECRET", "secret")
+
+    warnings = startup_warnings(_repo_with_settings({
+        "job_market_focus": "france",
+        "job_boards": "\n".join([
+            "france_travail:developpeur;lieu=France;range=0-49",
+            "jobspy:backend;location=France;sites=indeed",
+            "import:https://example.com/job",
+        ]),
+    }))
+
+    assert warnings == []
+
+
 def test_startup_validation_warns_when_free_sources_have_no_targets():
     from api.startup_validation import startup_warnings
 

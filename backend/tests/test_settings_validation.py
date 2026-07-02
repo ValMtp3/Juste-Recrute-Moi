@@ -49,6 +49,24 @@ def test_valid_integer_setting_saves(tmp_path):
     )
 
 
+def test_browser_scan_settings_are_validated():
+    ok, message = validate_setting("browser_scan_concurrency", "4")
+    assert ok, message
+    ok, message = validate_setting("browser_scan_max_targets", "32")
+    assert ok, message
+    ok, message = validate_setting("browser_scan_enabled", "true")
+    assert ok, message
+    ok, message = validate_setting("llm_scan_mode", "balanced")
+    assert ok, message
+
+    ok, message = validate_setting("browser_scan_concurrency", "99")
+    assert not ok
+    assert "between 1 and 8" in message
+    ok, message = validate_setting("llm_scan_mode", "expensive")
+    assert not ok
+    assert "lean, balanced, thorough" in message
+
+
 def test_unknown_setting_keys_remain_forward_compatible(tmp_path):
     db_path = str(tmp_path / "settings.db")
     run_script(

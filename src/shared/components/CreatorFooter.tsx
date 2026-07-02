@@ -14,7 +14,7 @@ export function CreatorFooter({ compact = false }: { compact?: boolean }) {
         void openExternalUrl(CREATOR_URL);
       }}
     >
-      Cree par Valentin Fiess
+      Créé par Valentin Fiess
     </a>
   );
 }

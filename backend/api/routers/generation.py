@@ -14,6 +14,23 @@ _background_tasks: set[asyncio.Task] = set()
 
 # M4: how long to ask the client to wait before retrying a transient failure.
 _GENERATION_RETRY_AFTER_SECONDS = 30
+_GENERATION_FAILED_DETAIL = "La génération du dossier a échoué. Consultez Activité pour le détail, puis réessayez."
+
+
+def _missing_lead_message(job_id: str) -> str:
+    return f"Offre introuvable pour la génération : {job_id}"
+
+
+def _pipeline_result_message(job_id: str, result: dict) -> str:
+    score = result.get("score", 0)
+    error = result.get("error")
+    if error:
+        return f"Analyse échouée pour l'offre {job_id} : score={score}, erreur={error}"
+    return f"Analyse terminée pour l'offre {job_id} : score={score}"
+
+
+def _pipeline_failed_message(job_id: str, exc: Exception) -> str:
+    return f"Analyse échouée pour l'offre {job_id} : {exc}"
 
 
 def _track_background_task(task: asyncio.Task) -> None:
@@ -55,7 +72,7 @@ async def generate_one(
     job = await asyncio.to_thread(job_store.create, "generate_package", {"job_id": job_id})
     lead = await asyncio.to_thread(repo.leads.get_lead_by_id, job_id)
     if not lead:
-        await manager.broadcast({"type": "agent", "event": "gen_error", "msg": f"Lead {job_id} not found"})
+        await manager.broadcast({"type": "agent", "event": "gen_error", "msg": _missing_lead_message(job_id)})
         raise HTTPException(status_code=404, detail="Offre introuvable")
     blocked_reason = lead_generation_blocker(lead)
     if blocked_reason:
@@ -188,11 +205,11 @@ async def generate_one(
         await manager.broadcast({
             "type": "agent",
             "event": "gen_error",
-            "msg": f"Generation failed for {lead.get('title','?')}: {exc}",
+            "msg": f"Génération échouée pour {lead.get('title','?')} : {exc}",
         })
         status_code = 503 if transient else 500
         headers = {"Retry-After": str(_GENERATION_RETRY_AFTER_SECONDS)} if transient else None
-        raise HTTPException(status_code=status_code, detail="Generation failed. See the activity log for details.", headers=headers) from exc
+        raise HTTPException(status_code=status_code, detail=_GENERATION_FAILED_DETAIL, headers=headers) from exc
 
 
 def create_router(*, manager) -> APIRouter:
@@ -289,7 +306,7 @@ def create_router(*, manager) -> APIRouter:
                     "kind": "agent",
                     "src": "pipeline",
                     "event": "pipeline_done",
-                    "msg": f"Pipeline done for {job_id}: score={result['score']}, error={result['error']}",
+                    "msg": _pipeline_result_message(job_id, result),
                 })
             except Exception as exc:
                 logging.getLogger(__name__).warning('suppressed exception in backend/api/routers/generation.py:_run: %s', exc)
@@ -299,7 +316,7 @@ def create_router(*, manager) -> APIRouter:
                     "kind": "agent",
                     "src": "pipeline",
                     "event": "pipeline_done",
-                    "msg": f"Pipeline failed for {job_id}: {exc}",
+                    "msg": _pipeline_failed_message(job_id, exc),
                 })
 
         bt.add_task(_run)

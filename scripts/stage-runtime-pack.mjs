@@ -27,7 +27,7 @@ function fail(message) {
 }
 
 if (!existsSync(sourceDir)) {
-  fail(`Runtime pack source directory not found: ${sourceDir}. Run \`npm run build:runtime-pack\` first or set JHM_RUNTIME_PACK_SOURCE_DIR.`);
+  fail(`Runtime pack source directory not found: ${sourceDir}. Run \`pnpm build:runtime-pack\` first or set JHM_RUNTIME_PACK_SOURCE_DIR.`);
 }
 
 const assetName = runtimePackAssetName();

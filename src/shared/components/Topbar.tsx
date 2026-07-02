@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Icon from "./Icon";
 import type { OperationProgress, View } from "../../types";
 import { useAppVersion } from "../hooks/useAppVersion";
@@ -7,6 +8,8 @@ import { useTheme } from "../lib/theme";
 export function Topbar({ view, progress }: { view: View; progress?: OperationProgress }) {
   const appVersion = useAppVersion();
   const { resolved, setPref } = useTheme();
+  const progressLabel = progress?.mode === "cleanup" ? "Nettoyage" : progress?.mode === "reevaluate" ? "Re-score" : "Scan";
+  const progressPercent = progress?.total ? Math.min(100, Math.round((progress.completed / progress.total) * 100)) : null;
   const titles: Record<View, string> = {
     apply:     "Adapter une offre",
     dashboard: "Centre de recherche",
@@ -50,25 +53,30 @@ export function Topbar({ view, progress }: { view: View; progress?: OperationPro
       )}
       {progress?.active && (
         <div style={{
-          width: 220,
+          width: 250,
           minWidth: 180,
           display: "flex",
           flexDirection: "column",
           gap: 5,
         }}>
           <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", display: "flex", justifyContent: "space-between", gap: 8 }}>
-            <span>{progress.mode === "reevaluate" ? "Re-score" : "Scan"}</span>
+            <span>{progressLabel}</span>
             <span>{progress.total ? `${Math.min(progress.completed, progress.total)}/${progress.total}` : progress.completed}</span>
           </div>
           <div style={{ height: 6, borderRadius: 999, background: "var(--paper-3)", overflow: "hidden", border: "1px solid var(--line)" }}>
             <div style={{
-              width: `${progress.total ? Math.min(100, Math.round((progress.completed / progress.total) * 100)) : 12}%`,
+              width: `${progressPercent ?? 12}%`,
               minWidth: progress.completed ? 8 : 0,
               height: "100%",
               background: "var(--green)",
               transition: "width 180ms ease",
             }} />
           </div>
+          {progress.current && (
+            <div title={progress.current} style={{ fontSize: 10.5, color: "var(--ink-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {progress.current}
+            </div>
+          )}
         </div>
       )}
       <button
@@ -88,7 +96,15 @@ export function Topbar({ view, progress }: { view: View; progress?: OperationPro
    DASHBOARD VIEW
 ══════════════════════════════════════ */
 
-export const StatCard = ({ tone, label, value, sub, icon }: any) => (
+type StatCardProps = {
+  tone: string;
+  label: string;
+  value: ReactNode;
+  sub: string;
+  icon: string;
+};
+
+export const StatCard = ({ tone, label, value, sub, icon }: StatCardProps) => (
   <div style={{
     background: `var(--${tone}-soft)`,
     border: `1px solid var(--${tone})`,

@@ -3,6 +3,8 @@ import Icon from "./Icon";
 import type { LeadCounts, View } from "../../types";
 import { useAppVersion } from "../hooks/useAppVersion";
 import { CreatorFooter } from "./CreatorFooter";
+import { ONBOARDING_KEY } from "../lib/leadUtils";
+import { readLocalStorage } from "../lib/storage";
 
 const NAV = [
   { id: "dashboard", label: "Accueil", icon: "home", tone: "blue" },
@@ -31,6 +33,7 @@ export function Sidebar({
   leadCounts,
   collapsed,
   onToggleCollapsed,
+  onGuide,
   onSettings,
 }: {
   view: View;
@@ -38,6 +41,7 @@ export function Sidebar({
   leadCounts: LeadCounts;
   collapsed: boolean;
   onToggleCollapsed: () => void;
+  onGuide: () => void;
   onSettings: () => void;
 }) {
   const [pipelineOpen, setPipelineOpen] = useState(true);
@@ -193,6 +197,12 @@ export function Sidebar({
       <div className="grow" />
 
       <div className="sidebar-utility">
+        {(readLocalStorage(ONBOARDING_KEY) !== "done") && (
+          <button className="btn sidebar-setup" onClick={onGuide} aria-label="Guide de démarrage" title="Guide de démarrage">
+            <Icon name="spark" size={15} />
+            <span className="sidebar-label">Guide</span>
+          </button>
+        )}
         <button className="btn sidebar-settings-btn" onClick={onSettings} aria-label="Paramètres" title="Paramètres">
           <Icon name="settings" size={15} />
           <span className="sidebar-label">Paramètres</span>

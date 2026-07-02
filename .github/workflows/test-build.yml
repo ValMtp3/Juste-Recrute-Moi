@@ -29,6 +29,7 @@ concurrency:
 env:
   PYTHON_VERSION: "3.13"
   NODE_VERSION: "24"
+  PNPM_VERSION: "10.33.2"
 
 jobs:
   windows-test-installer:
@@ -40,10 +41,14 @@ jobs:
         with:
           ref: ${{ github.event.inputs.ref || github.ref }}
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
+          cache: pnpm
 
       - uses: actions/setup-python@v6
         with:
@@ -60,7 +65,7 @@ jobs:
           workspaces: "src-tauri -> target"
 
       - name: Installer les dépendances frontend
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Installer les dépendances backend
         run: cd backend && uv sync --dev
@@ -74,25 +79,25 @@ jobs:
           uv run python -m playwright install chromium
 
       - name: Compiler le frontend
-        run: npm run build
+        run: pnpm build
 
       - name: Build backend sidecar
-        run: npm run build:sidecar
+        run: pnpm build:sidecar
 
       # Actually start the frozen sidecar and wait for its FastAPI startup
       # handshake. This catches packaging bugs (missing bundled modules that
       # only surface in the frozen build) BEFORE we ship an installer.
       - name: Smoke-test sidecar startup
-        run: npm run smoke:sidecar
+        run: pnpm smoke:sidecar
 
       - name: Package first-run runtime pack
-        run: npm run build:runtime-pack
+        run: pnpm build:runtime-pack
 
       # createUpdaterArtifacts is forced off so no signing key is required and no
       # update metadata is produced — this build can never reach the updater.
       - name: Build unsigned Windows installer
         shell: bash
-        run: npx tauri build --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        run: pnpm exec tauri build --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       - name: Locate installer
         id: find
