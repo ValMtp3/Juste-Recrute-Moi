@@ -208,7 +208,7 @@ def _retry_llm_call(fn, *, max_retries: int = _MAX_LLM_RETRIES):
                 attempt + 1,
                 max_retries,
                 wait,
-                exc,
+                type(exc).__name__,
             )
             time.sleep(wait)
             delay *= 2
@@ -779,5 +779,5 @@ def _parse_fallback(u: str, m: type[BaseModel]):
                 kwargs[field_name] = empties.get(origin, "")
         return m(**kwargs)
     except Exception as log_exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/llm/client.py:_parse_fallback: %s', log_exc)
+        logging.getLogger(__name__).warning('suppressed exception in backend/llm/client.py:_parse_fallback: %s', type(log_exc).__name__)
         return m.model_construct()

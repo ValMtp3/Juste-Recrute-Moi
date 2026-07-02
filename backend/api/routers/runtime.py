@@ -31,7 +31,7 @@ def _loaded_vector_status(runtime_ready: bool) -> dict:
         try:
             return status_fn(refresh=False)
         except Exception as exc:
-            return {"status": "degraded", "tables": [], "error": str(exc)}
+            return {"status": "degraded", "tables": [], "error": f"Statut vectoriel indisponible ({type(exc).__name__})"}
     return {"status": "initializing", "tables": []}
 
 

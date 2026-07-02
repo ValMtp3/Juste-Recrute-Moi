@@ -120,15 +120,15 @@ _REDDIT_PAYLOAD = {
 def _mock_handler(request: httpx.Request) -> httpx.Response:
     """Route a mocked request to the right canned keyless-API payload."""
     host = request.url.host or ""
-    if "boards-api.greenhouse.io" in host:
+    if host == "boards-api.greenhouse.io" or host.endswith(".boards-api.greenhouse.io"):
         return httpx.Response(200, json=_GREENHOUSE_PAYLOAD)
-    if "api.lever.co" in host:
+    if host == "api.lever.co" or host.endswith(".api.lever.co"):
         return httpx.Response(200, json=_LEVER_PAYLOAD)
-    if "api.github.com" in host:
+    if host == "api.github.com":
         return httpx.Response(200, json=_GITHUB_PAYLOAD)
-    if "reddit.com" in host:
+    if host == "reddit.com" or host.endswith(".reddit.com"):
         return httpx.Response(200, json=_REDDIT_PAYLOAD)
-    if "hn.algolia.com" in host:
+    if host == "hn.algolia.com":
         return httpx.Response(200, json={"hits": []})
     # Anything else (should not happen in this test) -> empty, never a real call.
     return httpx.Response(200, json={}, text="")
