@@ -115,8 +115,7 @@ def run(raw: str = "", pdf: str | None = None) -> C:
             step="ingestor",
         )
         _log.info(
-            "LLM extraction OK via '%s' - %s skills, %s roles, %s projects, %s certifications",
-            p,
+            "LLM extraction OK - %s skills, %s roles, %s projects, %s certifications",
             len(result.skills),
             len(result.exp),
             len(result.projects),
