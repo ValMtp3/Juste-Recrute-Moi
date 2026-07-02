@@ -47,9 +47,7 @@ def _parse_target(target: str) -> dict[str, Any]:
         elif key in {"location", "search_term", "country_indeed"}:
             params[key] = value
 
-    if "results" not in raw and "results_wanted" not in raw:
-        params["results_wanted"] = default_results
-    elif params["results_wanted"] == 50:
+    if ("results" not in raw and "results_wanted" not in raw) or params["results_wanted"] == 50:
         params["results_wanted"] = default_results
 
     return params

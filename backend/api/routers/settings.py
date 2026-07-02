@@ -198,7 +198,9 @@ def _provider_key(cfg: dict, provider: str) -> str:
 
 
 def _rebuild_vector_tables() -> dict:
-    summary: dict[str, object] = {"vectors_dropped": [], "errors": []}
+    vectors_dropped: list[str] = []
+    errors: list[str] = []
+    summary: dict[str, object] = {"vectors_dropped": vectors_dropped, "errors": errors}
     try:
         from data.graph.profile_vectors import vec_table_names
         from data.vector.connection import vec
@@ -206,11 +208,11 @@ def _rebuild_vector_tables() -> dict:
         for name in list(vec_table_names() or []):
             try:
                 vec.drop_table(name)
-                summary["vectors_dropped"].append(name)
+                vectors_dropped.append(name)
             except Exception as exc:
-                summary["errors"].append(f"vector {name}: {exc}")
+                errors.append(f"vector {name}: {exc}")
     except Exception as exc:
-        summary["errors"].append(f"vector store: {exc}")
+        errors.append(f"vector store: {exc}")
 
     try:
         from data.graph.profile import sync_vectors_from_graph
@@ -218,7 +220,7 @@ def _rebuild_vector_tables() -> dict:
         summary["sync"] = sync_vectors_from_graph()
     except Exception as exc:
         summary["sync"] = {"status": "error", "synced": 0, "error": str(exc)}
-        summary["errors"].append(f"vector sync: {exc}")
+        errors.append(f"vector sync: {exc}")
     return summary
 
 

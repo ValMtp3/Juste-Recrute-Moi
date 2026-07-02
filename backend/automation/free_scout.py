@@ -3,7 +3,8 @@ import asyncio
 import re
 import threading
 from contextvars import ContextVar
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -145,9 +146,8 @@ def _empty_source_hint(target: str) -> str:
         app_id, api_key = _source_adzuna_env_client()
         if not app_id or not api_key:
             return "Adzuna ignoré : renseignez adzuna_app_id et adzuna_api_key pour activer cet agrégateur."
-    if lower.startswith("jooble:"):
-        if not _source_jooble_env_client():
-            return "Jooble ignoré : renseignez jooble_api_key pour activer cet agrégateur."
+    if lower.startswith("jooble:") and not _source_jooble_env_client():
+        return "Jooble ignoré : renseignez jooble_api_key pour activer cet agrégateur."
     return ""
 
 

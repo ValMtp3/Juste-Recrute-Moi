@@ -20,6 +20,8 @@ type SimLink = { source: string | SimNode; target: string | SimNode; type: strin
 
 const W = 1200;
 const H = 760;
+const GRAPH_PRESETTLE_TICKS = 90;
+const GRAPH_ALPHA_MIN = 0.02;
 
 // One palette + size per type. Skills grow with how connected they are, giving a
 // natural hierarchy with no extra UI.
@@ -145,11 +147,11 @@ export function GraphCanvas({ nodes, edges }: { nodes: RawNode[]; edges: RawEdge
 
     // Pre-settle off-screen so the first painted frame is already laid out and
     // fit, then run live for a short, gentle, animated cool-down.
-    for (let i = 0; i < 90; i += 1) sim.tick();
+    for (let i = 0; i < GRAPH_PRESETTLE_TICKS; i += 1) sim.tick();
     paint();
     fitToView(simNodes);
     setReady(true);
-    sim.on("tick", paint).alpha(0.5).alphaDecay(0.035).restart();
+    sim.on("tick", paint).alpha(0.5).alphaDecay(0.035).alphaMin(GRAPH_ALPHA_MIN).restart();
     simRef.current = sim;
     return () => { sim.stop(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
