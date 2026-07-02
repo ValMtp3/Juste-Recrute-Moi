@@ -61,9 +61,10 @@ def create_ghost_tick(manager):
 
         boards = job_targets(
             cfg.get("job_boards", ""),
-            cfg.get("job_market_focus", "global"),
+            cfg.get("job_market_focus", "france"),
             search_text=str(profile.get("_discovery_search_text") or profile.get("desired_position") or profile.get("s") or ""),
             location=str(profile.get("_discovery_location") or ""),
+            radius_km=str(profile.get("_discovery_radius_km") or ""),
         )
         has_x = has_x_token(cfg)
         has_free = free_sources_enabled(cfg)
@@ -78,7 +79,7 @@ def create_ghost_tick(manager):
 
         await manager.broadcast({"type": "agent", "event": "ghost_scout", "msg": "Ghost Mode: scout cycle starting"})
         try:
-            boards = await discovery_service.plan_board_targets(profile, boards, cfg.get("job_market_focus", "global"))
+            boards = await discovery_service.plan_board_targets(profile, boards, cfg.get("job_market_focus", "france"))
             result = await discovery_service.scan_job_boards(boards, cfg)
             leads = result.leads
             await manager.broadcast({"type": "agent", "event": "ghost_scout", "msg": f"Ghost scout complete - {len(leads)} new leads found"})

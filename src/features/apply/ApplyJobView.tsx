@@ -4,9 +4,81 @@ import Icon from "../../shared/components/Icon";
 import type { ApiFetch, ContactLookup, KeywordCoverage, Lead } from "../../types";
 import { roleFromLead } from "../../shared/lib/leadUtils";
 import { emitAppEvent, onAppEvent } from "../../shared/lib/appEvents";
+import { copyTextToClipboard } from "../../shared/lib/clipboard";
+import { readJsonResponse, responseErrorMessage } from "../../shared/lib/httpError";
 
 const CUSTOMIZE_START_TIMEOUT_MS = 10000;
 const CUSTOMIZE_WATCHDOG_MS = 12000;
+const APPLY_REFRESH_FAILURES_BEFORE_NOTICE = 3;
+
+const CONTACT_STATUS_LABELS: Record<string, string> = {
+  disabled: "Recherche désactivée",
+  empty: "Contact non recherché",
+  error: "Recherche indisponible",
+  found: "Contact trouvé",
+  missing_hunter_key: "Clé Hunter.io manquante",
+  no_domain: "Domaine introuvable",
+  not_found: "Aucun contact trouvé",
+  unknown: "État inconnu",
+};
+
+function readableContactStatus(status: string | undefined) {
+  const normalized = String(status || "unknown").toLowerCase();
+  return CONTACT_STATUS_LABELS[normalized] || normalized.replace(/[_-]+/g, " ");
+}
+
+function readableContactMessage(message: string | undefined) {
+  const trimmed = String(message || "").trim();
+  if (!trimmed) return "";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("add a hunter.io api key")) {
+    return "Ajoutez une clé Hunter.io dans les paramètres pour trouver des contacts recruteurs ou fondateurs.";
+  }
+  if (lower.includes("hunter lookup failed")) {
+    return "La recherche Hunter.io a échoué. Vérifiez la clé API ou réessayez plus tard.";
+  }
+  if (lower.includes("hunter did not return usable contacts")) {
+    return "Aucun contact exploitable n'a été trouvé pour ce domaine.";
+  }
+  return trimmed;
+}
+
+function readableApplyError(error: unknown, fallback = "La génération du dossier a échoué.") {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("request cancelled") || lower.includes("requête annulée")) {
+    return "Attente arrêtée. Si la génération a déjà commencé, elle peut encore finir en arrière-plan.";
+  }
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("cv pdf pas encore prêt")) {
+    return "Le CV est encore en préparation. Réessayez dans quelques secondes ou ouvrez l'offre depuis Prêt.";
+  }
+  if (lower.includes("lettre pdf pas encore prête")) {
+    return "La lettre est encore en préparation. Réessayez dans quelques secondes ou ouvrez l'offre depuis Prêt.";
+  }
+  if (lower.includes("ouvrir le pdf")) {
+    return "Le PDF n'a pas pu être ouvert. Réessayez ou régénérez le dossier si le problème persiste.";
+  }
+  if (lower.includes("no url available")) {
+    return "Aucune URL exploitable n'est disponible pour cette offre. Collez la description complète ou ajoutez le lien de l'offre.";
+  }
+  if (lower.includes("api key") || lower.includes("llm")) {
+    return "La génération a besoin d'une clé IA valide. Vérifiez le fournisseur et la clé dans les paramètres.";
+  }
+  if (/le serveur a renvoyé \d+/.test(lower)) {
+    return "Le serveur local n'a pas accepté la demande. Vérifiez Activité, puis réessayez.";
+  }
+  return trimmed;
+}
+
+async function pdfBlobOrError(response: Response, fallback: string) {
+  if (!response.ok) throw new Error(await responseErrorMessage(response, fallback));
+  return response.blob();
+}
 
 function withDeadline<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -30,6 +102,8 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const submitControllerRef = useRef<AbortController | null>(null);
   const submitRunRef = useRef(0);
+  const copyStatusTimerRef = useRef<number | null>(null);
+  const fallbackRefreshFailuresRef = useRef(0);
   const mountedRef = useRef(true);
   const [lead, setLead] = useState<Lead | null>(null);
   const [busy, setBusy] = useState(false);
@@ -38,6 +112,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
   const [coverBlobUrl, setCoverBlobUrl] = useState<string | null>(null);
   const [resumeLoadErr, setResumeLoadErr] = useState<string | null>(null);
   const [coverLoadErr, setCoverLoadErr] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
 
   const liveLead = lead ? (leads.find(l => l.job_id === lead.job_id) || lead) : null;
   const resumeReady = Boolean(liveLead?.resume_asset || liveLead?.asset);
@@ -66,6 +141,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
   useEffect(() => () => {
     mountedRef.current = false;
     submitControllerRef.current?.abort();
+    if (copyStatusTimerRef.current) window.clearTimeout(copyStatusTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -85,16 +161,13 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
     setResumeLoadErr(null);
     setResumeBlobUrl(null);
     api(resumeDocPath, { signal: controller.signal })
-      .then(r => {
-        if (!r.ok) throw new Error("CV PDF pas encore prêt");
-        return r.blob();
-      })
+      .then(r => pdfBlobOrError(r, "CV PDF pas encore prêt"))
       .then(blob => {
         if (!alive) return;
         revoke = URL.createObjectURL(blob);
         setResumeBlobUrl(revoke);
       })
-      .catch(e => alive && setResumeLoadErr(e instanceof Error ? e.message : "Le CV n'a pas pu être chargé"));
+      .catch(e => alive && setResumeLoadErr(readableApplyError(e, "Le CV n'a pas pu être chargé")));
     return () => {
       alive = false;
       controller.abort();
@@ -110,16 +183,13 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
     setCoverLoadErr(null);
     setCoverBlobUrl(null);
     api(coverDocPath, { signal: controller.signal })
-      .then(r => {
-        if (!r.ok) throw new Error("Lettre PDF pas encore prête");
-        return r.blob();
-      })
+      .then(r => pdfBlobOrError(r, "Lettre PDF pas encore prête"))
       .then(blob => {
         if (!alive) return;
         revoke = URL.createObjectURL(blob);
         setCoverBlobUrl(revoke);
       })
-      .catch(e => alive && setCoverLoadErr(e instanceof Error ? e.message : "La lettre n'a pas pu être chargée"));
+      .catch(e => alive && setCoverLoadErr(readableApplyError(e, "La lettre n'a pas pu être chargée")));
     return () => {
       alive = false;
       controller.abort();
@@ -138,10 +208,17 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
       try {
         const res = await api(`/api/v1/leads/${lead.job_id}`, { timeoutMs: 10000 });
         if (!res.ok) return;
-        const latest = await res.json();
+        const latest = await readJsonResponse<Lead>(
+          res,
+          "Actualisation de l'offre illisible.",
+        );
+        fallbackRefreshFailuresRef.current = 0;
         if (alive && latest?.job_id === lead.job_id) setLead(latest);
-      } catch {
-        // Live websocket updates are preferred; polling is only a fallback.
+      } catch (error) {
+        fallbackRefreshFailuresRef.current += 1;
+        if (alive && fallbackRefreshFailuresRef.current >= APPLY_REFRESH_FAILURES_BEFORE_NOTICE) {
+          setErr(`${readableApplyError(error, "Actualisation automatique impossible.")} La génération peut continuer en arrière-plan ; vérifiez Activité ou l'onglet Prêt dans un instant.`);
+        }
       }
     }, 5000);
     const guard = window.setTimeout(() => {
@@ -186,18 +263,19 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
         "La génération n'a pas accepté l'offre assez vite.",
       );
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
+        throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`));
       }
-      const started = await r.json();
+      const started = await readJsonResponse<{ lead?: Lead | null }>(
+        r,
+        "La génération a répondu dans un format illisible. Vérifiez Activité, puis réessayez.",
+      );
       if (submitRunRef.current !== runId) return;
       setLead(started.lead || null);
       setBusy(false);
       emitAppEvent("leads-refresh");
     } catch (e) {
       if (mountedRef.current) {
-        const message = e instanceof Error ? e.message : "La génération du dossier a échoué";
-        setErr(message === "Request cancelled" || message === "Requête annulée" ? "Attente arrêtée. Si la génération a déjà commencé, elle peut encore finir en arrière-plan." : message);
+        setErr(readableApplyError(e));
         setBusy(false);
       }
     } finally {
@@ -206,7 +284,27 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
     }
   };
 
-  const copyText = (value: string) => navigator.clipboard?.writeText(value);
+  const copyText = async (value: string) => {
+    try {
+      const copied = await copyTextToClipboard(value);
+      if (!copied) throw new Error("clipboard unavailable");
+      setCopyStatus("Copié dans le presse-papiers.");
+    } catch {
+      setCopyStatus("Copie impossible. Sélectionnez le texte manuellement.");
+    }
+    if (copyStatusTimerRef.current) window.clearTimeout(copyStatusTimerRef.current);
+    copyStatusTimerRef.current = window.setTimeout(() => setCopyStatus(null), 1800);
+  };
+
+  const openDocumentBlob = async (label: "CV" | "Lettre", blobUrl: string) => {
+    const setDocError = label === "CV" ? setResumeLoadErr : setCoverLoadErr;
+    setDocError(null);
+    try {
+      await openUrl(blobUrl);
+    } catch (error) {
+      setDocError(readableApplyError(error, `Ouvrir le PDF ${label} a échoué`));
+    }
+  };
   const stepTone = (done: boolean, active: boolean) => done ? "green" : active ? "purple" : "blue";
   const stepPill = (label: string, done: boolean, active: boolean) => {
     const tone = stepTone(done, active);
@@ -244,6 +342,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
             </button>
           )}
           {err && <div style={{ color: "var(--bad)", background: "var(--bad-soft)", border: "1px solid var(--bad)", borderRadius: 8, padding: "9px 11px", fontSize: 12 }}>{err}</div>}
+          {copyStatus && <div style={{ color: copyStatus.startsWith("Copie impossible") ? "var(--bad)" : "var(--green-ink)", background: copyStatus.startsWith("Copie impossible") ? "var(--bad-soft)" : "var(--green-soft)", border: `1px solid ${copyStatus.startsWith("Copie impossible") ? "var(--bad)" : "var(--green)"}`, borderRadius: 8, padding: "9px 11px", fontSize: 12 }}>{copyStatus}</div>}
           {liveLead && (
             <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
               {stepPill("Offre capturée", true, false)}
@@ -305,14 +404,14 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
                     <>
                       <h3 style={{ fontSize: 17, fontWeight: 800, marginTop: 5 }}>Recherche de contact</h3>
                       <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3 }}>
-                        {contactLookup.message || (resumeReady && coverReady ? "Ajoute une clé Hunter.io dans les paramètres pour trouver des emails recruteurs ou fondateurs." : "La recherche de contact démarre après génération du dossier.")}
+                        {readableContactMessage(contactLookup.message) || (resumeReady && coverReady ? "Ajoutez une clé Hunter.io dans les paramètres pour trouver des emails recruteurs ou fondateurs." : "La recherche de contact démarre après génération du dossier.")}
                       </div>
                     </>
                   )}
                 </div>
                 {contactLookup.status && (
                   <span className="pill mono" style={{ background: primaryContact ? "var(--paper)" : "var(--paper-3)", color: primaryContact ? "var(--green-ink)" : "var(--ink-3)", border: `1px solid ${primaryContact ? "var(--green)" : "var(--line)"}` }}>
-                    {contactLookup.status.replace(/_/g, " ")}
+                    {readableContactStatus(contactLookup.status)}
                   </span>
                 )}
               </div>
@@ -362,7 +461,7 @@ export function ApplyJobView({ port, api, leads, openDrawer, initialInput, autoF
                       <span style={{ fontSize: 13, fontWeight: 800 }}>{doc.label}</span>
                       <span className="dot" style={{ color: doc.ready ? "var(--ok)" : "var(--ink-4)" }} />
                     </div>
-                    <button className="btn btn-ghost" disabled={!doc.blob} onClick={() => doc.blob && openUrl(doc.blob)} style={{ fontSize: 11, padding: "4px 9px" }}>
+                    <button className="btn btn-ghost" disabled={!doc.blob} onClick={() => doc.blob && void openDocumentBlob(doc.label as "CV" | "Lettre", doc.blob)} style={{ fontSize: 11, padding: "4px 9px" }}>
                       <Icon name="download" size={12} /> Télécharger le PDF
                     </button>
                   </div>

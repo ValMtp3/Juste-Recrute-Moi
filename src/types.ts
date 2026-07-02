@@ -42,6 +42,18 @@ export interface ContactLookup {
   }[];
 }
 
+export interface LeadSourceMeta {
+  keyword_coverage?: KeywordCoverage;
+  contact_lookup?: ContactLookup;
+  lead_quality_score?: number;
+  lead_quality_reason?: string;
+  source_reliability?: string;
+  seniority_level?: string;
+  seniority?: string;
+  created_at?: string;
+  [key: string]: unknown;
+}
+
 export interface Lead {
   job_id: string; title: string; company: string;
   url: string; platform: string; status: string; asset: string;
@@ -58,7 +70,7 @@ export interface Lead {
   tech_stack?: string[]; location?: string; urgency?: string;
   seniority_level?: string;
   lead_quality_score?: number; lead_quality_reason?: string;
-  source_meta?: Record<string, any>; feedback?: string; feedback_note?: string;
+  source_meta?: LeadSourceMeta; feedback?: string; feedback_note?: string;
   followup_due_at?: string; last_contacted_at?: string;
   events?: { action: string; ts: string }[];
 }
@@ -68,7 +80,7 @@ export interface GraphStats {
   available?: boolean; status?: "live" | "degraded"; error?: string;
   loading?: boolean; loaded?: boolean; request_error?: string;
   sync?: { status?: string; synced?: number; refreshed_at?: string; error?: string };
-  profile?: Record<string, any>;
+  profile?: Record<string, unknown>;
   graph?: {
     nodes: { id: string; label: string; type: string; subtitle?: string }[];
     edges: { source: string; target: string; type: string }[];

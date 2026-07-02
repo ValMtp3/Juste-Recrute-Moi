@@ -13,6 +13,27 @@ from core.types import StrictBody
 from data.repository import Repository
 
 _log = logging.getLogger(__name__)
+_NO_APPLICATION_URL = "Aucune URL exploitable n'est disponible pour cette offre."
+_SUBMISSION_NOT_CONFIRMED = "La soumission automatique n'a pas confirmé la candidature."
+
+
+def _submission_blocked_message(job_id: str, detail: str) -> str:
+    return f"Candidature automatique bloquée pour l'offre {job_id} : {detail}"
+
+
+def _opening_browser_message(lead: dict) -> str:
+    title = lead.get("title") or "offre"
+    company = lead.get("company") or "entreprise inconnue"
+    return f"Ouverture du navigateur pour {title} chez {company}"
+
+
+def _application_submitted_message(job_id: str) -> str:
+    return f"Candidature envoyée pour l'offre {job_id}"
+
+
+def _submission_failed_message(job_id: str, detail: str = "") -> str:
+    suffix = f" : {detail}" if detail else ""
+    return f"Échec de la soumission automatique pour l'offre {job_id}{suffix}"
 
 
 class FormReadBody(StrictBody):
@@ -80,7 +101,7 @@ async def actuate_job(job_id: str, manager, repo: Repository | None = None, serv
                 "type": "agent",
                 "event": "failed",
                 "job_id": job_id,
-                "msg": f"Submission blocked for {job_id}: {detail}",
+                "msg": _submission_blocked_message(job_id, detail),
             })
             job_store.update(job.job_id, status="failed", error=detail)
             return
@@ -89,7 +110,7 @@ async def actuate_job(job_id: str, manager, repo: Repository | None = None, serv
             "type": "agent",
             "event": "actuating",
             "job_id": job_id,
-            "msg": f"Opening browser for {lead.get('title','')} @ {lead.get('company','')}",
+            "msg": _opening_browser_message(lead),
         })
         ok = await service.submit_application(lead, asset)
     except Exception as exc:
@@ -98,7 +119,7 @@ async def actuate_job(job_id: str, manager, repo: Repository | None = None, serv
             "type": "agent",
             "event": "failed",
             "job_id": job_id,
-            "msg": f"Submission failed for {job_id}: {exc}",
+            "msg": _submission_failed_message(job_id, str(exc)),
         })
         job_store.update(job.job_id, status="failed", error=str(exc))
         return
@@ -110,15 +131,15 @@ async def actuate_job(job_id: str, manager, repo: Repository | None = None, serv
             "type": "agent",
             "event": "applied",
             "job_id": job_id,
-            "msg": f"Application submitted for {job_id}",
+            "msg": _application_submitted_message(job_id),
         })
     else:
-        job_store.update(job.job_id, status="failed", error="submit_application returned false")
+        job_store.update(job.job_id, status="failed", error=_SUBMISSION_NOT_CONFIRMED)
         await manager.broadcast({
             "type": "agent",
             "event": "failed",
             "job_id": job_id,
-            "msg": f"Submission failed for {job_id}",
+            "msg": _submission_failed_message(job_id, _SUBMISSION_NOT_CONFIRMED),
         })
 
 
@@ -153,7 +174,7 @@ def create_router(manager) -> APIRouter:
 
         url = (body.url or lead.get("url") or "").strip()
         if not url:
-            raise HTTPException(400, "no url available for this lead")
+            raise HTTPException(400, _NO_APPLICATION_URL)
 
         profile = repo.profile.get_profile()
         candidate = profile.get("candidate") or {}

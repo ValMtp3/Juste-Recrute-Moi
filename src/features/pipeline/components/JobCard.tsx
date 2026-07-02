@@ -3,8 +3,9 @@ import { openExternalUrl } from "../../../shared/lib/openExternal";
 import Icon from "../../../shared/components/Icon";
 import type { ApiFetch, Lead } from "../../../types";
 import { GENERATION_TIMEOUT_MS } from "../../../api/generation";
-import { getMark, getTone, leadDisplayHeading, leadSeniority, seniorityLabel, seniorityTone } from "../../../shared/lib/leadUtils";
+import { getMark, getTone, leadDisplayHeading, leadSeniority, leadStatusLabel, seniorityLabel, seniorityTone } from "../../../shared/lib/leadUtils";
 import { emitAppEvent } from "../../../shared/lib/appEvents";
+import { readJsonResponse, responseErrorMessage } from "../../../shared/lib/httpError";
 
 const sourceReliability = (lead: Lead) => {
   const raw = String(lead.source_meta?.source_reliability || "").toLowerCase();
@@ -13,6 +14,65 @@ const sourceReliability = (lead: Lead) => {
   if (raw === "best_effort") return { label: "À vérifier", tone: "yellow" };
   return null;
 };
+
+function readableGenerationError(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return "La génération du dossier a échoué.";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("signal is aborted") || lower.includes("aborterror")) {
+    return "Génération arrêtée. Vous pouvez relancer depuis cette carte.";
+  }
+  if (lower.includes("no url available")) {
+    return "Aucune URL exploitable n'est disponible pour cette offre. Ouvrez l'offre et ajoutez la description complète.";
+  }
+  if (lower.includes("api key") || lower.includes("llm")) {
+    return "La génération a besoin d'une clé IA valide. Vérifiez le fournisseur et la clé dans les paramètres.";
+  }
+  if (lower.includes("génération échouée")) {
+    return "La génération n'a pas pu démarrer. Vérifiez Activité, puis réessayez.";
+  }
+  if (lower.includes("generation failed")) {
+    return "La génération n'a pas pu démarrer. Vérifiez Activité, puis réessayez.";
+  }
+  if (lower.includes("réponse de génération illisible")) {
+    return "La génération a répondu avec un résultat illisible. Vérifiez Activité, puis relancez la génération.";
+  }
+  return trimmed;
+}
+
+function readableOpenLeadError(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const lower = raw.toLowerCase();
+  if (lower.includes("missing")) return "Aucune URL source n'est disponible pour cette offre.";
+  if (lower.includes("invalid") || lower.includes("unsupported")) return "Lien source invalide ou non web. Ouvrez les détails pour vérifier l'offre.";
+  return "Le lien source n'a pas pu être ouvert. Copiez-le depuis les détails si besoin.";
+}
+
+async function openLeadUrl(url: string | null | undefined) {
+  if (!url) throw new Error("missing-url");
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("invalid-url");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("unsupported-url");
+  await openExternalUrl(url);
+}
+
+async function generateLeadDocument(api: ApiFetch, jobId: string, signal: AbortSignal) {
+  const response = await api(`/api/v1/leads/${jobId}/generate`, {
+    method: "POST",
+    signal,
+    timeoutMs: GENERATION_TIMEOUT_MS,
+  });
+  if (!response.ok) throw new Error(await responseErrorMessage(response, `Génération échouée (${response.status})`));
+  return await readJsonResponse<{ lead?: Lead }>(response, "Réponse de génération illisible");
+}
 
 export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerate = false, port, api }: {
   lead: Lead;
@@ -24,6 +84,8 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
   api?: ApiFetch | null;
 }) {
   const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const desc = lead.description?.trim();
   const signalScore = lead.signal_score || 0;
@@ -38,20 +100,30 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
     e.stopPropagation();
     if (!port || !api) return;
     setGenerating(true);
+    setGenerationError(null);
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
     try {
-      const response = await api(`/api/v1/leads/${lead.job_id}/generate`, { method: "POST", signal: controller.signal, timeoutMs: GENERATION_TIMEOUT_MS });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.detail || `Génération échouée (${response.status})`);
+      const body = await generateLeadDocument(api, lead.job_id, controller.signal);
       if (body.lead) emitAppEvent("lead-updated", body.lead);
       emitAppEvent("leads-refresh");
     } catch (error) {
       console.error("La génération du dossier a échoué", error);
+      if (!controller.signal.aborted) setGenerationError(readableGenerationError(error));
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
       setGenerating(false);
+    }
+  };
+
+  const handleOpenSource = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLinkError(null);
+    try {
+      await openLeadUrl(lead.url);
+    } catch (error) {
+      setLinkError(readableOpenLeadError(error));
     }
   };
 
@@ -148,10 +220,21 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
         </div>
       )}
 
+      {generationError && (
+        <div style={{ fontSize: 11.5, color: "var(--bad)", lineHeight: 1.5, border: "1px solid var(--bad)", background: "var(--bad-soft)", borderRadius: 8, padding: "7px 9px" }}>
+          {generationError}
+        </div>
+      )}
+      {linkError && (
+        <div style={{ fontSize: 11.5, color: "var(--bad)", lineHeight: 1.5, border: "1px solid var(--bad)", background: "var(--bad-soft)", borderRadius: 8, padding: "7px 9px" }}>
+          {linkError}
+        </div>
+      )}
+
       {/* Footer */}
       <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
         <button
-          onClick={e => { e.stopPropagation(); openExternalUrl(lead.url); }}
+          onClick={handleOpenSource}
           title={lead.url}
           style={{ fontSize: 11, color: "var(--teal)", background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center", gap: 4, maxWidth: "60%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
         >
@@ -188,15 +271,18 @@ export function JobCard({ lead, onOpen, onDelete, showScore = false, showGenerat
    PIPELINE VIEW (tabbed)
 ══════════════════════════════════════ */
 
-export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, port, api }: {
+export function PipelineJobCard({ lead, onOpen, onDelete, deleting = false, showGenerate = false, port, api }: {
   lead: Lead;
   onOpen: (l: Lead) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void | Promise<void>;
+  deleting?: boolean;
   showGenerate?: boolean;
   port?: number | null;
   api?: ApiFetch | null;
 }) {
   const [generating, setGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const signalScore = lead.signal_score || 0;
   const matchScore = lead.score || 0;
@@ -205,6 +291,7 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
   const level = leadSeniority(lead);
   const levelTone = seniorityTone(level);
   const statusTone = getTone(lead.status);
+  const statusLabel = leadStatusLabel(lead.status);
   const display = leadDisplayHeading(lead);
   const urlLabel = lead.url ? lead.url.replace(/^https?:\/\//, "").slice(0, 42) : "Aucune URL source";
   const reliability = sourceReliability(lead);
@@ -213,20 +300,30 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
     e.stopPropagation();
     if (!port || !api) return;
     setGenerating(true);
+    setGenerationError(null);
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
     try {
-      const response = await api(`/api/v1/leads/${lead.job_id}/generate`, { method: "POST", signal: controller.signal, timeoutMs: GENERATION_TIMEOUT_MS });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body.detail || `Génération échouée (${response.status})`);
+      const body = await generateLeadDocument(api, lead.job_id, controller.signal);
       if (body.lead) emitAppEvent("lead-updated", body.lead);
       emitAppEvent("leads-refresh");
     } catch (error) {
       console.error("La génération du dossier a échoué", error);
+      if (!controller.signal.aborted) setGenerationError(readableGenerationError(error));
     } finally {
       if (requestRef.current === controller) requestRef.current = null;
       setGenerating(false);
+    }
+  };
+
+  const handleOpenSource = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLinkError(null);
+    try {
+      await openLeadUrl(lead.url);
+    } catch (error) {
+      setLinkError(readableOpenLeadError(error));
     }
   };
 
@@ -241,11 +338,11 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
         <div className="pipeline-job-title-row">
           <div className="pipeline-job-title">
             <span>{display.role}</span>
-            <b>||</b>
+            <b>chez</b>
             <span className="company">{display.company}</span>
           </div>
           <span className="pipeline-status-pill" style={{ background: `var(--${statusTone}-soft)`, color: `var(--${statusTone}-ink)`, borderColor: `var(--${statusTone})` }}>
-            {lead.status || "discovered"}
+            {statusLabel}
           </span>
         </div>
         <div className="pipeline-job-meta">
@@ -268,15 +365,17 @@ export function PipelineJobCard({ lead, onOpen, onDelete, showGenerate = false, 
               <Icon name="file" size={12} /> {generating ? "En file" : "Générer"}
             </button>
           )}
-          <button className="btn btn-icon" onClick={e => { e.stopPropagation(); if (lead.url) openExternalUrl(lead.url); }} title={lead.url} disabled={!lead.url}>
+          <button className="btn btn-icon" onClick={handleOpenSource} title={lead.url} disabled={!lead.url}>
             <Icon name="external-link" size={13} />
           </button>
           <button className="btn" onClick={e => { e.stopPropagation(); onOpen(lead); }}>Détails</button>
-          <button className="btn btn-icon danger" onClick={e => { e.stopPropagation(); onDelete(lead.job_id); }} title="Supprimer l'offre">
-            <Icon name="trash" size={13} />
+          <button className="btn btn-icon danger" onClick={e => { e.stopPropagation(); onDelete(lead.job_id); }} title={deleting ? "Suppression en cours" : "Supprimer l'offre"} disabled={deleting}>
+            {deleting ? <span className="spinner-sm" aria-hidden="true" /> : <Icon name="trash" size={13} />}
           </button>
         </div>
         <div className="pipeline-source mono" title={lead.url}>{urlLabel}</div>
+        {generationError && <div className="pipeline-inline-error">{generationError}</div>}
+        {linkError && <div className="pipeline-inline-error">{linkError}</div>}
       </div>
     </div>
   );

@@ -1,5 +1,63 @@
 import { useEffect, useRef, useState } from "react";
 import type { ApiFetch, FormField, FormReadResult } from "../../../types";
+import { copyTextToClipboard } from "../../../shared/lib/clipboard";
+import { readJsonResponse, responseErrorMessage } from "../../../shared/lib/httpError";
+
+const FIELD_LABELS: Record<string, string> = {
+  city: "Ville",
+  cover_letter: "Lettre de motivation",
+  current_company: "Entreprise actuelle",
+  email: "Email",
+  first_name: "Prénom",
+  full_name: "Nom complet",
+  github: "GitHub",
+  last_name: "Nom",
+  linkedin_url: "LinkedIn",
+  phone: "Téléphone",
+  resume: "CV",
+  website: "Site web",
+};
+
+const CONFIDENCE_LABELS: Record<FormField["confidence"], string> = {
+  high: "élevée",
+  medium: "moyenne",
+  low: "faible",
+};
+
+function readableFieldLabel(field: Pick<FormField, "type" | "label">) {
+  return FIELD_LABELS[field.type] || field.label || field.type.replace(/[_-]+/g, " ");
+}
+
+function readablePlatformLabel(result: FormReadResult) {
+  if (!result.platform || result.platform_label === "Generic form") return "Formulaire générique";
+  return result.platform_label || "Formulaire générique";
+}
+
+function readableFormError(error: unknown, fallback = "La lecture du formulaire a échoué.") {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("no url available")) {
+    return "Aucune URL exploitable n'est disponible pour cette offre.";
+  }
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("aborted") || lower.includes("signal is aborted")) {
+    return "Lecture arrêtée. Relancez la lecture du formulaire si nécessaire.";
+  }
+  if (lower.includes("timeout") || lower.includes("timed out")) {
+    return "La page met trop longtemps à répondre. Vérifiez l'URL ou réessayez plus tard.";
+  }
+  if (lower.includes("browser") || lower.includes("chromium") || lower.includes("playwright")) {
+    return "Le navigateur automatique n'a pas pu lire la page. Vérifiez le runtime navigateur dans les paramètres.";
+  }
+  if (/le serveur a renvoyé \d+/.test(lower)) {
+    return "Le serveur local n'a pas accepté la lecture du formulaire. Vérifiez Activité, puis réessayez.";
+  }
+  return trimmed;
+}
 
 export function FormReader({
   jobId,
@@ -14,14 +72,19 @@ export function FormReader({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<FormReadResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [expandedCl, setExpandedCl] = useState(false);
   const requestRef = useRef<AbortController | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+  const copyErrorTimerRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => () => {
     mountedRef.current = false;
     requestRef.current?.abort();
+    if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+    if (copyErrorTimerRef.current) window.clearTimeout(copyErrorTimerRef.current);
   }, []);
 
   const readForm = async () => {
@@ -38,22 +101,37 @@ export function FormReader({
         signal: controller.signal,
       });
       if (!r.ok) {
-        const detail = await r.json().then((d: any) => d.detail).catch(() => "");
-        throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
+        throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`));
       }
-      setResult(await r.json());
+      setResult(await readJsonResponse<FormReadResult>(
+        r,
+        "La lecture du formulaire a répondu dans un format illisible. Consultez Activité, puis réessayez.",
+      ));
     } catch (err) {
-      if (mountedRef.current) setError(err instanceof Error ? err.message : "La lecture du formulaire a échoué");
+      if (mountedRef.current && requestRef.current === controller && !controller.signal.aborted) {
+        setError(readableFormError(err));
+      }
     } finally {
-      if (requestRef.current === controller) requestRef.current = null;
-      if (mountedRef.current) setLoading(false);
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        if (mountedRef.current) setLoading(false);
+      }
     }
   };
 
-  const copy = (text: string, key: string) => {
-    navigator.clipboard?.writeText(text);
+  const copy = async (text: string, key: string) => {
+    const ok = await copyTextToClipboard(text);
+    if (!ok) {
+      setCopied(null);
+      setCopyError("Copie impossible. Sélectionnez le texte manuellement.");
+      if (copyErrorTimerRef.current) window.clearTimeout(copyErrorTimerRef.current);
+      copyErrorTimerRef.current = window.setTimeout(() => setCopyError(null), 2200);
+      return;
+    }
+    setCopyError(null);
     setCopied(key);
-    setTimeout(() => setCopied(null), 1500);
+    if (copyTimerRef.current) window.clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = window.setTimeout(() => setCopied(null), 1500);
   };
 
   const copyAll = () => {
@@ -61,8 +139,8 @@ export function FormReader({
     const found = result.fields.filter(f => f.found_on_page && f.answer);
     const lines = found.map(f =>
       f.type === "cover_letter"
-        ? `${f.label}:\n${f.answer}`
-        : `${f.label}: ${f.answer}`
+        ? `${readableFieldLabel(f)}:\n${f.answer}`
+        : `${readableFieldLabel(f)}: ${f.answer}`
     );
     copy(lines.join("\n"), "__all__");
   };
@@ -74,7 +152,7 @@ export function FormReader({
     const color = c === "high" ? "var(--green)" : c === "medium" ? "var(--yellow)" : "var(--ink-4)";
     return (
       <span
-        title={`Confidence: ${c}`}
+        title={`Confiance : ${CONFIDENCE_LABELS[c] || c}`}
         style={{
           display: "inline-block",
           width: 7,
@@ -89,7 +167,7 @@ export function FormReader({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div className="eyebrow">Form Reader</div>
+      <div className="eyebrow">Lecture de formulaire</div>
 
       {/* URL bar */}
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -133,6 +211,11 @@ export function FormReader({
           {error}
         </div>
       )}
+      {copyError && (
+        <div style={{ fontSize: 12, color: "var(--bad)", padding: "6px 10px", background: "var(--bad-soft)", border: "1px solid var(--bad)", borderRadius: 8 }}>
+          {copyError}
+        </div>
+      )}
 
       {result && (
         <>
@@ -149,7 +232,7 @@ export function FormReader({
                 color: "var(--blue-ink)",
                 border: "1px solid var(--blue)",
               }}>
-                {result.platform_label}
+                {readablePlatformLabel(result)}
               </span>
             </div>
           )}
@@ -165,7 +248,7 @@ export function FormReader({
                 color: "var(--ink-3)",
                 border: "1px solid var(--line)",
               }}>
-                Generic form
+                Formulaire générique
               </span>
             </div>
           )}
@@ -173,7 +256,7 @@ export function FormReader({
           {/* Error from result */}
           {result.error && (
             <div style={{ fontSize: 12, color: "var(--bad)" }}>
-              Browser error: {result.error}
+              Lecture incomplète : {readableFormError(result.error)}
             </div>
           )}
 
@@ -184,7 +267,7 @@ export function FormReader({
               <div style={{ flex: "0 0 45%", minWidth: 0 }}>
                 <img
                   src={`data:image/png;base64,${result.screenshot_b64}`}
-                  alt="Form screenshot"
+                  alt="Capture du formulaire"
                   style={{ width: "100%", borderRadius: 8, border: "1px solid var(--line)", objectFit: "contain", display: "block" }}
                 />
               </div>
@@ -205,7 +288,7 @@ export function FormReader({
                   {confidenceDot(field.confidence)}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="mono" style={{ fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>
-                      {field.label}
+                      {readableFieldLabel(field)}
                     </div>
                     {field.type === "cover_letter" ? (
                       <>
@@ -224,7 +307,7 @@ export function FormReader({
                           onClick={() => setExpandedCl(v => !v)}
                           style={{ marginTop: 3, fontSize: 10.5, color: "var(--ink-3)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
                         >
-                          {expandedCl ? "Collapse" : "Preview"}
+                          {expandedCl ? "Réduire" : "Aperçu"}
                         </button>
                       </>
                     ) : (
@@ -254,7 +337,7 @@ export function FormReader({
 
               {missingFields.length > 0 && (
                 <div style={{ fontSize: 11, color: "var(--ink-4)", marginTop: 2 }}>
-                  Introuvable sur la page : {missingFields.map(f => f.label).join(", ")}
+                  Introuvable sur la page : {missingFields.map(readableFieldLabel).join(", ")}
                 </div>
               )}
 

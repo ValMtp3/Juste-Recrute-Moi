@@ -4,6 +4,7 @@ import re
 import threading
 from contextvars import ContextVar
 from typing import Any
+from collections.abc import Callable
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -38,6 +39,12 @@ from discovery.sources.france_travail import scrape_target as _source_scrape_fra
 from discovery.sources.jobspy import scrape_target as _source_scrape_jobspy
 from discovery.sources.reddit import scrape_reddit as _source_scrape_reddit
 from discovery.sources.url_import import scrape_target as _source_scrape_url_import
+from discovery.sources.adzuna import _env_client as _source_adzuna_env_client
+from discovery.sources.adzuna import scrape_target as _source_scrape_adzuna
+from discovery.sources.jooble import _env_client as _source_jooble_env_client
+from discovery.sources.jooble import scrape_target as _source_scrape_jooble
+from discovery.sources.wttj_rss import scrape_target as _source_scrape_wttj
+from discovery.sources.apec import scrape_target as _source_scrape_apec
 from discovery.quality_gate import MIN_DEFAULT_QUALITY, attach_quality_metadata, evaluate_lead_quality
 from core.logging import get_logger
 
@@ -131,6 +138,17 @@ def _source_error_detail(exc: Exception) -> str:
     if "timed out" in str(exc).lower() or "timeout" in type(exc).__name__.lower():
         return "délai de requête dépassé"
     return str(exc).strip() or type(exc).__name__
+
+
+def _empty_source_hint(target: str) -> str:
+    lower = str(target or "").strip().lower()
+    if lower.startswith("adzuna:"):
+        app_id, api_key = _source_adzuna_env_client()
+        if not app_id or not api_key:
+            return "Adzuna ignoré : renseignez adzuna_app_id et adzuna_api_key pour activer cet agrégateur."
+    if lower.startswith("jooble:") and not _source_jooble_env_client():
+        return "Jooble ignoré : renseignez jooble_api_key pour activer cet agrégateur."
+    return ""
 
 
 async def _scrape_custom_connector(
@@ -282,6 +300,14 @@ async def _scrape_target(target: str) -> list[dict]:
         return await _source_scrape_france_travail(target)
     if lower.startswith("jobspy:"):
         return await _source_scrape_jobspy(target)
+    if lower.startswith("adzuna:"):
+        return await _source_scrape_adzuna(target)
+    if lower.startswith("jooble:"):
+        return await _source_scrape_jooble(target)
+    if lower.startswith("wttj:"):
+        return await _source_scrape_wttj(target)
+    if lower.startswith("apec:"):
+        return await _source_scrape_apec(target)
     if lower.startswith("import:"):
         return await _source_scrape_url_import(target)
     if lower.startswith(("http://", "https://")):
@@ -307,6 +333,7 @@ def run(
     kind_filter: str | None = None,
     max_requests: int = 20,
     min_signal_score: int = MIN_DEFAULT_QUALITY,
+    progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> list[dict]:
     errors: list[str] = []
     error_token = _ERROR_SINK.set(errors)
@@ -336,6 +363,7 @@ def run(
         "duplicates": 0,
         "filtered": 0,
         "missing_url": 0,
+        "empty": 0,
         "errors": 0,
         "by_source": {},
     }
@@ -347,25 +375,60 @@ def run(
 
     leads: list[dict] = []
     seen: set[str] = set()
+    empty_hints_seen: set[str] = set()
 
-    for target in all_targets[:cap]:
+    for i, target in enumerate(all_targets[:cap]):
+        if progress_callback:
+            progress_callback(i + 1, min(len(all_targets), cap), target)
         try:
             batch = asyncio.run(_scrape_target(target))
             usage["executed"] += 1
             usage["candidates"] += len(batch)
             usage["by_source"][target] = len(batch)
+            if not batch:
+                usage["empty"] += 1
+                hint = _empty_source_hint(target)
+                if hint and hint not in empty_hints_seen:
+                    empty_hints_seen.add(hint)
+                    errors.append(hint)
         except Exception as exc:
             logging.getLogger(__name__).warning("Source gratuite ignorée %s : %s", target, _source_error_detail(exc))
             usage["errors"] += 1
             errors.append(f"{target}: {_source_error_detail(exc)}")
             continue
 
+        target_loc = ""
+        if ":" in target:
+            try:
+                from core.config import FRANCE_LOCATION_HINTS
+            except ImportError:
+                FRANCE_LOCATION_HINTS = set()
+            raw = target.split(":", 1)[1]
+            parts = [p.strip() for p in raw.replace("|", ";").split(";") if p.strip()]
+            for part in parts:
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    if k.strip().lower() in {"lieu", "location", "where", "aroundquery"}:
+                        target_loc = v.strip()
+                        break
+            if not target_loc and parts and "=" not in parts[0]:
+                kw = parts[0].lower()
+                for hint in FRANCE_LOCATION_HINTS:
+                    if hint in kw.split():
+                        target_loc = hint
+                        break
+
         for item in batch:
+            meta = dict(item.get("source_meta") or {})
+            meta.setdefault("target", target)
+            if target_loc:
+                meta.setdefault("target_location", target_loc)
+            item["source_meta"] = meta
             if wanted and item.get("kind") != wanted:
                 usage["filtered"] += 1
                 continue
             item = rank_lead_by_feedback(item)
-            quality = evaluate_lead_quality(item, min_quality=min_score)
+            quality = evaluate_lead_quality(item, min_quality=min_score, target_location=target_loc)
             item = attach_quality_metadata(item, quality)
             if not quality.get("accepted"):
                 usage["filtered"] += 1
@@ -425,6 +488,8 @@ def run(
             name = str(connector.get("name") or connector.get("url") or "custom")
             usage["candidates"] += len(batch)
             usage["by_source"][name] = len(batch)
+            if not batch:
+                usage["empty"] += 1
         except Exception as exc:
             logging.getLogger(__name__).warning('suppressed exception in backend/automation/free_scout.py:run: %s', exc)
             usage["errors"] += 1

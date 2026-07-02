@@ -117,13 +117,15 @@ Prérequis :
 | Python | 3.13+ |
 | Rust | stable |
 | uv | dernière version stable |
+| pnpm | 10.33.2, via Corepack ou installation locale |
 
 Installation :
 
 ```bash
 git clone https://github.com/ValMtp3/Juste-Recrute-Moi.git
 cd "Juste-Recrute-Moi"
-npm ci
+corepack enable
+pnpm install
 cd backend
 uv sync --dev
 cd ..
@@ -132,13 +134,13 @@ cd ..
 Lancer l'interface frontend seule :
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 Lancer l'application desktop en développement :
 
 ```bash
-npm run tauri dev
+pnpm dev:local
 ```
 
 ## Configuration
@@ -161,13 +163,13 @@ Ne commitez jamais `.env`, des clés API, des cookies, des CV privés, des bases
 
 | Tâche | Commande |
 | --- | --- |
-| TypeScript | `npm run typecheck` |
-| Tests frontend | `npm test` |
-| Build frontend | `npm run build` |
-| Lint frontend | `npm run lint` |
+| TypeScript | `pnpm typecheck` |
+| Tests frontend | `pnpm test` |
+| Build frontend | `pnpm build` |
+| Lint frontend | `pnpm lint` |
 | Tests backend | `cd backend && uv run python -m pytest tests -q` |
-| Smoke sources live | `npm run smoke:live-sources` |
-| Vérification versions | `npm run version:check` |
+| Smoke sources live | `pnpm smoke:live-sources` |
+| Vérification versions | `pnpm version:check` |
 
 ## Documentation
 

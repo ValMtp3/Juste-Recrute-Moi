@@ -5,7 +5,7 @@
 // subscription; per-provider it self-skips if the CLI isn't on PATH. CI never
 // runs this (it sets no subscription and doesn't invoke this script).
 //
-//   npm run smoke:llm-cli
+//   pnpm smoke:llm-cli
 //
 // Sets JHM_LIVE_CLI=1 cross-platform (so it works the same on Windows, macOS,
 // and Linux — unlike an inline `VAR=1` prefix, which cmd.exe doesn't support).

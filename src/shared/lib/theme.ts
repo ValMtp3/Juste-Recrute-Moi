@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Vasudev Siddh and vasu-devs
 
 import { useEffect, useState } from "react";
+import { readLocalStorage, writeLocalStorage } from "./storage";
 
 export type ThemePref = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
@@ -11,12 +12,8 @@ export const THEME_KEY = "jhm-theme";
 const SYSTEM_DARK = "(prefers-color-scheme: dark)";
 
 export function getStoredPref(): ThemePref {
-  try {
-    const value = localStorage.getItem(THEME_KEY);
-    if (value === "light" || value === "dark" || value === "system") return value;
-  } catch {
-    /* localStorage unavailable (private mode / sandbox) — fall back to system */
-  }
+  const value = readLocalStorage(THEME_KEY);
+  if (value === "light" || value === "dark" || value === "system") return value;
   return "system";
 }
 
@@ -57,11 +54,7 @@ export function useTheme() {
   const [resolved, setResolved] = useState<ResolvedTheme>(() => resolveTheme(getStoredPref()));
 
   const setPref = (next: ThemePref) => {
-    try {
-      localStorage.setItem(THEME_KEY, next);
-    } catch {
-      /* ignore persistence failure; the in-memory choice still applies */
-    }
+    writeLocalStorage(THEME_KEY, next);
     setPrefState(next);
     setResolved(applyTheme(next));
   };
