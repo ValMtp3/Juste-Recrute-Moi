@@ -19,6 +19,12 @@ from data.repository import Repository
 
 MANUAL_FEEDBACK_TIMEOUT_SECONDS = 8
 _background_tasks: set[asyncio.Task] = set()
+_INVALID_JOB_ID = "Identifiant d'offre invalide. Rechargez la liste puis réessayez."
+
+
+def _manual_generation_failed_message(lead: dict, exc: Exception) -> str:
+    title = lead.get("title") or "offre sans titre"
+    return f"Génération échouée pour {title} : {exc}"
 
 
 def _track_background_task(task: asyncio.Task) -> None:
@@ -79,7 +85,7 @@ def create_router(manager) -> APIRouter:
 
     def _safe_job_id(job_id: str) -> str:
         if not re.match(r"^[a-zA-Z0-9_\-]{1,128}$", job_id):
-            raise HTTPException(status_code=400, detail="Invalid job ID format")
+            raise HTTPException(status_code=400, detail=_INVALID_JOB_ID)
         return job_id
 
     async def _manual_or_imported_lead(body: ManualLeadBody) -> dict:
@@ -300,7 +306,7 @@ def create_router(manager) -> APIRouter:
                 await manager.broadcast({
                     "type": "agent",
                     "event": "gen_error",
-                    "msg": f"Generation failed for {lead.get('title','?')}: {exc}",
+                    "msg": _manual_generation_failed_message(lead, exc),
                 })
 
         _track_background_task(asyncio.create_task(_run()))

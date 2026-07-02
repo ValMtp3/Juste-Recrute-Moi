@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import SettingsModal from "./features/settings/SettingsModal";
 import "./index.css";
@@ -12,6 +12,7 @@ import { useDueFollowups } from "./shared/hooks/useDueFollowups";
 import { useGraphStats } from "./shared/hooks/useGraphStats";
 import { useKeyboardShortcuts } from "./shared/hooks/useKeyboardShortcuts";
 import { useSubsystemHealth, type SubsystemHealth } from "./shared/hooks/useSubsystemHealth";
+import { profileHasContent } from "./features/profile/profileUtils";
 import { Sidebar } from "./shared/components/Sidebar";
 import { Topbar } from "./shared/components/Topbar";
 import ErrorBoundary from "./shared/components/ErrorBoundary";
@@ -29,6 +30,9 @@ import { UpdatePrompt } from "./shared/components/UpdatePrompt";
 import { SemanticRuntimePrompt } from "./shared/components/SemanticRuntimePrompt";
 import { CreatorFooter } from "./shared/components/CreatorFooter";
 import { emitAppEvent, onAppEvent } from "./shared/lib/appEvents";
+import { copyTextToClipboard } from "./shared/lib/clipboard";
+import { readJsonResponse, responseErrorMessage } from "./shared/lib/httpError";
+import { readLocalStorage, writeLocalStorage } from "./shared/lib/storage";
 
 const PIPELINE_VIEW_TO_TAB: Partial<Record<View, PipelineTab>> = {
   pipeline: "all",
@@ -46,12 +50,64 @@ const connLabel = (conn: string) => ({
   disconnected: "déconnecté",
 }[conn] || conn);
 
+function hasDesktopBridge() {
+  return typeof (window as Window & { __TAURI_INTERNALS__?: { transformCallback?: unknown } }).__TAURI_INTERNALS__?.transformCallback === "function";
+}
+
 function isActionableSubsystemIssue(name: string, value: SubsystemHealth[string]) {
   if (value.status === "ok") return false;
   const message = String(value.error || value.reason || "").toLowerCase();
   if (name === "llm" && message.includes("api key")) return false;
   if (name === "embeddings" && value.mode === "hashing") return false;
   return true;
+}
+
+function readableAppError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend injoignable") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("arrêt")) {
+    return fallback;
+  }
+  if (lower.includes("scan")) {
+    return "Le scan n'a pas pu démarrer. Vérifiez Activité, puis réessayez.";
+  }
+  if (lower.includes("réévaluation") || lower.includes("reeval")) {
+    return "La réévaluation n'a pas pu démarrer. Vérifiez Activité, puis réessayez.";
+  }
+  if (lower.includes("nettoyage")) {
+    return "Le nettoyage n'a pas pu démarrer. Vérifiez Activité, puis réessayez.";
+  }
+  if (lower.includes("suppression")) {
+    return "La suppression n'a pas pu être appliquée. Réessayez dans quelques secondes.";
+  }
+  return trimmed;
+}
+
+function readableStartupError(error: string | null) {
+  const trimmed = String(error || "").trim();
+  if (!trimmed) return "";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("port backend") || lower.includes("jeton api local") || lower.includes("jeton api")) {
+    return `Le backend local démarre encore. ${trimmed}`;
+  }
+  if (lower.includes("permission denied") || lower.includes("operation not permitted") || lower.includes("quarantine") || lower.includes("blocked")) {
+    return `macOS bloque probablement le backend intégré. Ouvrez Confidentialité et sécurité > Ouvrir quand même, puis relancez l'application.\n\nDétail : ${trimmed}`;
+  }
+  if (lower.includes("no such file") || lower.includes("not found") || lower.includes("introuvable")) {
+    return `Le backend intégré est introuvable dans cette installation. Réinstallez la dernière version de Juste Recrute Moi, puis relancez l'application.\n\nDétail : ${trimmed}`;
+  }
+  if (lower.includes("address already in use") || lower.includes("port already") || lower.includes("eaddrinuse")) {
+    return `Un ancien backend semble encore ouvert sur le port local. Quittez Juste Recrute Moi, attendez quelques secondes, puis relancez.\n\nDétail : ${trimmed}`;
+  }
+  if (lower.includes("backend injoignable") || lower.includes("failed to fetch") || lower.includes("connection refused")) {
+    return `Le backend local ne répond pas encore. Relancez Juste Recrute Moi si cet écran reste bloqué.\n\nDétail : ${trimmed}`;
+  }
+  return `Le backend intégré n'a pas pu démarrer correctement.\n\nDétail : ${trimmed}`;
 }
 
 export default function App() {
@@ -61,28 +117,31 @@ export default function App() {
     return createApiFetch(port, apiToken);
   }, [port, apiToken]);
   const { leads, setLeads, loading: leadsLoading, error: leadsError } = useLeads(api, wsAddLog);
-  const dueFollowups = useDueFollowups(api);
+  const dueFollowups = useDueFollowups(api, wsAddLog);
   const stats  = useGraphStats(api);
   const {
     view, setView, sel, setSel, showSettings, setShowSettings, showOnboarding,
     setShowOnboarding, applyDraft, setApplyDraft, applyAutoFocus, setApplyAutoFocus,
     scanning, setScanning, reevaluating, setReevaluating, cleaning, setCleaning,
-    scanErr, setScanErr, closeDrawer, focusApplyView, openSettings,
+    scanErr, setScanErr, closeDrawer, focusApplyView, openSettings, openSetupGuide,
   } = useAppShellState();
+  const [scanSpeed, setScanSpeed] = useState<"rapide" | "moyen" | "max">("moyen");
   // Always pass the live version of the selected lead so the drawer reflects real-time updates
   const liveSel = sel ? (leads.find(l => l.job_id === sel.job_id) ?? sel) : null;
   const [startupSeconds, setStartupSeconds] = useState(0);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem("jhm-sidebar-collapsed") === "1");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readLocalStorage("jhm-sidebar-collapsed") === "1");
+  const [onboardingAutoCheckDone, setOnboardingAutoCheckDone] = useState(() => readLocalStorage(ONBOARDING_KEY) === "done");
+  const onboardingAutoCheckRef = useRef(false);
   const subsystems = useSubsystemHealth(api);
 
   useEffect(() => {
-    localStorage.setItem("jhm-sidebar-collapsed", sidebarCollapsed ? "1" : "0");
+    writeLocalStorage("jhm-sidebar-collapsed", sidebarCollapsed ? "1" : "0");
   }, [sidebarCollapsed]);
 
   useEffect(() => {
     const h = () => setScanning(false);
     return onAppEvent("scan-done", h);
-  }, []);
+  }, [setScanning]);
 
   useEffect(() => {
     const h = (detail: { scanning?: boolean; reevaluating?: boolean } | undefined) => {
@@ -90,7 +149,7 @@ export default function App() {
       setReevaluating(Boolean(detail?.reevaluating));
     };
     return onAppEvent("backend-status", h);
-  }, []);
+  }, [setReevaluating, setScanning]);
 
   useEffect(() => {
     if (!scanning) return;
@@ -112,6 +171,40 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [api]);
 
+  useEffect(() => {
+    if (!api || onboardingAutoCheckRef.current) return;
+    onboardingAutoCheckRef.current = true;
+    if (readLocalStorage(ONBOARDING_KEY) === "done") {
+      setOnboardingAutoCheckDone(true);
+      return;
+    }
+    let cancelled = false;
+    setOnboardingAutoCheckDone(false);
+    const checkExistingProfile = async () => {
+      try {
+        const response = await api(`/api/v1/profile`);
+        if (!response.ok) return;
+        const profile = await readJsonResponse(
+          response,
+          "Réponse profil illisible pendant la vérification du démarrage.",
+        );
+        if (profileHasContent(profile)) {
+          writeLocalStorage(ONBOARDING_KEY, "done");
+          if (!cancelled) setShowOnboarding(false);
+        }
+      } catch {
+        // Si le profil n'est pas lisible, garder le comportement existant :
+        // afficher le guide au lieu de masquer une configuration potentiellement nécessaire.
+      } finally {
+        if (!cancelled) setOnboardingAutoCheckDone(true);
+      }
+    };
+    void checkExistingProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [api, setShowOnboarding]);
+
   useKeyboardShortcuts({
     onEscape: closeDrawer,
     onCmdK: focusApplyView,
@@ -122,42 +215,48 @@ export default function App() {
     if (view !== "apply" || !applyAutoFocus) return;
     const timer = window.setTimeout(() => setApplyAutoFocus(false), 0);
     return () => window.clearTimeout(timer);
-  }, [view, applyAutoFocus]);
+  }, [view, applyAutoFocus, setApplyAutoFocus]);
 
   useEffect(() => {
     const h = () => setReevaluating(false);
     return onAppEvent("reevaluate-done", h);
-  }, []);
+  }, [setReevaluating]);
 
   useEffect(() => {
     const h = () => setCleaning(false);
     return onAppEvent("cleanup-done", h);
-  }, []);
+  }, [setCleaning]);
 
-  const onScan = useCallback(async () => {
+  const onScan = useCallback(async (speed?: "rapide" | "moyen" | "max") => {
     if (!port || !api || scanning) return;
     setScanning(true); setScanErr(null);
     try {
+      const selectedSpeed = speed || scanSpeed;
+      let maxRequests = "20";
+      if (selectedSpeed === "rapide") maxRequests = "5";
+      if (selectedSpeed === "max") maxRequests = "80";
+      await api(`/api/v1/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({ free_source_max_requests: maxRequests })
+      });
       const r = await api(`/api/v1/scan`, { method: "POST" });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Backend injoignable");
+        throw new Error(await responseErrorMessage(r, "Backend injoignable"));
       }
-    } catch (e: any) {
-      setScanErr(e.message || "Le scan a échoué"); setScanning(false);
+    } catch (e: unknown) {
+      setScanErr(readableAppError(e, "Le scan a échoué")); setScanning(false);
     }
-  }, [port, api, scanning]);
+  }, [port, api, scanning, scanSpeed, setScanErr, setScanning]);
 
   const onStopScan = useCallback(async () => {
     if (!port || !api) return;
     try {
       const r = await api(`/api/v1/scan/stop`, { method: "POST" });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Arrêt du scan impossible");
+        throw new Error(await responseErrorMessage(r, "Arrêt du scan impossible"));
       }
-    } catch (e: any) {
-      const msg = e.message || "La demande d'arrêt du scan a échoué";
+    } catch (e: unknown) {
+      const msg = readableAppError(e, "La demande d'arrêt du scan a échoué");
       setScanErr(msg);
       wsAddLog(msg, "system", "scan");
     }
@@ -169,26 +268,24 @@ export default function App() {
     try {
       const r = await api(`/api/v1/leads/reevaluate`, { method: "POST" });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "La réévaluation a échoué");
+        throw new Error(await responseErrorMessage(r, "La réévaluation a échoué"));
       }
-    } catch (e: any) {
-      const msg = e.message || "La réévaluation a échoué";
+    } catch (e: unknown) {
+      const msg = readableAppError(e, "La réévaluation a échoué");
       setScanErr(msg); setReevaluating(false);
       wsAddLog(msg, "system", "reeval");
     }
-  }, [port, api, reevaluating, scanning, wsAddLog]);
+  }, [port, api, reevaluating, scanning, setReevaluating, setScanErr, wsAddLog]);
 
   const onStopReevaluate = useCallback(async () => {
     if (!port || !api) return;
     try {
       const r = await api(`/api/v1/leads/reevaluate/stop`, { method: "POST" });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Arrêt de la réévaluation impossible");
+        throw new Error(await responseErrorMessage(r, "Arrêt de la réévaluation impossible"));
       }
-    } catch (e: any) {
-      const msg = e.message || "La demande d'arrêt de la réévaluation a échoué";
+    } catch (e: unknown) {
+      const msg = readableAppError(e, "La demande d'arrêt de la réévaluation a échoué");
       setScanErr(msg);
       wsAddLog(msg, "system", "reeval");
     }
@@ -196,30 +293,33 @@ export default function App() {
 
   const onCleanupLeads = useCallback(async () => {
     if (!port || !api || scanning || reevaluating || cleaning) return;
-    const ok = window.confirm("Masquer les lignes clairement hors sujet, comme des commentaires ou contenus non liés à une offre ? Elles resteront dans les offres masquées avec une raison de nettoyage.");
-    if (!ok) return;
     setCleaning(true); setScanErr(null);
     try {
       const r = await api(`/api/v1/leads/cleanup`, { method: "POST" });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || "Le nettoyage a échoué");
+        throw new Error(await responseErrorMessage(r, "Le nettoyage a échoué"));
       }
-      const result = await r.json();
+      const result = await readJsonResponse<Record<string, unknown>>(
+        r,
+        "Le nettoyage a répondu dans un format illisible. Vérifiez Activité, puis réessayez.",
+      );
       wsAddLog(`Nettoyage : ${result.candidates ?? 0} lignes masquées après analyse de ${result.scanned ?? 0}`, "system", "cleanup");
       emitAppEvent("leads-refresh");
-    } catch (e: any) {
-      const msg = e.message || "Le nettoyage a échoué";
+    } catch (e: unknown) {
+      const msg = readableAppError(e, "Le nettoyage a échoué");
       setScanErr(msg);
       wsAddLog(msg, "system", "cleanup");
     } finally {
       setCleaning(false);
     }
-  }, [port, api, scanning, reevaluating, cleaning, wsAddLog]);
+  }, [port, api, scanning, reevaluating, cleaning, setCleaning, setScanErr, wsAddLog]);
 
   const deleteLead = useCallback(async (jobId: string) => {
     if (!port || !api) return;
-    await api(`/api/v1/leads/${jobId}`, { method: "DELETE" });
+    const response = await api(`/api/v1/leads/${jobId}`, { method: "DELETE" });
+    if (!response.ok) {
+      throw new Error(await responseErrorMessage(response, "Suppression impossible"));
+    }
     setLeads(prev => prev.filter(l => l.job_id !== jobId));
   }, [port, api, setLeads]);
 
@@ -260,19 +360,24 @@ export default function App() {
           leadCounts={leadCounts}
           collapsed={sidebarCollapsed}
           onToggleCollapsed={() => setSidebarCollapsed(value => !value)}
+          onGuide={openSetupGuide}
           onSettings={() => setShowSettings(true)}
         />
         <div className="app-main">
           <Topbar view={view} progress={progress} />
-          <SubsystemBanner items={degradedSubsystems} />
+          <SubsystemBanner
+            items={degradedSubsystems}
+            onSettings={() => setShowSettings(true)}
+            onActivity={() => setView("activity")}
+          />
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--paper)" }}>
             {view === "apply"     && <ErrorBoundary label="Adaptation" api={api ?? undefined}><ApplyJobView port={port} api={api} leads={leads} openDrawer={setSel} initialInput={applyDraft} autoFocus={applyAutoFocus} /></ErrorBoundary>}
-            {view === "dashboard" && <ErrorBoundary label="Dashboard" api={api ?? undefined}><DashboardView leads={leads} dueFollowups={dueFollowups} logs={logs} setView={setView} openDrawer={setSel} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} progress={progress} onScan={onScan} onStopScan={onStopScan} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} scanErr={scanErr} api={api} /></ErrorBoundary>}
-            {isPipelineView  && <ErrorBoundary label="Pipeline" api={api ?? undefined}><PipelineView leads={leads} openDrawer={setSel} deleteLead={deleteLead} port={port} api={api} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} loading={leadsLoading || !port || !api} error={leadsError} tab={pipelineTab} /></ErrorBoundary>}
-            {view === "graph"     && <ErrorBoundary label="Graphe" api={api ?? undefined}><GraphView stats={stats} /></ErrorBoundary>}
-            {view === "activity"  && <ErrorBoundary label="Activité" api={api ?? undefined}><ActivityView logs={logs} /></ErrorBoundary>}
+            {view === "dashboard" && <ErrorBoundary label="Tableau de bord" api={api ?? undefined}><DashboardView leads={leads} dueFollowups={dueFollowups} logs={logs} setView={setView} openDrawer={setSel} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} progress={progress} onScan={onScan} scanSpeed={scanSpeed} setScanSpeed={setScanSpeed} onStopScan={onStopScan} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} scanErr={scanErr} api={api} /></ErrorBoundary>}
+            {isPipelineView  && <ErrorBoundary label="Pipeline" api={api ?? undefined}><PipelineView leads={leads} openDrawer={setSel} deleteLead={deleteLead} port={port} api={api} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} progress={progress} onScan={onScan} scanSpeed={scanSpeed} setScanSpeed={setScanSpeed} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} setView={setView} loading={leadsLoading || !port || !api} error={leadsError} tab={pipelineTab} /></ErrorBoundary>}
+            {view === "graph"     && <ErrorBoundary label="Graphe" api={api ?? undefined}><GraphView stats={stats} setView={setView} /></ErrorBoundary>}
+            {view === "activity"  && <ErrorBoundary label="Activité" api={api ?? undefined}><ActivityView logs={logs} setView={setView} /></ErrorBoundary>}
             {view === "profile"   && (api ? <ErrorBoundary label="Profil" api={api ?? undefined}><ProfileView api={api} setView={setView} stats={stats} /></ErrorBoundary> : <BackendUnavailable title="Profil" conn={conn} port={port} />)}
-            {view === "ingestion" && (api ? <ErrorBoundary label="Contexte" api={api ?? undefined}><IngestionView api={api} /></ErrorBoundary> : <BackendUnavailable title="Ajout de contexte" conn={conn} port={port} />)}
+            {view === "ingestion" && (api ? <ErrorBoundary label="Contexte" api={api ?? undefined}><IngestionView api={api} setView={setView} /></ErrorBoundary> : <BackendUnavailable title="Ajout de contexte" conn={conn} port={port} />)}
           </div>
         </div>
 
@@ -286,13 +391,16 @@ export default function App() {
             {showSettings && api && (
               <SettingsModal key="settings" api={api} onClose={() => setShowSettings(false)} />
             )}
-            {showOnboarding && api && (
+            {showOnboarding && onboardingAutoCheckDone && api && (
               <OnboardingWizard
                 key="onboarding"
                 api={api}
-                onOpenSettings={() => setShowSettings(true)}
+                onOpenSettings={() => {
+                  setShowOnboarding(false);
+                  setShowSettings(true);
+                }}
                 onFinish={(draft) => {
-                  localStorage.setItem(ONBOARDING_KEY, "done");
+                  writeLocalStorage(ONBOARDING_KEY, "done");
                   setApplyDraft(draft);
                   setView("apply");
                   setShowOnboarding(false);
@@ -315,27 +423,91 @@ export default function App() {
   );
 }
 
-function SubsystemBanner({ items }: { items: Array<[string, SubsystemHealth[string]]> }) {
+function readableSubsystemName(name: string) {
+  return ({
+    llm: "IA",
+    vector: "Vecteurs",
+    embeddings: "Embeddings",
+    graph: "Graphe",
+    database: "Base locale",
+  } as Record<string, string>)[name] || name;
+}
+
+function readableSubsystemStatus(status: string | undefined) {
+  const normalized = String(status || "unknown").toLowerCase();
+  return ({
+    degraded: "dégradé",
+    disabled: "désactivé",
+    error: "en erreur",
+    missing_key: "clé manquante",
+    ok: "opérationnel",
+    unavailable: "indisponible",
+    unknown: "état inconnu",
+  } as Record<string, string>)[normalized] || normalized.replace(/[_-]+/g, " ");
+}
+
+function readableSubsystemMessage(message: string) {
+  const trimmed = String(message || "").trim();
+  if (!trimmed) return "";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("llm api key is not configured")) {
+    return "Aucune clé IA n'est configurée pour le fournisseur choisi.";
+  }
+  if (lower.includes("lancedb") && lower.includes("n'est pas installé")) {
+    return "Le runtime vectoriel LanceDB n'est pas encore installé.";
+  }
+  return trimmed;
+}
+
+function SubsystemBanner({
+  items,
+  onSettings,
+  onActivity,
+}: {
+  items: Array<[string, SubsystemHealth[string]]>;
+  onSettings: () => void;
+  onActivity: () => void;
+}) {
   if (items.length === 0) return null;
-  const summary = items.map(([name, value]) => `${name}: ${value.status}`).join(" | ");
+  const summary = items.map(([name, value]) => `${readableSubsystemName(name)} : ${readableSubsystemStatus(value.status)}`).join(" | ");
   const detail = items
     .map(([name, value]) => {
-      const message = value.error || value.reason;
-      return message ? `${name}: ${message}` : "";
+      const message = readableSubsystemMessage(String(value.error || value.reason || ""));
+      return message ? `${readableSubsystemName(name)}: ${message}` : "";
     })
     .filter(Boolean)
     .join(" | ");
   return (
     <div className="subsystem-banner" role="status">
-      <strong>Sous-système dégradé</strong>
+      <strong>{items.length > 1 ? "Sous-systèmes à vérifier" : "Sous-système à vérifier"}</strong>
       <span>{summary}</span>
       {detail && <span className="subsystem-banner-detail">{detail}</span>}
+      <div className="subsystem-banner-actions">
+        <button className="btn btn-ghost" onClick={onSettings}>Paramètres</button>
+        <button className="btn btn-ghost" onClick={onActivity}>Activité</button>
+      </div>
     </div>
   );
 }
 
 function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; port: number | null; seconds: number; sidecarError: string | null }) {
   const isSlow = seconds >= 20;
+  const browserOnly = !hasDesktopBridge();
+  const desktopCommand = "pnpm dev:local";
+  const startupError = readableStartupError(sidecarError);
+  const [copiedCommand, setCopiedCommand] = useState(false);
+  const copiedCommandTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (copiedCommandTimerRef.current) window.clearTimeout(copiedCommandTimerRef.current);
+  }, []);
+  const copyDesktopCommand = useCallback(() => {
+    void copyTextToClipboard(desktopCommand).then(copied => {
+      if (!copied) return;
+      setCopiedCommand(true);
+      if (copiedCommandTimerRef.current) window.clearTimeout(copiedCommandTimerRef.current);
+      copiedCommandTimerRef.current = window.setTimeout(() => setCopiedCommand(false), 1800);
+    });
+  }, [desktopCommand]);
   return (
     <div style={{
       minHeight: "100vh",
@@ -354,19 +526,43 @@ function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; po
           <div className="spinner" />
           <div>
             <div className="eyebrow">Lancement de Juste Recrute Moi</div>
-            <h1 style={{ fontSize: 30, marginTop: 6 }}>Préparation de ton espace local</h1>
+            <h1 style={{ fontSize: 30, marginTop: 6 }}>Préparation de votre espace local</h1>
           </div>
         </div>
         <p style={{ color: "var(--ink-2)", lineHeight: 1.6, maxWidth: 620 }}>
-          L'application desktop démarre son backend intégré, ouvre la base locale et attend le jeton privé de l'API.
-          Le guide de configuration s'affichera automatiquement dès que le backend sera prêt.
+          {browserOnly
+            ? "Le frontend est ouvert seul dans le navigateur. Pour utiliser les scans, la base locale et la génération, lancez l'application desktop avec son backend intégré."
+            : "L'application desktop démarre son backend intégré, ouvre la base locale et attend le jeton privé de l'API."}
+          {!browserOnly && " Le guide de configuration s'affichera seulement si aucun profil existant n'est détecté."}
         </p>
         <div className="row gap-2" style={{ flexWrap: "wrap" }}>
           <span className="pill">Backend : {connLabel(conn)}</span>
           <span className="pill">Port : {port ?? "en attente"}</span>
           <span className="pill">Temps écoulé : {seconds}s</span>
         </div>
-        {isSlow && (
+        {browserOnly && (
+          <div style={{
+            border: "1px solid var(--blue)",
+            borderRadius: 8,
+            padding: 14,
+            background: "var(--blue-soft)",
+            color: "var(--blue-ink)",
+            lineHeight: 1.55,
+          }}>
+            <div style={{ fontWeight: 800, marginBottom: 6 }}>Mode frontend seul détecté</div>
+            <div>
+              Cette page permet de vérifier l'interface, mais les scans, la base locale, les fichiers et les réglages sécurisés passent par l'app desktop.
+            </div>
+            <div className="row gap-2" style={{ marginTop: 12, flexWrap: "wrap", alignItems: "center" }}>
+              <span>Lancez l'expérience complète avec</span>
+              <span className="mono" style={{ padding: "6px 10px", borderRadius: 8, background: "var(--paper)", border: "1px solid var(--line)" }}>{desktopCommand}</span>
+              <button className="btn btn-ghost" onClick={copyDesktopCommand} type="button">
+                {copiedCommand ? "Commande copiée" : "Copier la commande"}
+              </button>
+            </div>
+          </div>
+        )}
+        {isSlow && !browserOnly && (
           <div style={{
             border: "1px solid var(--line)",
             borderRadius: 8,
@@ -376,10 +572,15 @@ function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; po
             lineHeight: 1.55,
           }}>
             Le démarrage prend plus de temps que prévu. Si cet écran reste affiché, le backend intégré n'a probablement pas démarré.
-            Sur macOS, ouvre Confidentialité et sécurité &gt; Ouvrir quand même si l'application a été bloquée, puis relance Juste Recrute Moi.
+            Sur macOS, ouvrez Confidentialité et sécurité &gt; Ouvrir quand même si l'application a été bloquée, puis relancez Juste Recrute Moi.
           </div>
         )}
-        {sidecarError && (
+        <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+          <button className="btn" onClick={() => window.location.reload()}>
+            Réessayer la connexion
+          </button>
+        </div>
+        {startupError && (
           <div style={{
             border: "1px solid var(--bad)",
             borderRadius: 8,
@@ -391,7 +592,8 @@ function StartupScreen({ conn, port, seconds, sidecarError }: { conn: string; po
             fontSize: 12,
             whiteSpace: "pre-wrap",
           }}>
-            {sidecarError}
+            <strong style={{ display: "block", marginBottom: 6, fontFamily: "inherit" }}>Diagnostic de démarrage</strong>
+            {startupError}
           </div>
         )}
       </section>

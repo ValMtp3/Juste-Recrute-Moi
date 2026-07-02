@@ -39,6 +39,17 @@ class _ServerError(Exception):
         self.status_code = status_code
 
 
+class _FailedAttempt:
+    def __init__(self, exception: Exception):
+        self.exception = exception
+
+
+class _WrappedInstructorError(Exception):
+    def __init__(self, exception: Exception):
+        super().__init__("Max retries exceeded. Total attempts: 1")
+        self.failed_attempts = [_FailedAttempt(exception)]
+
+
 def test_connection_error_is_retryable():
     assert client._is_retryable_llm_error(_conn_error()) is True
 
@@ -49,6 +60,38 @@ def test_5xx_is_retryable():
 
 def test_4xx_is_not_retryable():
     assert client._is_retryable_llm_error(_ServerError(400)) is False
+
+
+def test_429_is_retryable_even_when_wrapped_by_instructor():
+    wrapped = _WrappedInstructorError(_ServerError(429))
+
+    assert client._is_retryable_llm_error(wrapped) is True
+
+
+def test_retry_delay_reads_provider_message():
+    wrapped = _WrappedInstructorError(Exception("Rate limit reached. Please try again in 810ms."))
+
+    assert client._retry_delay_from_error(wrapped, 4.0) == 0.81
+
+
+def test_rate_limit_retry_sets_bounded_shared_cooldown(monkeypatch):
+    sleeps = []
+    clock = {"now": 100.0}
+    monkeypatch.setattr(client.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(client.time, "sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(client, "_LLM_COOLDOWN_UNTIL", 0.0)
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise _ServerError(429)
+        return "ok"
+
+    assert client._retry_llm_call(flaky, max_retries=1) == "ok"
+    assert calls["n"] == 2
+    assert sleeps[0] >= client._RATE_LIMIT_MIN_DELAY
+    assert client._LLM_COOLDOWN_UNTIL >= 100.0 + client._RATE_LIMIT_MIN_DELAY
 
 
 def test_generic_error_is_not_retryable():

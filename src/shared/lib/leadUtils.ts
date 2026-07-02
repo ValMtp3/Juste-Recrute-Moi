@@ -6,8 +6,28 @@ export const ONBOARDING_KEY = "juste-recrute-moi:onboarding:v4";
 
 export const leadSignal = (lead: Lead) => Math.max(lead.signal_score || 0, lead.score || 0);
 
+export const leadStatusLabel = (status: string | undefined | null) => {
+  const normalized = String(status || "discovered").trim().toLowerCase();
+  return ({
+    discovered: "Nouvelle",
+    evaluating: "En évaluation",
+    tailoring: "Dossier en cours",
+    approved: "Dossier prêt",
+    applied: "Postulée",
+    interviewing: "Entretien",
+    accepted: "Acceptée",
+    rejected: "Refusée",
+    discarded: "Masquée",
+    matched: "Matchée",
+    bidding: "Proposition en cours",
+    proposal_sent: "Proposition envoyée",
+    awarded: "Gagnée",
+    completed: "Terminée",
+  } as Record<string, string>)[normalized] || normalized.replace(/[_-]+/g, " ");
+};
+
 export const leadSearchText = (lead: Lead) => [
-  lead.title, lead.company, lead.platform, lead.status, lead.kind, lead.budget,
+  lead.title, lead.company, lead.platform, lead.status, leadStatusLabel(lead.status), lead.kind, lead.budget,
   lead.location, lead.urgency, lead.feedback, lead.description, lead.reason,
   lead.signal_reason, lead.learning_reason, ...(lead.signal_tags || []), ...(lead.tech_stack || []),
 ].join(" ").toLowerCase();

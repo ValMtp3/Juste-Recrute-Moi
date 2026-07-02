@@ -1,5 +1,11 @@
 import { useEffect } from "react";
 
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName.toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select" || target.isContentEditable;
+}
+
 export function useKeyboardShortcuts(config: {
   onEscape: () => void;
   onCmdK: () => void;
@@ -9,6 +15,8 @@ export function useKeyboardShortcuts(config: {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.isComposing) return;
+      if (isEditableTarget(e.target)) return;
       const mod = e.metaKey || e.ctrlKey;
       if (e.key === "Escape") {
         onEscape();

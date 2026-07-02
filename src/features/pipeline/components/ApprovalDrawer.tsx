@@ -6,9 +6,38 @@ import Icon from "../../../shared/components/Icon";
 import type { ApiFetch, KeywordCoverage, Lead } from "../../../types";
 import { isAbortLikeError } from "../../../api/client";
 import { GENERATION_TIMEOUT_MS } from "../../../api/generation";
-import { cleanLeadText, getTone, leadDisplayHeading } from "../../../shared/lib/leadUtils";
+import { cleanLeadText, getTone, leadDisplayHeading, leadStatusLabel } from "../../../shared/lib/leadUtils";
 import { emitAppEvent } from "../../../shared/lib/appEvents";
+import { copyTextToClipboard } from "../../../shared/lib/clipboard";
+import { readJsonResponse, responseErrorMessage } from "../../../shared/lib/httpError";
 import { FormReader } from "../../apply/components/FormReader";
+
+function readableDrawerError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const message = raw.replace(/^Error:\s*/i, "").trim();
+  const lower = message.toLowerCase();
+  if (!message) return fallback;
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed")) {
+    return "Backend local injoignable. Relancez Juste Recrute Moi puis réessayez.";
+  }
+  if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("expiré")) {
+    return "L'action prend trop de temps. Vérifiez Activité, puis réessayez.";
+  }
+  const status = message.match(/(?:renvoyé|retourné|status|http)\s*(\d{3})/i)?.[1];
+  if (status) return `Le backend local n'a pas accepté cette action (${status}). Vérifiez Activité, puis réessayez.`;
+  if (lower.includes("pdf") && lower.includes("vide")) {
+    return "Le PDF généré est vide. Relancez la génération du dossier.";
+  }
+  return message || fallback;
+}
+
+async function parseGenerationResponse(response: Response) {
+  const body = await readJsonResponse(
+    response,
+    "Réponse de génération illisible. Relancez Juste Recrute Moi puis réessayez.",
+  );
+  return body && typeof body === "object" ? body as { lead?: Lead } : {};
+}
 
 export function ApprovalDrawer({ j: initialLead, api, onClose }: {
   j: Lead; api: ApiFetch; onClose: () => void;
@@ -32,16 +61,22 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
   const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
   const [versionErr, setVersionErr] = useState<string | null>(null);
   const [generatedLead, setGeneratedLead] = useState<Lead | null>(null);
+  const [copyStatus, setCopyStatus] = useState<{ label: string; ok: boolean; message: string } | null>(null);
   type TemplateOption = { id: string; name: string; is_default: boolean };
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [templateId, setTemplateId] = useState<string>("");
+  const [templateErr, setTemplateErr] = useState<string | null>(null);
   const generateControllerRef = useRef<AbortController | null>(null);
   const pipelineControllerRef = useRef<AbortController | null>(null);
+  const pipelineTimerRef = useRef<number | null>(null);
+  const copyStatusTimerRef = useRef<number | null>(null);
   const j = generatedLead ? { ...initialLead, ...generatedLead } : initialLead;
 
   useEffect(() => () => {
     generateControllerRef.current?.abort();
     pipelineControllerRef.current?.abort();
+    if (pipelineTimerRef.current) window.clearTimeout(pipelineTimerRef.current);
+    if (copyStatusTimerRef.current) window.clearTimeout(copyStatusTimerRef.current);
   }, []);
 
   // Load the saved resume templates so the user can pick which one this job's
@@ -50,15 +85,25 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
   useEffect(() => {
     let alive = true;
     api("/api/v1/templates")
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(await responseErrorMessage(r, `Les modèles de CV ont renvoyé ${r.status}`));
+        return readJsonResponse<{ templates?: TemplateOption[] }>(
+          r,
+          "Les modèles de CV ont répondu dans un format illisible.",
+        );
+      })
       .then(d => {
         if (!alive) return;
         const items: TemplateOption[] = d.templates || [];
         setTemplates(items);
+        setTemplateErr(null);
         const fallback = items.find(t => t.is_default) || items[0];
         if (fallback) setTemplateId(prev => prev || fallback.id);
       })
-      .catch(() => {});
+      .catch(err => {
+        if (!alive) return;
+        setTemplateErr(readableDrawerError(err, "Les modèles de CV n'ont pas pu être chargés."));
+      });
     return () => { alive = false; };
   }, [api]);
 
@@ -86,6 +131,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
   const visibleGenerateErr = generateErr && !/request\s+cancel(?:led|ed)|abort/i.test(generateErr)
     ? generateErr
     : null;
+  const pipelineMsgIsError = Boolean(pipelineMsg && !pipelineMsg.startsWith("Pipeline lancé"));
   const display = leadDisplayHeading(j);
   const originalTitle = cleanLeadText(j.title);
   const descriptionText = cleanLeadText(j.description);
@@ -98,22 +144,28 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     setVersionErr(null);
     try {
       const r = await api(`/api/v1/leads/${j.job_id}/versions`, { signal });
-      if (!r.ok) throw new Error(`Le serveur a renvoyé ${r.status}`);
-      const items = await r.json() as VersionEntry[];
+      if (!r.ok) throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`));
+      const items = await readJsonResponse<VersionEntry[]>(
+        r,
+        "L'historique des versions a répondu dans un format illisible.",
+      );
       setVersions(items);
       setSelectedVersion(prev => {
         if (prev && items.some(item => item.version === prev)) return prev;
         return items[0]?.version ?? null;
       });
     } catch (err) {
-      setVersionErr(err instanceof Error ? err.message : "L'historique des versions n'a pas pu être chargé");
+      setVersionErr(readableDrawerError(err, "L'historique des versions n'a pas pu être chargé"));
     }
   }, [api, j.job_id]);
 
   const refreshLead = useCallback(async (signal?: AbortSignal) => {
     const r = await api(`/api/v1/leads/${initialLead.job_id}`, { signal });
-    if (!r.ok) throw new Error(`Le rafraîchissement de l'offre a renvoyé ${r.status}`);
-    const lead = await r.json() as Lead;
+    if (!r.ok) throw new Error(await responseErrorMessage(r, `Le rafraîchissement de l'offre a renvoyé ${r.status}`));
+    const lead = await readJsonResponse<Lead>(
+      r,
+      "Le rafraîchissement de l'offre a répondu dans un format illisible.",
+    );
     setGeneratedLead(lead);
     return lead;
   }, [api, initialLead.job_id]);
@@ -139,7 +191,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     setPdfLoadErr(null);
     setPdfBlobUrl(null);
     api(activeDocPath, { signal: controller.signal, timeoutMs: 12000 })
-      .then(r => { if (!r.ok) throw new Error(`Le serveur a renvoyé ${r.status}`); return r.blob(); })
+      .then(async r => { if (!r.ok) throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`)); return r.blob(); })
       .then(blob => {
         if (!alive) return;
         if (!blob.size) throw new Error("Le PDF généré est vide");
@@ -151,7 +203,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
       .catch(err => {
         if (!alive) return;
         if (isAbortLikeError(err)) return;
-        setPdfLoadErr(String(err));
+        setPdfLoadErr(readableDrawerError(err, "L'aperçu PDF n'a pas pu être chargé."));
         setPdfBlobUrl(null);
       });
     return () => {
@@ -180,19 +232,34 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     try {
       const query = templateId ? `?template_id=${encodeURIComponent(templateId)}` : "";
       const r = await api(`/api/v1/leads/${j.job_id}/generate${query}`, { method: "POST", signal: controller.signal, timeoutMs: GENERATION_TIMEOUT_MS });
-      const body = await r.json().catch(() => ({}));
-       if (!r.ok) throw new Error(body.detail || `Le serveur a renvoyé ${r.status}`);
-      if (body.lead) setGeneratedLead(body.lead as Lead);
-      await refreshLead(controller.signal).catch(() => null);
+      if (!r.ok) throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`));
+      const body = await parseGenerationResponse(r);
+      const bodyLead = body.lead || null;
+      if (bodyLead) setGeneratedLead(bodyLead);
+      let refreshError: unknown = null;
+      let refreshedLead: Lead | null = null;
+      try {
+        refreshedLead = await refreshLead(controller.signal);
+      } catch (error: unknown) {
+        refreshError = error;
+      }
+      if (controller.signal.aborted) return;
+      const latestLead = refreshedLead || bodyLead;
       emitAppEvent("leads-refresh");
       await loadVersions();
       setPdfPreviewAttempt(n => n + 1);
+      if (!latestLead?.resume_asset && !latestLead?.asset && !latestLead?.cover_letter_asset) {
+        setGenerateErr(refreshError
+          ? `Génération lancée, mais l'offre n'a pas pu être rafraîchie. ${readableDrawerError(refreshError, "Vérifiez Activité, puis réessayez l'aperçu.")}`
+          : "La génération est terminée, mais les fichiers ne sont pas encore disponibles. Réessayez l'aperçu ou relancez dans un instant.");
+      }
+      setGenerating(false);
     } catch (err) {
       if (controller.signal.aborted || isAbortLikeError(err)) {
         setGenerating(false);
         return;
       }
-      setGenerateErr(err instanceof Error ? err.message : String(err));
+      setGenerateErr(readableDrawerError(err, "La génération du dossier a échoué."));
       setGenerating(false);
     } finally {
       if (generateControllerRef.current === controller) generateControllerRef.current = null;
@@ -208,28 +275,44 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     pipelineControllerRef.current = controller;
     try {
       const r = await api(`/api/v1/leads/${j.job_id}/pipeline/run`, { method: "POST", signal: controller.signal, timeoutMs: 15000 });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.detail || `Le serveur a renvoyé ${r.status}`);
+      if (!r.ok) throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`));
       setPipelineMsg("Pipeline lancé. Vous pouvez continuer à travailler pendant son exécution.");
-      window.setTimeout(() => {
+      if (pipelineTimerRef.current) window.clearTimeout(pipelineTimerRef.current);
+      pipelineTimerRef.current = window.setTimeout(() => {
+        pipelineTimerRef.current = null;
         setPipelineRunning(false);
-        setPipelineMsg(null);
-        refreshLead().catch(() => null);
-        emitAppEvent("leads-refresh");
+        void refreshLead()
+          .then(() => {
+            setPipelineMsg(null);
+            emitAppEvent("leads-refresh");
+          })
+          .catch(err => {
+            setPipelineMsg(readableDrawerError(err, "Pipeline lancé, mais l'offre n'a pas pu être rafraîchie."));
+            emitAppEvent("leads-refresh");
+          });
       }, 3000);
     } catch (err) {
       if (controller.signal.aborted || isAbortLikeError(err)) {
         setPipelineRunning(false);
         return;
       }
-      setPipelineMsg(err instanceof Error ? err.message : "Le pipeline n'a pas pu démarrer");
+      setPipelineMsg(readableDrawerError(err, "Le pipeline n'a pas pu démarrer."));
       setPipelineRunning(false);
     } finally {
       if (pipelineControllerRef.current === controller) pipelineControllerRef.current = null;
     }
   };
 
-  const openPdf = () => { if (pdfBlobUrl) openUrl(pdfBlobUrl); };
+  const openPdf = async () => {
+    if (!pdfBlobUrl) return;
+    try {
+      setPdfLoadErr(null);
+      await openUrl(pdfBlobUrl);
+    } catch (err: unknown) {
+      console.error("Ouverture du PDF échouée :", err);
+      setPdfLoadErr(readableDrawerError(err, "Le PDF n'a pas pu être ouvert. Réessayez après avoir régénéré le dossier."));
+    }
+  };
 
   const submitFeedback = async (feedback: string) => {
     setFeedbackBusy(feedback);
@@ -241,11 +324,10 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
         body: JSON.stringify({ feedback }),
       });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
+        throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`));
       }
     } catch (err) {
-      setFeedbackErr(err instanceof Error ? err.message : "Le retour n'a pas pu être enregistré");
+      setFeedbackErr(readableDrawerError(err, "Le retour n'a pas pu être enregistré."));
     } finally {
       setFeedbackBusy(null);
     }
@@ -261,13 +343,12 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
         body: JSON.stringify({ status }),
       });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
+        throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`));
       }
       emitAppEvent("lead-updated", { job_id: j.job_id, status });
       emitAppEvent("leads-refresh");
     } catch (err) {
-      setStatusErr(err instanceof Error ? err.message : "Le statut n'a pas pu être mis à jour");
+      setStatusErr(readableDrawerError(err, "Le statut n'a pas pu être mis à jour."));
     } finally {
       setStatusBusy(null);
     }
@@ -283,11 +364,10 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
         body: JSON.stringify({ days }),
       });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `Le serveur a renvoyé ${r.status}`);
+        throw new Error(await responseErrorMessage(r, `Le serveur a renvoyé ${r.status}`));
       }
     } catch (err) {
-      setFeedbackErr(err instanceof Error ? err.message : "La relance n'a pas pu être enregistrée");
+      setFeedbackErr(readableDrawerError(err, "La relance n'a pas pu être enregistrée."));
     } finally {
       setFollowupBusy(null);
     }
@@ -300,15 +380,33 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
     ["Budget", j.budget || ""],
   ].filter(([, value]) => value);
 
-  const draftBlock = (label: string, value?: string) => value ? (
-    <div key={label} style={{ background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
-      <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <span className="mono" style={{ fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
-        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => navigator.clipboard?.writeText(value)}>Copier</button>
+  const copyDraft = async (label: string, value: string) => {
+    if (copyStatusTimerRef.current) window.clearTimeout(copyStatusTimerRef.current);
+    try {
+      const copied = await copyTextToClipboard(value);
+      if (!copied) throw new Error("clipboard unavailable");
+      setCopyStatus({ label, ok: true, message: `${label} copié.` });
+    } catch {
+      setCopyStatus({ label, ok: false, message: "Copie impossible. Sélectionnez le texte manuellement." });
+    }
+    copyStatusTimerRef.current = window.setTimeout(() => setCopyStatus(null), 1800);
+  };
+
+  const draftBlock = (label: string, value?: string) => {
+    if (!value) return null;
+    const currentCopyStatus = copyStatus?.label === label ? copyStatus : null;
+    return (
+      <div key={label} style={{ background: "var(--paper-3)", border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
+        <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <span className="mono" style={{ fontSize: 10, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => void copyDraft(label, value)}>
+            {currentCopyStatus ? currentCopyStatus.ok ? "Copié" : "Erreur" : "Copier"}
+          </button>
+        </div>
+        <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{value}</div>
       </div>
-      <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{value}</div>
-    </div>
-  ) : null;
+    );
+  };
 
   return (
     <div className="drawer-backdrop" onClick={onClose} style={{ zIndex: 100, display: "grid", placeItems: "center", padding: 12, overflow: "hidden" }}>
@@ -321,7 +419,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", padding: "18px 22px 16px", borderBottom: "1px solid var(--line)", flexShrink: 0, gap: 16, background: "var(--paper)", flexWrap: "wrap" }}>
           <div style={{ minWidth: 0 }}>
             <div className="row gap-2" style={{ marginBottom: 7, flexWrap: "wrap" }}>
-              <span className="pill" style={{ background: `var(--${getTone(j.status)})`, color: `var(--${getTone(j.status)}-ink)` }}>{j.status}</span>
+              <span className="pill" style={{ background: `var(--${getTone(j.status)})`, color: `var(--${getTone(j.status)}-ink)` }}>{leadStatusLabel(j.status)}</span>
               <span className="pill mono" style={{ background: "var(--paper-3)", color: "var(--ink-3)" }}>{j.platform}</span>
               {j.budget && <span className="pill mono" style={{ background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" }}>{j.budget}</span>}
               {(j.signal_score || 0) > 0 && <span className="pill mono" style={{ background: (j.signal_score || 0) >= 80 ? "var(--orange-soft)" : "var(--yellow-soft)", color: (j.signal_score || 0) >= 80 ? "var(--orange-ink)" : "var(--yellow-ink)", border: `1px solid ${(j.signal_score || 0) >= 80 ? "var(--orange)" : "var(--yellow)"}` }}>Signal {j.signal_score}</span>}
@@ -330,7 +428,7 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
               {j.score > 0 && <span className="pill mono" style={{ background: j.score >= 85 ? "var(--green-soft)" : j.score >= 60 ? "var(--yellow-soft)" : "var(--bad-soft)", color: j.score >= 85 ? "var(--green-ink)" : j.score >= 60 ? "var(--yellow-ink)" : "var(--bad)" }}>Match {j.score}/100</span>}
             </div>
             <h2 style={{ fontSize: 26, fontWeight: 600, overflowWrap: "anywhere" }}>
-              {display.role} <span style={{ color: "var(--ink-3)", fontWeight: 700 }}>||</span> {display.company}
+              {display.role} <span style={{ color: "var(--ink-3)", fontWeight: 700 }}>chez</span> {display.company}
             </h2>
             <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 2 }}>{j.platform}</p>
           </div>
@@ -392,7 +490,12 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                 }}>{pipelineRunning ? "Pipeline en cours..." : "Lancer le pipeline complet"}</button>
               </div>
             </div>
-            {pipelineMsg && <div style={{ color: pipelineMsg.includes("failed") || pipelineMsg.includes("Server") ? "var(--bad)" : "var(--blue-ink)", fontSize: 12 }}>{pipelineMsg}</div>}
+            {templateErr && (
+              <div role="alert" style={{ color: "var(--bad)", fontSize: 11.5, lineHeight: 1.45 }}>
+                {templateErr} Le générateur utilisera le modèle par défaut.
+              </div>
+            )}
+            {pipelineMsg && <div style={{ color: pipelineMsgIsError ? "var(--bad)" : "var(--blue-ink)", fontSize: 12 }}>{pipelineMsg}</div>}
             <div className="row gap-2" style={{ background: "var(--paper-3)", padding: 5, borderRadius: 10, flexShrink: 0 }}>
               {[
                 ["resume", "CV", resumeReady],
@@ -596,7 +699,9 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                     <div style={{ background: "var(--purple-soft)", border: "1px solid var(--purple)", borderRadius: 10, padding: "10px 12px" }}>
                       <div className="row" style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                         <span className="mono" style={{ fontSize: 10, color: "var(--purple-ink)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>Message court recruteur/fondateur</span>
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => navigator.clipboard?.writeText(j.outreach_reply!)}>Copier</button>
+                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => void copyDraft("Message court", j.outreach_reply!)}>
+                          {copyStatus?.label === "Message court" ? copyStatus.ok ? "Copié" : "Erreur" : "Copier"}
+                        </button>
                       </div>
                       <div style={{ fontSize: 13, color: "var(--ink)", lineHeight: 1.65, whiteSpace: "pre-wrap", fontWeight: 500 }}>{j.outreach_reply}</div>
                     </div>
@@ -604,6 +709,11 @@ export function ApprovalDrawer({ j: initialLead, api, onClose }: {
                   {draftBlock("Note LinkedIn", j.outreach_dm)}
                   {draftBlock("Email d'approche", j.outreach_email)}
                   {draftBlock("Proposition", j.proposal_draft)}
+                  {copyStatus && (
+                    <div style={{ color: copyStatus.ok ? "var(--green-ink)" : "var(--bad)", fontSize: 11.5 }}>
+                      {copyStatus.message}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

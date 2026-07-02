@@ -9,12 +9,25 @@ from discovery.normalizer import clean_text
 
 def _parse_target(target: str) -> dict[str, Any]:
     raw = target.split(":", 1)[1] if target.lower().startswith("jobspy:") else target
+    try:
+        from data.repository import create_repository
+        db_settings = create_repository().settings.get_settings()
+        max_reqs = int(db_settings.get("free_source_max_requests", "20"))
+    except Exception:
+        max_reqs = 20
+
+    default_results = 50
+    if max_reqs <= 5:
+        default_results = 15
+    elif max_reqs > 20:
+        default_results = 150
+
     params: dict[str, Any] = {
         "search_term": "developpeur",
         "location": "France",
-        "results_wanted": 25,
+        "results_wanted": default_results,
         "hours_old": 168,
-        "site_name": ["indeed", "google"],
+        "site_name": ["indeed", "google", "glassdoor", "zip_recruiter"],
         "country_indeed": "France",
     }
     parts = [part.strip() for part in raw.replace("|", ";").split(";") if part.strip()]
@@ -28,11 +41,15 @@ def _parse_target(target: str) -> dict[str, Any]:
         if key in {"sites", "site_name"}:
             params["site_name"] = [item.strip() for item in value.split(",") if item.strip()]
         elif key in {"results", "results_wanted"}:
-            params["results_wanted"] = max(1, min(int(value), 100))
+            params["results_wanted"] = max(1, min(int(value), 300))
         elif key in {"hours", "hours_old"}:
             params["hours_old"] = max(1, min(int(value), 24 * 30))
         elif key in {"location", "search_term", "country_indeed"}:
             params[key] = value
+
+    if ("results" not in raw and "results_wanted" not in raw) or params["results_wanted"] == 50:
+        params["results_wanted"] = default_results
+
     return params
 
 

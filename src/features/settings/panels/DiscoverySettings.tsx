@@ -1,9 +1,69 @@
 import { useState, type ChangeEvent } from "react";
-import type { Cfg } from "./shared";
-import { BigToggle, FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, LabelledField, SECRET_MASKS, SectionLabel } from "./shared";
+import { FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, type Cfg } from "./config";
+import { BigToggle, LabelledField, SecretInput, SectionLabel } from "./shared";
+import type { ApiFetch } from "../../../types";
 
-export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: keyof Cfg) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void }) {
+const SOURCE_PRESETS = {
+  france: FRANCE_SOURCE_PRESET,
+  global: GLOBAL_SOURCE_PRESET,
+  india: INDIA_SOURCE_PRESET,
+} as const;
+
+const MARKET_LABELS: Record<keyof typeof SOURCE_PRESETS, string> = {
+  france: "France",
+  global: "International",
+  india: "Inde",
+};
+
+function configuredSourceTargets(raw: string) {
+  return String(raw || "")
+    .split(/\n/)
+    .flatMap(line => line.trim().startsWith("#") ? [] : line.split(","))
+    .map(target => target.trim())
+    .filter(target => target && !target.startsWith("#"));
+}
+
+function sourceKind(target: string) {
+  const lower = target.toLowerCase();
+  if (lower.startsWith("france_travail:")) return "France Travail";
+  if (lower.startsWith("wttj:") || lower.startsWith("apec:")) return "Jobboards directs";
+  if (lower.startsWith("adzuna:") || lower.startsWith("jooble:")) return "Agrégateurs";
+  if (lower.startsWith("http://") || lower.startsWith("https://")) return "Flux web/API";
+  if (lower.startsWith("site:") || lower.startsWith("ats:")) return "Sites et ATS";
+  if (lower.startsWith("github:") || lower.startsWith("hn:") || lower.startsWith("reddit:") || lower === "hn-hiring") return "Communautés";
+  if (lower.startsWith("jobspy:")) return "JobSpy";
+  return "Autres";
+}
+
+function sourceKindCounts(targets: string[]) {
+  const counts = new Map<string, number>();
+  for (const target of targets) {
+    const kind = sourceKind(target);
+    counts.set(kind, (counts.get(kind) || 0) + 1);
+  }
+  return [...counts.entries()];
+}
+
+export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: (k: keyof Cfg) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void; api: ApiFetch }) {
   const [siteDraft, setSiteDraft] = useState("");
+  const [siteFeedback, setSiteFeedback] = useState("");
+  const marketFocus = ((cfg.job_market_focus || "france") in SOURCE_PRESETS ? cfg.job_market_focus || "france" : "global") as keyof typeof SOURCE_PRESETS;
+  const configuredTargets = configuredSourceTargets(cfg.job_boards);
+  const defaultTargets = configuredSourceTargets(SOURCE_PRESETS[marketFocus]);
+  const activeTargets = configuredTargets.length ? configuredTargets : defaultTargets;
+  const sourceSummary = configuredTargets.length
+    ? `${activeTargets.length} source${activeTargets.length > 1 ? "s" : ""} configurée${activeTargets.length > 1 ? "s" : ""}`
+    : `${defaultTargets.length} sources recommandées pour ${MARKET_LABELS[marketFocus]}`;
+  const sourceCounts = sourceKindCounts(activeTargets);
+  const applyMarketPreset = (market: keyof typeof SOURCE_PRESETS) => {
+    onChange("job_market_focus", market);
+    onChange("job_boards", SOURCE_PRESETS[market]);
+    setSiteFeedback(`Sources ${MARKET_LABELS[market]} appliquées. Enregistrez les paramètres pour les utiliser au prochain scan.`);
+  };
+  const resetToMarketDefaults = () => {
+    onChange("job_boards", "");
+    setSiteFeedback(`Retour au preset ${MARKET_LABELS[marketFocus]} par défaut. Enregistrez les paramètres pour l'utiliser au prochain scan.`);
+  };
 
   const atsHosts = new Set(["greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com", "teamtailor.com"]);
   const isKnownAtsHost = (raw: string) => {
@@ -21,22 +81,30 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
     const value = raw.trim().replace(/,$/, "");
     if (!value) return "";
     const lower = value.toLowerCase();
-    if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|france_travail:|jobspy:|import:|https?:\/\/)/i.test(value)) {
+    if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|france_travail:|wttj:|apec:|adzuna:|jooble:|jobspy:|import:|https?:\/\/)/i.test(value)) {
       if (isKnownAtsHost(lower)) {
         return value;
       }
       return value;
     }
     const domain = value.replace(/^www\./i, "").replace(/\/+$/, "");
-    return `site:${domain} ("jobs" OR "careers" OR "hiring" OR "open roles") (remote OR hybrid OR onsite OR France OR global)`;
+    return `site:${domain} ("jobs" OR "careers" OR "hiring" OR "open roles" OR recrutement OR emploi OR postes) (remote OR hybrid OR onsite OR France OR global OR télétravail OR hybride)`;
   };
 
   const addSiteSource = () => {
     const target = sourceTargetFromSite(siteDraft);
-    if (!target || cfg.job_boards.includes(target)) return;
+    if (!target) {
+      setSiteFeedback("Saisissez un domaine, une URL, une source API ou une requête site:.");
+      return;
+    }
+    if (cfg.job_boards.includes(target)) {
+      setSiteFeedback("Cette source est déjà présente.");
+      return;
+    }
     const sep = cfg.job_boards.trim() ? ",\n" : "";
     onChange("job_boards", cfg.job_boards.trim() + sep + target);
     setSiteDraft("");
+    setSiteFeedback("Source ajoutée. Enregistrez les paramètres pour l'utiliser au prochain scan.");
   };
 
   return (
@@ -45,18 +113,33 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
           <div style={{ borderTop: "1px dashed var(--line)", paddingTop: 18 }}>
             <SectionLabel label="Sources et découverte" />
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <LabelledField label="Postes ou intitulés ciblés" hint="facultatif ; le graphe profil reste prioritaire">
-                <textarea value={cfg.desired_position || cfg.onboarding_target_role || ""} onChange={e => {
-                  onChange("desired_position", e.target.value);
-                  onChange("onboarding_target_role", e.target.value);
-                }} rows={3} className="mono field-input"
-                  placeholder={"Développeur backend\nChef de projet digital\nCommercial B2B"}
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
-              </LabelledField>
+              <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
+                <SectionLabel label="Recherche ciblée" sub="poste, localisation et rayon utilisés par les sources compatibles" />
+                <LabelledField label="Postes ou intitulés ciblés" hint="facultatif ; le graphe profil reste prioritaire">
+                  <textarea value={cfg.desired_position || cfg.onboarding_target_role || ""} onChange={e => {
+                    onChange("desired_position", e.target.value);
+                    onChange("onboarding_target_role", e.target.value);
+                  }} rows={3} className="mono field-input"
+                    placeholder={"Développeur backend\nChef de projet digital\nCommercial B2B"}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
+                </LabelledField>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(120px, 180px)", gap: 10 }}>
+                  <LabelledField label="Localisation cible" hint="vide = CV ou marché choisi">
+                    <input type="text" placeholder="Paris, Lyon, Montpellier..." value={cfg.job_location} onChange={set("job_location")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                  <LabelledField label="Rayon" hint="km, 0-100">
+                    <input type="number" min={0} max={100} value={cfg.job_search_radius_km} onChange={set("job_search_radius_km")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.45 }}>
+                  Le rayon est transmis aux sources qui le supportent, notamment France Travail. Les autres sources utilisent la localisation comme signal de requête et de filtrage.
+                </div>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <LabelledField label="Token Apify" hint="optionnel, pour scraping LinkedIn/X">
-                  <input type="password" placeholder="apify_api_***" value={cfg.apify_token} onChange={set("apify_token")} className="mono field-input"
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  <SecretInput placeholder="apify_api_***" value={cfg.apify_token} onChange={v => onChange("apify_token", v)} api={api} secretKey="apify_token" />
                 </LabelledField>
                 <LabelledField label="Actor Apify" hint="actor à exécuter">
                   <input type="text" placeholder="drobnikj/..." value={cfg.apify_actor} onChange={set("apify_actor")} className="mono field-input"
@@ -64,8 +147,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                 </LabelledField>
               </div>
               <LabelledField label="Cookie de session LinkedIn" hint="valeur li_at">
-                <input type="password" placeholder="li_at=***" value={cfg.linkedin_cookie} onChange={set("linkedin_cookie")} className="mono field-input"
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                <SecretInput placeholder="li_at=***" value={cfg.linkedin_cookie} onChange={v => onChange("linkedin_cookie", v)} api={api} secretKey="linkedin_cookie" />
               </LabelledField>
               <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
                 <SectionLabel label="Recherche de contacts" sub="emails Hunter.io, LinkedIn Proxycurl optionnel" />
@@ -80,12 +162,10 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <LabelledField label="Clé API Hunter.io" hint="recherche par domaine">
-                    <input type="password" placeholder="hunter key" value={cfg.hunter_api_key} onChange={set("hunter_api_key")} className="mono field-input"
-                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                    <SecretInput placeholder="hunter key" value={cfg.hunter_api_key} onChange={v => onChange("hunter_api_key", v)} api={api} secretKey="hunter_api_key" />
                   </LabelledField>
                   <LabelledField label="Clé API Proxycurl" hint="résolution LinkedIn optionnelle">
-                    <input type="password" placeholder="proxycurl key" value={cfg.proxycurl_api_key} onChange={set("proxycurl_api_key")} className="mono field-input"
-                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                    <SecretInput placeholder="proxycurl key" value={cfg.proxycurl_api_key} onChange={v => onChange("proxycurl_api_key", v)} api={api} secretKey="proxycurl_api_key" />
                   </LabelledField>
                 </div>
               </div>
@@ -93,8 +173,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
               <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
                 <SectionLabel label="Signaux X" sub="posts récents pouvant signaler une offre" />
                 <LabelledField label="Bearer token X" hint="token de la console développeur">
-                  <input type="password" placeholder="Bearer token" value={cfg.x_bearer_token} onChange={set("x_bearer_token")} className="mono field-input"
-                    style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  <SecretInput placeholder="Bearer token" value={cfg.x_bearer_token} onChange={v => onChange("x_bearer_token", v)} api={api} secretKey="x_bearer_token" />
                 </LabelledField>
                 <LabelledField label="Requêtes X recent-search" hint="une requête par ligne ; vide = valeurs IA par défaut">
                   <textarea value={cfg.x_search_queries} onChange={set("x_search_queries")} rows={4} className="mono field-input"
@@ -151,12 +230,10 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                 />
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <LabelledField label="Client ID France Travail" hint="API Offres d'emploi">
-                    <input type="password" placeholder="client_id" value={SECRET_MASKS.has(cfg.france_travail_client_id) ? "" : cfg.france_travail_client_id} onChange={set("france_travail_client_id")} className="mono field-input"
-                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                    <SecretInput placeholder="client_id" value={cfg.france_travail_client_id} onChange={v => onChange("france_travail_client_id", v)} api={api} secretKey="france_travail_client_id" />
                   </LabelledField>
                   <LabelledField label="Secret France Travail" hint="conservé masqué après sauvegarde">
-                    <input type="password" placeholder="client_secret" value={SECRET_MASKS.has(cfg.france_travail_client_secret) ? "" : cfg.france_travail_client_secret} onChange={set("france_travail_client_secret")} className="mono field-input"
-                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                    <SecretInput placeholder="client_secret" value={cfg.france_travail_client_secret} onChange={v => onChange("france_travail_client_secret", v)} api={api} secretKey="france_travail_client_secret" />
                   </LabelledField>
                 </div>
                 <LabelledField label="Entreprises à surveiller" hint="fournisseur,slug par ligne : greenhouse,<slug-entreprise>">
@@ -181,11 +258,11 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
                 </LabelledField>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8 }}>
-                  <LabelledField label="Requêtes gratuites" hint="par scan">
+                  <LabelledField label="Nb max. de sources" hint="par scan">
                     <input type="number" min={1} max={80} value={cfg.free_source_max_requests} onChange={set("free_source_max_requests")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
-                  <LabelledField label="Signal gratuit min." hint="0-100">
+                  <LabelledField label="Score qualité min." hint="Filtrage IA (0-100)">
                     <input type="number" min={0} max={100} value={cfg.free_source_min_signal_score} onChange={set("free_source_min_signal_score")} className="mono field-input"
                       style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
                   </LabelledField>
@@ -237,18 +314,48 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                   Chaque connecteur récupère du JSON, lit <span className="mono">items_path</span>, mappe les champs, puis envoie les offres dans le même filtre qualité. Gardez les tokens dans les headers, pas dans les définitions.
                 </div>
               </div>
+              <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
+                <SectionLabel label="Scan navigateur" sub="Playwright, extraction IA légère, budget contrôlé" />
+                <BigToggle
+                  active={cfg.browser_scan_enabled !== "false"}
+                  onToggle={() => onChange("browser_scan_enabled", cfg.browser_scan_enabled === "false" ? "true" : "false")}
+                  icon="search"
+                  label="Jobboards web volumétriques"
+                  badge={cfg.browser_scan_enabled !== "false" ? "on" : "off"}
+                  sub="Transforme les requêtes site: en pages Google récentes, avec erreurs isolées par source"
+                  tone="blue"
+                />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+                  <LabelledField label="Concurrence" hint="pages en parallèle">
+                    <input type="number" min={1} max={8} value={cfg.browser_scan_concurrency} onChange={set("browser_scan_concurrency")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                  <LabelledField label="Cibles max" hint="par lot jobboard">
+                    <input type="number" min={1} max={80} value={cfg.browser_scan_max_targets} onChange={set("browser_scan_max_targets")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                  <LabelledField label="Mode IA scan" hint="budget de seconde passe">
+                    <select value={cfg.llm_scan_mode || "balanced"} onChange={e => onChange("llm_scan_mode", e.target.value)} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }}>
+                      <option value="lean">lean</option>
+                      <option value="balanced">balanced</option>
+                      <option value="thorough">thorough</option>
+                    </select>
+                  </LabelledField>
+                </div>
+              </div>
               <LabelledField label="Jobboards / URLs de recherche ciblés" hint="séparés par des virgules">
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>Marché ciblé</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    {[
+                    {([
                       { id: "france", label: "Marché français", sub: "France Travail, ATS et jobboards français" },
                       { id: "global", label: "International", sub: "Jobboards mondiaux, ATS, flux remote et sources généralistes" },
                       { id: "india", label: "Marché indien", sub: "Jobboards indiens, startups locales, ATS et offres remote India" },
-                    ].map(mode => {
-                      const active = (cfg.job_market_focus || "global") === mode.id;
+                    ] as const).map(mode => {
+                      const active = marketFocus === mode.id;
                       return (
-                        <button key={mode.id} onClick={() => onChange("job_market_focus", mode.id)} style={{
+                        <button key={mode.id} type="button" onClick={() => onChange("job_market_focus", mode.id)} style={{
                           textAlign: "left", padding: "10px 12px", borderRadius: 10, cursor: "pointer",
                           background: active ? "var(--blue-soft)" : "var(--paper-3)",
                           border: `1.5px solid ${active ? "var(--blue)" : "var(--line)"}`,
@@ -259,6 +366,36 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                         </button>
                       );
                     })}
+                  </div>
+                  <div style={{ padding: 12, borderRadius: 10, border: "1px solid var(--line)", background: "var(--paper-3)", display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+                      <div>
+                        <div className="eyebrow">Scan prévu</div>
+                        <div style={{ marginTop: 3, fontSize: 12.5, fontWeight: 700, color: "var(--ink-2)" }}>{sourceSummary}</div>
+                        <div style={{ marginTop: 4, fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.45 }}>
+                          {configuredTargets.length
+                            ? "Le champ ci-dessous remplace le preset du marché. Videz-le pour revenir aux sources recommandées."
+                            : "Le champ peut rester vide : l'application utilisera ces sources recommandées au prochain scan."}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <button type="button" className="btn btn-ghost" onClick={() => applyMarketPreset(marketFocus)} style={{ fontSize: 11, padding: "5px 9px" }}>
+                          Remplir avec ce preset
+                        </button>
+                        {configuredTargets.length > 0 && (
+                          <button type="button" className="btn btn-ghost" onClick={resetToMarketDefaults} style={{ fontSize: 11, padding: "5px 9px" }}>
+                            Revenir au défaut
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {sourceCounts.map(([kind, count]) => (
+                        <span key={kind} className="pill mono" style={{ background: "var(--paper)", color: "var(--ink-2)", border: "1px solid var(--line)", fontSize: 10.5 }}>
+                          {kind}: {count}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div style={{ marginBottom: 8 }}>
@@ -285,20 +422,29 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                       Sera ajouté : {sourceTargetFromSite(siteDraft)}
                     </div>
                   )}
+                  {siteFeedback && (
+                    <div role="status" style={{ marginBottom: 10, color: siteFeedback.includes("ajoutée") ? "var(--green-ink)" : "var(--yellow-ink)", fontSize: 11.5, lineHeight: 1.45 }}>
+                      {siteFeedback}
+                    </div>
+                  )}
                   <div style={{ fontSize: 11, fontWeight: 600, color: "var(--ink-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 7 }}>Ajout rapide</div>
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                    {[
-                      { label: "Preset international", url: GLOBAL_SOURCE_PRESET },
-                      { label: "Preset France", url: FRANCE_SOURCE_PRESET },
-                      { label: "Preset Inde", url: INDIA_SOURCE_PRESET },
+                    {([
+                      { label: "Preset international", url: GLOBAL_SOURCE_PRESET, presetMarket: "global" },
+                      { label: "Preset France", url: FRANCE_SOURCE_PRESET, presetMarket: "france" },
+                      { label: "Preset Inde", url: INDIA_SOURCE_PRESET, presetMarket: "india" },
                       { label: "HN Hiring", url: "hn-hiring" },
                       { label: "RemoteOK", url: "https://remoteok.com/api" },
                       { label: "LinkedIn", url: "site:linkedin.com/jobs" },
                       { label: "Indeed", url: "site:indeed.com/jobs" },
                       { label: "France Travail", url: "france_travail:developpeur;lieu=France;range=0-49" },
-                      { label: "WTTJ", url: "site:welcometothejungle.com/fr/jobs France" },
+                      { label: "WTTJ RSS", url: "wttj:query=developpeur&aroundQuery=France" },
+                      { label: "APEC direct", url: "apec:developpeur;location=France" },
+                      { label: "Adzuna FR", url: "adzuna:developpeur;location=France;results=50" },
+                      { label: "Jooble FR", url: "jooble:developpeur;location=France" },
+                      { label: "WTTJ web", url: "site:welcometothejungle.com/fr/jobs France" },
                       { label: "HelloWork", url: "site:hellowork.com/fr-fr/emplois France" },
-                      { label: "Apec", url: "site:apec.fr/candidat/recherche-emploi.html/emploi France" },
+                      { label: "APEC web", url: "site:apec.fr/candidat/recherche-emploi.html/emploi France" },
                       { label: "Cadremploi", url: "site:cadremploi.fr/emploi France" },
                       { label: "Meteojob", url: "site:meteojob.com/jobs France" },
                       { label: "LesJeudis", url: "site:lesjeudis.com/jobs France" },
@@ -319,16 +465,22 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                       { label: "Remotive All", url: "https://remotive.com/api/remote-jobs" },
                       { label: "Jobicy All", url: "https://jobicy.com/api/v2/remote-jobs?count=50" },
                       { label: "Jobicy", url: "https://jobicy.com/feed/newjobs" },
-                    ].map(p => {
-                      const already = cfg.job_boards.includes(p.url);
+                    ] as const).map(p => {
+                      const isPreset = "presetMarket" in p;
+                      const already = isPreset ? (marketFocus === p.presetMarket && cfg.job_boards.trim() === p.url.trim()) : cfg.job_boards.includes(p.url);
                       return (
-                        <button key={p.label} onClick={() => {
-                          if (already) return;
+                        <button key={p.label} type="button" onClick={() => {
+                          if (isPreset) {
+                            applyMarketPreset(p.presetMarket);
+                            return;
+                          }
+                          if (already) {
+                            setSiteFeedback("Cette source est déjà présente.");
+                            return;
+                          }
                           const sep = cfg.job_boards.trim() ? ",\n" : "";
-                          if (p.label === "Preset France") onChange("job_market_focus", "france");
-                          if (p.label === "Preset Inde") onChange("job_market_focus", "india");
-                          if (p.label === "Preset international") onChange("job_market_focus", "global");
                           onChange("job_boards", cfg.job_boards.trim() + sep + p.url);
+                          setSiteFeedback(`${p.label} ajouté. Enregistrez les paramètres pour l'utiliser au prochain scan.`);
                         }} style={{
                           padding: "4px 10px", borderRadius: 7, fontSize: 10.5, cursor: already ? "default" : "pointer",
                           fontWeight: 600, transition: "all .12s ease",
@@ -337,7 +489,7 @@ export function DiscoverySettings({ cfg, set, onChange }: { cfg: Cfg; set: (k: k
                           border: `1px solid ${already ? "var(--blue)" : "var(--line)"}`,
                           opacity: already ? 0.7 : 1,
                         }}>
-                          {already ? "Ajouté " : "+ "}{p.label}
+                          {isPreset ? (already ? "Preset actif " : "Remplacer par ") : (already ? "Ajouté " : "+ ")}{p.label}
                         </button>
                       );
                     })}

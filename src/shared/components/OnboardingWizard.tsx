@@ -3,6 +3,30 @@ import { motion } from "framer-motion";
 import Icon from "./Icon";
 import type { ApiFetch } from "../../types";
 import { emitAppEvent } from "../lib/appEvents";
+import { responseErrorMessage } from "../lib/httpError";
+
+function readableOnboardingError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Relancez Juste Recrute Moi puis réessayez.";
+  }
+  if (lower.includes("format") || lower.includes("unsupported")) {
+    return "Format non supporté. Importez un CV en PDF, DOCX, TXT ou Markdown.";
+  }
+  if (lower.includes("api key") || lower.includes("llm")) {
+    return "La clé IA ou le modèle n'est pas utilisable. Vérifiez les réglages IA avant de continuer.";
+  }
+  if (lower.includes("ingest") || lower.includes("import") || lower.includes("cv")) {
+    return "L'import du CV a échoué. Vérifiez le fichier ou collez le texte du CV, puis réessayez.";
+  }
+  if (lower.includes("préférences") || lower.includes("settings")) {
+    return "Les préférences n'ont pas pu être enregistrées. Vérifiez les champs, puis réessayez.";
+  }
+  return trimmed;
+}
 
 export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFetch; onFinish: (draft: string) => void; onOpenSettings: () => void }) {
   const [step, setStep] = useState(0);
@@ -101,6 +125,18 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
     { name: "Guide de démarrage", detail: "Rouvrez cet assistant depuis la barre latérale pour revérifier clés, sources, pages ou premier dossier." },
   ];
 
+  const selectResumeFile = (nextFile?: File | null) => {
+    if (!nextFile) return;
+    const lower = nextFile.name.toLowerCase();
+    if (!lower.endsWith(".pdf") && !lower.endsWith(".docx") && !lower.endsWith(".txt") && !lower.endsWith(".md")) {
+      setFile(null);
+      setErr("Format non supporté. Importez un CV en PDF, DOCX, TXT ou Markdown.");
+      return;
+    }
+    setFile(nextFile);
+    setErr(null);
+  };
+
   const saveResume = async () => {
     if (!file && !rawResume.trim()) {
       setErr("Importez un fichier CV ou collez le texte du CV.");
@@ -112,17 +148,15 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
     if (file) fd.append("file", file);
     else fd.append("raw", rawResume.trim());
     try {
-      const r = await api(`/api/v1/ingest`, { method: "POST", body: fd });
+      const r = await api(`/api/v1/ingest`, { method: "POST", body: fd, timeoutMs: 0 });
       if (!r.ok) {
-        const detail = await r.json().then(d => d.detail).catch(() => "");
-        throw new Error(detail || `L'import du CV a renvoyé ${r.status}`);
+        throw new Error(await responseErrorMessage(r, `L'import du CV a renvoyé ${r.status}`));
       }
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
       setStep(1);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "L'import du CV a échoué";
-      setErr(message === "Failed to fetch" ? "Backend local injoignable. Relance Juste Recrute Moi puis réessaie." : message);
+      setErr(readableOnboardingError(e, "L'import du CV a échoué"));
     } finally {
       setBusy(false);
     }
@@ -132,7 +166,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
     setBusy(true);
     setErr(null);
     const trimmedRole = role.trim();
-    const payload: Record<string, any> = {
+    const payload: Record<string, string | boolean> = {
       job_market_focus: market,
       remote_preference: remotePref,
       llm_provider: provider,
@@ -156,10 +190,10 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!r.ok) throw new Error(`Les préférences ont renvoyé ${r.status}`);
+      if (!r.ok) throw new Error(await responseErrorMessage(r, `Les préférences ont renvoyé ${r.status}`));
       setStep(2);
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Les préférences n'ont pas pu être enregistrées");
+      setErr(readableOnboardingError(e, "Les préférences n'ont pas pu être enregistrées"));
     } finally {
       setBusy(false);
     }
@@ -219,7 +253,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
             </div>
           </div>
           <button className="btn btn-ghost" onClick={() => onFinish("")} style={{ alignSelf: "flex-start" }}>
-            Ignorer la configuration
+            Configurer plus tard
           </button>
         </div>
 
@@ -229,7 +263,7 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
           {step === 0 && (
             <div className="col gap-4">
               <label className="card" style={{ padding: 18, cursor: "pointer", borderStyle: "dashed", background: "var(--paper)" }}>
-                <input type="file" accept=".pdf,.docx,.txt,.md" style={{ display: "none" }} onChange={e => setFile(e.target.files?.[0] || null)} />
+                <input type="file" accept=".pdf,.docx,.txt,.md" style={{ display: "none" }} onChange={e => { selectResumeFile(e.target.files?.[0]); e.currentTarget.value = ""; }} />
                 <div className="row gap-3">
                   <Icon name="upload" size={20} />
                   <div>
@@ -328,7 +362,9 @@ export function OnboardingWizard({ api, onFinish, onOpenSettings }: { api: ApiFe
                 </div>
               )}
               <div className="row gap-2" style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
-                <button className="btn" onClick={onOpenSettings}><Icon name="settings" size={13} /> Réglages avancés</button>
+                <button className="btn" onClick={onOpenSettings} title="Fermer ce guide et ouvrir les paramètres complets">
+                  <Icon name="settings" size={13} /> Réglages avancés
+                </button>
                 <button className="btn btn-accent" onClick={savePreferences} disabled={busy} style={{ minWidth: 170, justifyContent: "center" }}>
                   <Icon name="arrow-right" size={14} color="#fff" /> {busy ? "Enregistrement..." : "Continuer"}
                 </button>

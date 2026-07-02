@@ -11,9 +11,9 @@ uv run python -m pytest tests -q
 uv run ruff check .
 
 # Frontend
-npm run typecheck
-npm test
-npm run build
+pnpm typecheck
+pnpm test
+pnpm build
 
 # Desktop
 cd src-tauri
@@ -77,7 +77,7 @@ cargo check
 | WebSocket auth et evenements | `backend/tests/test_ws_auth.py` |
 | Store atomique et historique | `backend/tests/test_job_store_atomic.py`, `backend/tests/test_prune_history.py` |
 | Reglages persistants | `backend/tests/test_sqlite_settings.py`, `backend/tests/test_settings_validation.py` |
-| Composants UI | `npm test` |
+| Composants UI | `pnpm test` |
 
 ## Securite, packaging et runtime
 
@@ -94,8 +94,8 @@ cargo check
 Les resultats exacts doivent etre relances avant une release. La validation recente du fork a couvert :
 
 - tests backend cibles agregateur/connecteurs/mappers ;
-- `npm test` ;
-- `npm run typecheck` ;
-- `npm run build` ;
-- `npm run lint` sans erreur bloquante ;
+- `pnpm test` ;
+- `pnpm typecheck` ;
+- `pnpm build` ;
+- `pnpm lint` sans erreur bloquante ;
 - `cargo check` avec le linker macOS configure.

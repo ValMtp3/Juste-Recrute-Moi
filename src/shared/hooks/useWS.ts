@@ -4,12 +4,16 @@ import { invoke } from "@tauri-apps/api/core";
 import type { ConnSt, Lead, LogLine, OperationProgress } from "../../types";
 import type { WSMessage } from "../../api/types";
 import { emitAppEvent } from "../lib/appEvents";
+import { readJsonResponse } from "../lib/httpError";
 
 const READY_RETRY_MS = 180;
 const READY_ATTEMPTS = 60;
+const SIDECAR_STARTUP_DIAGNOSTIC_POLLS = 8;
 
 const delay = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms));
-const hasTauriEventBridge = () => typeof (window as any).__TAURI_INTERNALS__?.transformCallback === "function";
+const hasTauriEventBridge = () => (
+  typeof (window as Window & { __TAURI_INTERNALS__?: { transformCallback?: unknown } }).__TAURI_INTERNALS__?.transformCallback === "function"
+);
 
 const emptyProgress = (): OperationProgress => ({
   active: false,
@@ -19,6 +23,8 @@ const emptyProgress = (): OperationProgress => ({
   current: "",
   updatedAt: Date.now(),
 });
+
+type BackendStatus = { scanning?: boolean; reevaluating?: boolean };
 
 function firstNumber(value: string | undefined) {
   const match = String(value || "").match(/\b(\d+)\b/);
@@ -30,6 +36,36 @@ function prevTotalFromMessage(value: string | undefined) {
   return match ? Number(match[2]) : 0;
 }
 
+function readableWsError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed")) {
+    return "Backend local injoignable. Nouvelle tentative automatique.";
+  }
+  if (lower.includes("syntaxerror") || lower.includes("json")) {
+    return "Message temps réel ignoré : format inattendu.";
+  }
+  if (lower.includes("http 401") || lower.includes("http 403")) {
+    return "Synchronisation backend refusée. Le jeton local a peut-être changé.";
+  }
+  if (lower.startsWith("http ")) {
+    return "Statut backend indisponible. Nouvelle tentative automatique.";
+  }
+  return trimmed;
+}
+
+function sidecarStartupMessage(hasToken: boolean, hasPort: boolean) {
+  const missing = [
+    hasPort ? "" : "port backend",
+    hasToken ? "" : "jeton API local",
+  ].filter(Boolean).join(" et ");
+  return missing
+    ? `Backend local en démarrage : ${missing} non reçu. Nouvelle tentative automatique.`
+    : "Backend local en démarrage. Nouvelle tentative automatique.";
+}
+
 export function nextProgressFromAgentEvent(
   previous: OperationProgress,
   event: string | undefined,
@@ -38,6 +74,15 @@ export function nextProgressFromAgentEvent(
 ): OperationProgress {
   if (event === "eval_start") {
     return { active: true, mode: "scan", total: firstNumber(message), completed: 0, current: "", updatedAt: now };
+  }
+  if (event === "scan_progress") {
+    // The backend sends current, total and target directly in the event, but we don't have access to the raw payload here.
+    // However, the message contains: "Exploration de {target} ({current}/{total})..."
+    // We can parse it or change the method signature, but since the frontend expects `message`, we'll parse it like `reeval_scored`.
+    const match = String(message || "").match(/\((\d+)\/(\d+)\)/);
+    const completed = match ? Number(match[1]) : previous.completed;
+    const total = match ? Number(match[2]) : previous.total;
+    return { active: true, mode: "scan", total, completed, current: message ?? "", updatedAt: now };
   }
   if (event === "eval_scored") {
     return { active: true, mode: "scan", total: previous.total, completed: previous.completed + 1, current: message ?? "", updatedAt: now };
@@ -61,7 +106,19 @@ export function nextProgressFromAgentEvent(
   return previous;
 }
 
-export const __wsTest = { emptyProgress, firstNumber, prevTotalFromMessage };
+export const __wsTest = { emptyProgress, firstNumber, prevTotalFromMessage, readableWsError, sidecarStartupMessage };
+
+async function fetchBackendStatus(port: number, token: string): Promise<BackendStatus> {
+  const response = await fetch(`http://127.0.0.1:${port}/api/v1/status`, {
+    cache: "no-store",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await readJsonResponse<BackendStatus>(
+    response,
+    "Statut backend illisible. Nouvelle tentative automatique.",
+  );
+}
 
 async function waitForBackendReady(port: number, isCurrent: () => boolean) {
   for (let attempt = 0; attempt < READY_ATTEMPTS; attempt += 1) {
@@ -127,18 +184,13 @@ export function useWS() {
     wsRef.current = ws;
     wsEndpointRef.current = endpoint;
     const reconcileBackendStatus = () => {
-      fetch(`http://127.0.0.1:${p}/api/v1/status`, {
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then(response => response.ok ? response.json() : Promise.reject(new Error(`HTTP ${response.status}`)))
+      fetchBackendStatus(p, token)
         .then(status => {
           if (!status?.scanning && !status?.reevaluating) setProgress(emptyProgress());
           emitAppEvent("backend-status", status);
         })
         .catch(error => {
-          const msg = error instanceof Error ? error.message : String(error);
-            addLog(`Échec de synchronisation du statut : ${msg}`, "system", "ws");
+          addLog(`Échec de synchronisation du statut : ${readableWsError(error, "Statut backend indisponible.")}`, "system", "ws");
         });
     };
     ws.onopen    = () => {
@@ -192,7 +244,7 @@ export function useWS() {
       } catch (err) {
         const preview = typeof e.data === "string" ? e.data.slice(0, 200) : "";
         console.warn("[WS] Message impossible à analyser :", err, preview);
-        addLog(`Erreur d'analyse du message : ${err}`, "system", "ws");
+        addLog(readableWsError(err, "Message temps réel ignoré : format inattendu."), "system", "ws");
       }
     };
     ws.onclose = () => {
@@ -231,6 +283,7 @@ export function useWS() {
       let backendReady = false;
       let pendingEndpoint = "";
       let publishedEndpoint = "";
+      let sidecarProbeFailures = 0;
       const publishReadyBackend = async (p: number, t: string) => {
         const endpoint = `${p}:${t}`;
         if (backendReady && publishedEndpoint === endpoint) return;
@@ -263,17 +316,31 @@ export function useWS() {
         if (token && currentPort) void publishReadyBackend(currentPort, token);
       };
       const syncSidecar = async () => {
+        let reportedSidecarError = "";
         try {
           const err = await invoke<string>("get_sidecar_error");
-          setSidecarError(err);
+          reportedSidecarError = err || "";
+          setSidecarError(reportedSidecarError || null);
         } catch { /* no sidecar error */ }
+        let hasToken = Boolean(token);
         try {
           token = await invoke<string>("get_api_token");
+          hasToken = true;
         } catch { /* not ready */ }
+        let hasPort = Boolean(currentPort);
         try {
           const p = await invoke<number>("get_sidecar_port");
           currentPort = p;
+          hasPort = Boolean(p);
         } catch { /* not ready */ }
+        if (hasToken && hasPort) {
+          sidecarProbeFailures = 0;
+        } else {
+          sidecarProbeFailures += 1;
+          if (sidecarProbeFailures >= SIDECAR_STARTUP_DIAGNOSTIC_POLLS && !reportedSidecarError) {
+            setSidecarError(sidecarStartupMessage(hasToken, hasPort));
+          }
+        }
         maybePublish();
       };
       await syncSidecar();
@@ -322,8 +389,7 @@ export function useWS() {
         const prevUnlisten = unlisten;
         unlisten = () => { prevUnlisten?.(); unlistenToken(); unlistenError(); unlistenTerminated(); };
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        addLog(`Bridge d'événements desktop indisponible ; polling actif : ${message}`, "system", "sidecar");
+        addLog(`Bridge d'événements desktop indisponible ; polling actif. ${readableWsError(error, "Le polling reste actif.")}`, "system", "sidecar");
       }
     })();
     return () => {
@@ -339,7 +405,7 @@ export function useWS() {
       if (wsRef.current) wsRef.current.onclose = null;
       wsRef.current?.close();
     };
-  }, [connect]);
+  }, [addLog, connect]);
 
   return { conn, port, apiToken, sidecarError, logs, beat, addLog, progress };
 }

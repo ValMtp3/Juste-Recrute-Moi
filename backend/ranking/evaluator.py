@@ -292,7 +292,37 @@ def _off_field_prefilter(baseline: dict, settings: dict | None) -> bool:
     the prefilter_off_field setting."""
     if str((settings or {}).get("prefilter_off_field", "true")).strip().lower() in ("0", "false", "no", "off"):
         return False
-    return any(str(gap).startswith("wrong-field cap") for gap in (baseline.get("gaps") or []))
+    score = int(baseline.get("score") or 0)
+    applied_cap = baseline.get("applied_cap")
+    return (
+        score <= 15
+        and int(applied_cap or 0) <= 15
+        and any(str(gap).startswith("wrong-field cap") for gap in (baseline.get("gaps") or []))
+    )
+
+
+def _llm_scan_mode(settings: dict | None) -> str:
+    mode = str((settings or {}).get("llm_scan_mode") or "balanced").strip().lower()
+    return mode if mode in {"lean", "balanced", "thorough"} else "balanced"
+
+
+def _second_pass_allowed(baseline: dict, settings: dict | None) -> tuple[bool, str]:
+    """Budget gate for the full evaluator pass.
+
+    The deterministic baseline is always computed first. The LLM only runs when
+    the lead is promising enough for the selected scan mode.
+    """
+    mode = _llm_scan_mode(settings)
+    score = int(baseline.get("score") or 0)
+    applied_cap = baseline.get("applied_cap")
+    cap = int(applied_cap) if isinstance(applied_cap, (int, float)) else None
+
+    if mode == "thorough":
+        return True, mode
+    if mode == "lean" and cap is not None and cap <= 38:
+        return False, mode
+    threshold = 60 if mode == "lean" else 0
+    return score >= threshold, mode
 
 
 def score(jd: str, candidate_data: dict, settings: dict | None = None) -> dict:
@@ -305,25 +335,39 @@ def score(jd: str, candidate_data: dict, settings: dict | None = None) -> dict:
     baseline = score_job_lead(jd, candidate_data).as_dict()
     if not _evaluator_llm_requested(settings):
         baseline["scored_by"] = "deterministic"
+        baseline["llm_scan_mode"] = _llm_scan_mode(settings)
         return baseline
     # Token-saving relevance gate: don't run the LLM on leads the cheap pass has
     # already ruled off-field — they can't score above 15 no matter what it says.
     if _off_field_prefilter(baseline, settings):
         baseline["scored_by"] = "prefiltered_off_field"
+        baseline["llm_scan_mode"] = _llm_scan_mode(settings)
         baseline["reason"] = (
             "Off-field for your profile — skipped the full AI evaluation to save tokens. "
             + str(baseline.get("reason") or "")
         ).strip()
         return baseline
+    allowed, scan_mode = _second_pass_allowed(baseline, settings)
+    if not allowed:
+        baseline["scored_by"] = "deterministic_triage"
+        baseline["llm_scan_mode"] = scan_mode
+        baseline["reason"] = (
+            f"Baseline {baseline.get('score', 0)}/100 below the {scan_mode} full-AI review threshold. "
+            + str(baseline.get("reason") or "")
+        ).strip()[:500]
+        return baseline
     preferences = str((settings or {}).get("job_preferences") or "").strip()
     try:
         result = _score_with_llm(jd, candidate_data, baseline, preferences)
         result["scored_by"] = "llm"
+        result["llm_scan_mode"] = scan_mode
         return result
     except Exception as exc:
         _log.warning("LLM evaluator failed, using deterministic fallback: %s", exc)
         record_error("llm_evaluator_failed", str(exc), "ranking.evaluator")
         baseline["scored_by"] = "deterministic_fallback"
+        baseline["llm_scan_mode"] = scan_mode
+        baseline["fallback_error"] = str(exc)
         return baseline
 
 
