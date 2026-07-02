@@ -41,12 +41,16 @@ describe("FIX.md frontend stability contracts", () => {
     expect(app).toContain("Un ancien backend semble encore ouvert");
     expect(app).toContain("Backend local injoignable");
     expect(app).toContain("useDueFollowups(api, wsAddLog)");
+    expect(app).toContain("profileHasContent");
+    expect(app).toContain("onboardingAutoCheckDone");
     expect(app).not.toContain("function responseDetail");
     expect(subsystemHealth).toContain("/api/v1/health/subsystems");
     expect(subsystemHealth).toContain("readJsonResponse<SubsystemHealth>");
     expect(subsystemHealth).toContain("responseErrorMessage");
     expect(subsystemHealth).toContain("Backend local injoignable");
     expect(subsystemHealth).toContain("format illisible");
+    expect(subsystemHealth).toContain("isDocumentVisible");
+    expect(subsystemHealth).toContain("visibilitychange");
     expect(subsystemHealth).not.toContain("const payload = await response.json()");
   });
 

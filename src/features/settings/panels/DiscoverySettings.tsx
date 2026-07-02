@@ -26,6 +26,8 @@ function configuredSourceTargets(raw: string) {
 function sourceKind(target: string) {
   const lower = target.toLowerCase();
   if (lower.startsWith("france_travail:")) return "France Travail";
+  if (lower.startsWith("wttj:") || lower.startsWith("apec:")) return "Jobboards directs";
+  if (lower.startsWith("adzuna:") || lower.startsWith("jooble:")) return "Agrégateurs";
   if (lower.startsWith("http://") || lower.startsWith("https://")) return "Flux web/API";
   if (lower.startsWith("site:") || lower.startsWith("ats:")) return "Sites et ATS";
   if (lower.startsWith("github:") || lower.startsWith("hn:") || lower.startsWith("reddit:") || lower === "hn-hiring") return "Communautés";
@@ -79,7 +81,7 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
     const value = raw.trim().replace(/,$/, "");
     if (!value) return "";
     const lower = value.toLowerCase();
-    if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|france_travail:|jobspy:|import:|https?:\/\/)/i.test(value)) {
+    if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|france_travail:|wttj:|apec:|adzuna:|jooble:|jobspy:|import:|https?:\/\/)/i.test(value)) {
       if (isKnownAtsHost(lower)) {
         return value;
       }
@@ -111,14 +113,30 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
           <div style={{ borderTop: "1px dashed var(--line)", paddingTop: 18 }}>
             <SectionLabel label="Sources et découverte" />
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <LabelledField label="Postes ou intitulés ciblés" hint="facultatif ; le graphe profil reste prioritaire">
-                <textarea value={cfg.desired_position || cfg.onboarding_target_role || ""} onChange={e => {
-                  onChange("desired_position", e.target.value);
-                  onChange("onboarding_target_role", e.target.value);
-                }} rows={3} className="mono field-input"
-                  placeholder={"Développeur backend\nChef de projet digital\nCommercial B2B"}
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
-              </LabelledField>
+              <div style={{ padding: 13, borderRadius: 13, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 10 }}>
+                <SectionLabel label="Recherche ciblée" sub="poste, localisation et rayon utilisés par les sources compatibles" />
+                <LabelledField label="Postes ou intitulés ciblés" hint="facultatif ; le graphe profil reste prioritaire">
+                  <textarea value={cfg.desired_position || cfg.onboarding_target_role || ""} onChange={e => {
+                    onChange("desired_position", e.target.value);
+                    onChange("onboarding_target_role", e.target.value);
+                  }} rows={3} className="mono field-input"
+                    placeholder={"Développeur backend\nChef de projet digital\nCommercial B2B"}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 11.5, resize: "vertical", lineHeight: 1.6 }} />
+                </LabelledField>
+                <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(120px, 180px)", gap: 10 }}>
+                  <LabelledField label="Localisation cible" hint="vide = CV ou marché choisi">
+                    <input type="text" placeholder="Paris, Lyon, Montpellier..." value={cfg.job_location} onChange={set("job_location")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                  <LabelledField label="Rayon" hint="km, 0-100">
+                    <input type="number" min={0} max={100} value={cfg.job_search_radius_km} onChange={set("job_search_radius_km")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 10px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                </div>
+                <div style={{ fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.45 }}>
+                  Le rayon est transmis aux sources qui le supportent, notamment France Travail. Les autres sources utilisent la localisation comme signal de requête et de filtrage.
+                </div>
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <LabelledField label="Token Apify" hint="optionnel, pour scraping LinkedIn/X">
                   <SecretInput placeholder="apify_api_***" value={cfg.apify_token} onChange={v => onChange("apify_token", v)} api={api} secretKey="apify_token" />
@@ -420,9 +438,13 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
                       { label: "LinkedIn", url: "site:linkedin.com/jobs" },
                       { label: "Indeed", url: "site:indeed.com/jobs" },
                       { label: "France Travail", url: "france_travail:developpeur;lieu=France;range=0-49" },
-                      { label: "WTTJ", url: "site:welcometothejungle.com/fr/jobs France" },
+                      { label: "WTTJ RSS", url: "wttj:query=developpeur&aroundQuery=France" },
+                      { label: "APEC direct", url: "apec:developpeur;location=France" },
+                      { label: "Adzuna FR", url: "adzuna:developpeur;location=France;results=50" },
+                      { label: "Jooble FR", url: "jooble:developpeur;location=France" },
+                      { label: "WTTJ web", url: "site:welcometothejungle.com/fr/jobs France" },
                       { label: "HelloWork", url: "site:hellowork.com/fr-fr/emplois France" },
-                      { label: "Apec", url: "site:apec.fr/candidat/recherche-emploi.html/emploi France" },
+                      { label: "APEC web", url: "site:apec.fr/candidat/recherche-emploi.html/emploi France" },
                       { label: "Cadremploi", url: "site:cadremploi.fr/emploi France" },
                       { label: "Meteojob", url: "site:meteojob.com/jobs France" },
                       { label: "LesJeudis", url: "site:lesjeudis.com/jobs France" },

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from time import monotonic
 from typing import Any
@@ -25,6 +26,7 @@ _TOKEN_CACHE: dict[str, Any] = {}
 _SEARCH_CACHE: dict[str, tuple[float, list[dict]]] = {}
 _CACHE_TTL_SECONDS = 600
 _ERROR_EXCERPT_LEN = 220
+_log = logging.getLogger(__name__)
 
 
 def _response_excerpt(response: httpx.Response) -> str:
@@ -144,10 +146,7 @@ def _search_params(target: str) -> dict[str, str]:
         default_range = "0-149"
 
     target_range = parsed.get("range")
-    if not target_range or target_range == "0-49":
-        range_val = default_range
-    else:
-        range_val = target_range
+    range_val = default_range if not target_range or target_range == "0-49" else target_range
 
     params = {
         "motsCles": parsed.get("motsCles") or parsed.get("q") or parsed.get("query") or "developpeur",
@@ -250,6 +249,11 @@ async def scrape_target(target: str) -> list[dict]:
         fallback = _fallback_search_params(params)
         if exc.response.status_code != 400 or fallback == params:
             raise
+        if "rayon" in params and "rayon" not in fallback:
+            _log.warning(
+                "France Travail a rejeté le filtre rayon=%s ; nouvel essai sans rayon",
+                params["rayon"],
+            )
         payload = await _json_search(fallback)
         cache_key = repr(sorted(fallback.items()))
     rows = payload.get("resultats") if isinstance(payload, dict) else []
