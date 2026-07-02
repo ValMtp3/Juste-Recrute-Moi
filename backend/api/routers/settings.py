@@ -5,7 +5,7 @@ import os
 import time
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 
 from api.dependencies import get_repository
 from api.scheduler import ensure_ghost_job
@@ -17,6 +17,7 @@ from data.repository import Repository
 
 MASK = "__JHM_SECRET_SET__"
 _log = get_logger(__name__)
+MAX_BACKUP_UPLOAD_SIZE = 512 * 1024 * 1024
 LEGACY_BULLET_MASK = "\u2022" * 20
 LEGACY_MOJIBAKE_BULLET_MASK = "\u00e2\u20ac\u00a2" * 20
 LEGACY_DOUBLE_ENCODED_BULLET_MASK = "\u00c3\u00a2\u00e2\u201a\u00ac\u00c2\u00a2" * 20
@@ -221,6 +222,22 @@ def _rebuild_vector_tables() -> dict:
     return summary
 
 
+async def _read_backup_upload(file: UploadFile, max_bytes: int = MAX_BACKUP_UPLOAD_SIZE) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(status_code=413, detail="Sauvegarde trop volumineuse")
+        chunks.append(chunk)
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Sauvegarde vide ou illisible")
+    return b"".join(chunks)
+
+
 async def validate_provider_settings(repo: Repository, incoming: dict | None = None) -> dict:
     from llm import _KEY_NAMES, _OPENAI_COMPAT_BASE_URLS
 
@@ -404,6 +421,63 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
             from llm.client import reset_client_cache
 
             await asyncio.to_thread(reset_client_cache)
+        return {"ok": True, "summary": summary}
+
+    @router.get("/data/export")
+    async def export_data():
+        """Download a complete local backup: settings/secrets, profile, leads,
+        scores, follow-up state, generated documents, graph, and vector files."""
+        from data.backup import export_app_data_backup
+
+        content, filename, summary = await asyncio.to_thread(export_app_data_backup)
+        _log.info(
+            "data export created: files=%s bytes=%s warnings=%s",
+            summary.get("files_exported"),
+            summary.get("bytes_exported"),
+            len(summary.get("warnings") or []),
+        )
+        return Response(
+            content,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
+
+    @router.post("/data/import")
+    async def import_data(
+        confirm: str = Form(...),
+        file: UploadFile = File(...),
+    ):
+        """Replace the current local data directory with a previously exported
+        archive. Requires confirm=IMPORT because this overwrites local state."""
+        if confirm.strip().upper() != "IMPORT":
+            raise HTTPException(status_code=422, detail="Tapez IMPORT pour confirmer la restauration.")
+        filename = (file.filename or "").lower()
+        if not filename.endswith(".zip"):
+            raise HTTPException(status_code=400, detail="Une archive .zip exportée par Juste Recrute Moi est attendue.")
+
+        from data.backup import import_app_data_backup
+
+        content = await _read_backup_upload(file)
+        try:
+            summary = await asyncio.to_thread(import_app_data_backup, content)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            _log.exception("data import failed")
+            raise HTTPException(status_code=500, detail="La restauration de la sauvegarde a échoué.") from exc
+
+        from llm.client import reset_client_cache
+
+        await asyncio.to_thread(reset_client_cache)
+        _log.info(
+            "data import restored: files=%s bytes=%s errors=%s",
+            summary.get("files_restored"),
+            summary.get("bytes_restored"),
+            len(summary.get("errors") or []),
+        )
         return {"ok": True, "summary": summary}
 
     @router.post("/vectors/rebuild")

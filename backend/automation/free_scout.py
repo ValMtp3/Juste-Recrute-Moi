@@ -38,7 +38,9 @@ from discovery.sources.france_travail import scrape_target as _source_scrape_fra
 from discovery.sources.jobspy import scrape_target as _source_scrape_jobspy
 from discovery.sources.reddit import scrape_reddit as _source_scrape_reddit
 from discovery.sources.url_import import scrape_target as _source_scrape_url_import
+from discovery.sources.adzuna import _env_client as _source_adzuna_env_client
 from discovery.sources.adzuna import scrape_target as _source_scrape_adzuna
+from discovery.sources.jooble import _env_client as _source_jooble_env_client
 from discovery.sources.jooble import scrape_target as _source_scrape_jooble
 from discovery.sources.wttj_rss import scrape_target as _source_scrape_wttj
 from discovery.sources.apec import scrape_target as _source_scrape_apec
@@ -135,6 +137,18 @@ def _source_error_detail(exc: Exception) -> str:
     if "timed out" in str(exc).lower() or "timeout" in type(exc).__name__.lower():
         return "délai de requête dépassé"
     return str(exc).strip() or type(exc).__name__
+
+
+def _empty_source_hint(target: str) -> str:
+    lower = str(target or "").strip().lower()
+    if lower.startswith("adzuna:"):
+        app_id, api_key = _source_adzuna_env_client()
+        if not app_id or not api_key:
+            return "Adzuna ignoré : renseignez adzuna_app_id et adzuna_api_key pour activer cet agrégateur."
+    if lower.startswith("jooble:"):
+        if not _source_jooble_env_client():
+            return "Jooble ignoré : renseignez jooble_api_key pour activer cet agrégateur."
+    return ""
 
 
 async def _scrape_custom_connector(
@@ -349,6 +363,7 @@ def run(
         "duplicates": 0,
         "filtered": 0,
         "missing_url": 0,
+        "empty": 0,
         "errors": 0,
         "by_source": {},
     }
@@ -360,6 +375,7 @@ def run(
 
     leads: list[dict] = []
     seen: set[str] = set()
+    empty_hints_seen: set[str] = set()
 
     for i, target in enumerate(all_targets[:cap]):
         if progress_callback:
@@ -369,6 +385,12 @@ def run(
             usage["executed"] += 1
             usage["candidates"] += len(batch)
             usage["by_source"][target] = len(batch)
+            if not batch:
+                usage["empty"] += 1
+                hint = _empty_source_hint(target)
+                if hint and hint not in empty_hints_seen:
+                    empty_hints_seen.add(hint)
+                    errors.append(hint)
         except Exception as exc:
             logging.getLogger(__name__).warning("Source gratuite ignorée %s : %s", target, _source_error_detail(exc))
             usage["errors"] += 1
@@ -397,6 +419,11 @@ def run(
                         break
 
         for item in batch:
+            meta = dict(item.get("source_meta") or {})
+            meta.setdefault("target", target)
+            if target_loc:
+                meta.setdefault("target_location", target_loc)
+            item["source_meta"] = meta
             if wanted and item.get("kind") != wanted:
                 usage["filtered"] += 1
                 continue
@@ -461,6 +488,8 @@ def run(
             name = str(connector.get("name") or connector.get("url") or "custom")
             usage["candidates"] += len(batch)
             usage["by_source"][name] = len(batch)
+            if not batch:
+                usage["empty"] += 1
         except Exception as exc:
             logging.getLogger(__name__).warning('suppressed exception in backend/automation/free_scout.py:run: %s', exc)
             usage["errors"] += 1

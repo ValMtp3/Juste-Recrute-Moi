@@ -40,7 +40,7 @@ class DiscoveryService:
 
         leads: list[dict] = []
         errors: list[str] = []
-        usage: dict = {"configured": len(urls), "executed": 0, "candidates": 0, "saved": 0, "duplicates": 0, "filtered": 0, "missing_url": 0, "errors": 0, "by_source": {}}
+        usage: dict = {"configured": len(urls), "executed": 0, "candidates": 0, "saved": 0, "duplicates": 0, "filtered": 0, "missing_url": 0, "empty": 0, "errors": 0, "by_source": {}}
 
         if free_targets:
             free_result = await asyncio.to_thread(
@@ -160,14 +160,14 @@ def _filter_free_targets_for_market(raw_targets: str, market_focus: str) -> str:
 
 def _is_direct_free_target(target: str) -> bool:
     lower = str(target or "").strip().lower()
-    return lower.startswith(("france_travail:", "jobspy:", "import:", "ats:"))
+    return lower.startswith(("france_travail:", "jobspy:", "adzuna:", "jooble:", "wttj:", "apec:", "import:", "ats:"))
 
 
 def _merge_usage(out: dict, incoming: dict | None, *, configured: int) -> None:
     incoming = incoming or {}
     out["configured"] = int(out.get("configured") or 0)
     out["executed"] = int(out.get("executed") or 0) + int(incoming.get("executed") or incoming.get("targets") or configured or 0)
-    for key in ("candidates", "saved", "duplicates", "filtered", "missing_url", "errors"):
+    for key in ("candidates", "saved", "duplicates", "filtered", "missing_url", "empty", "errors"):
         out[key] = int(out.get(key) or 0) + int(incoming.get(key) or 0)
     by_source = out.setdefault("by_source", {})
     for key, value in (incoming.get("by_source") or {}).items():

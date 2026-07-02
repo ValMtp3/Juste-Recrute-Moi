@@ -4,6 +4,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from urllib.parse import urlencode
 
 
 DEFAULT_JOB_TARGETS = [
@@ -40,8 +41,15 @@ INDIA_JOB_TARGETS = [
     "site:apply.workable.com India",
 ]
 
-FRANCE_JOB_TARGETS = [
+FRANCE_DIRECT_SOURCE_TARGETS = [
     "france_travail:developpeur;lieu=France;range=0-49",
+    "wttj:query=developpeur&aroundQuery=France",
+    "apec:developpeur;location=France",
+    "adzuna:developpeur;location=France;results=50",
+    "jooble:developpeur;location=France",
+]
+
+FRANCE_SITE_TARGETS = [
     "site:hellowork.com/fr-fr/emplois France",
     "site:cadremploi.fr/emploi France",
     "site:meteojob.com/jobs France",
@@ -58,11 +66,9 @@ FRANCE_JOB_TARGETS = [
     "site:jobs.lever.co France",
     "site:jobs.ashbyhq.com France",
     "site:apply.workable.com France",
-    "adzuna:developpeur;location=France;results=50",
-    "jooble:developpeur;location=France",
-    "wttj:query=developpeur&aroundQuery=France",
-    "apec:developpeur",
 ]
+
+FRANCE_JOB_TARGETS = [*FRANCE_DIRECT_SOURCE_TARGETS, *FRANCE_SITE_TARGETS]
 
 GENERIC_FRANCE_TRAVAIL_ROLES = {
     "developpeur",
@@ -187,6 +193,12 @@ def _clean_france_travail_value(value: str, fallback: str) -> str:
     return cleaned or fallback
 
 
+def _clean_target_value(value: str, fallback: str) -> str:
+    cleaned = re.sub(r"[;|=]+", " ", str(value or "")).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned or fallback
+
+
 def _is_generic_france_travail_target(target: str) -> bool:
     lower = str(target or "").strip().lower()
     if not lower.startswith("france_travail:"):
@@ -205,6 +217,24 @@ def _is_generic_france_travail_target(target: str) -> bool:
     return role in GENERIC_FRANCE_TRAVAIL_ROLES and location in {"", "france"} and not has_specific_filter
 
 
+def _france_direct_prefix(target: str) -> str:
+    lower = str(target or "").strip().lower()
+    for prefix in ("france_travail", "wttj", "apec", "adzuna", "jooble"):
+        if lower.startswith(f"{prefix}:"):
+            return prefix
+    return ""
+
+
+def _is_generic_france_direct_target(target: str) -> bool:
+    prefix = _france_direct_prefix(target)
+    if not prefix:
+        return False
+    if prefix == "france_travail":
+        return _is_generic_france_travail_target(target)
+    lower = str(target or "").strip().lower()
+    return any(role in lower for role in GENERIC_FRANCE_TRAVAIL_ROLES) and "france" in lower
+
+
 def _norm_token(value: str) -> str:
     return re.sub(r"[^\w%]+", " ", str(value or "").lower(), flags=re.UNICODE).strip()
 
@@ -215,6 +245,47 @@ def _canonical_france_location(value: str) -> str:
     if key in FRANCE_LOCATION_HINTS:
         return " ".join(part.capitalize() for part in cleaned.split())
     return cleaned
+
+
+def _is_country_wide_france_location(value: str) -> bool:
+    return _norm_token(value) in {"", "france"}
+
+
+def _normalize_radius_km(value, default: str = "") -> str:
+    text = str(value or "").strip()
+    if not text:
+        return default
+    try:
+        radius = int(float(text.replace(",", ".")))
+    except (TypeError, ValueError):
+        return default
+    return str(max(0, min(radius, 100)))
+
+
+def _secondary_france_role_variant(role: str) -> str:
+    cleaned = _clean_target_value(role, "")
+    words = [word for word in re.split(r"\s+", cleaned) if word]
+    if len(words) < 2:
+        return ""
+    first = _norm_token(words[0])
+    if first in {"chef"} and len(words) >= 3 and _norm_token(words[1]) == "de":
+        return " ".join(words[:3])
+    if first in {
+        "developpeur",
+        "développeur",
+        "developer",
+        "ingenieur",
+        "ingénieur",
+        "commercial",
+        "designer",
+        "product",
+        "data",
+        "devops",
+    }:
+        return words[0]
+    if len(words) >= 3:
+        return " ".join(words[:2])
+    return ""
 
 
 def _extract_contract(chunks: list[str]) -> tuple[str, list[str]]:
@@ -283,7 +354,11 @@ def parse_search_intent(parts: list[str], fallback_location: str = "France") -> 
     return SearchIntent(role=role, location=location, contract=contract, remote=remote)
 
 
-def france_travail_target_from_plain(parts: list[str], fallback_location: str = "France") -> str | None:
+def france_travail_target_from_plain(
+    parts: list[str],
+    fallback_location: str = "France",
+    radius_km: str = "",
+) -> str | None:
     """Convert simple France search text like "data, paris" into an API target."""
     intent = parse_search_intent(parts, fallback_location)
     if not intent:
@@ -291,6 +366,11 @@ def france_travail_target_from_plain(parts: list[str], fallback_location: str = 
     query = _clean_france_travail_value(intent.role, "developpeur")
     location = _clean_france_travail_value(intent.location, "France")
     suffix = ""
+    radius = _normalize_radius_km(radius_km)
+    if radius and not _is_country_wide_france_location(location):
+        suffix += f";rayon={radius}"
+    if intent.remote:
+        suffix += ";teletravail=1"
     if intent.contract:
         suffix += f";typeContrat={intent.contract}"
     location = _clean_france_travail_value(location, "France")
@@ -311,12 +391,86 @@ def is_hn_target(target: str) -> bool:
     return lower.startswith("hn:") or "hn-hiring" in lower or "hackernews" in lower or "news.ycombinator.com" in lower
 
 
-def _france_targets_from_intent(search_text: str, fallback_location: str = "France") -> list[str]:
-    target = france_travail_target_from_plain([search_text], fallback_location) if str(search_text or "").strip() else None
-    if target:
-        return [target, *FRANCE_JOB_TARGETS[1:]]
+def _france_direct_targets(
+    role: str,
+    location: str,
+    *,
+    radius_km: str = "",
+    contract: str = "",
+    remote: bool = False,
+    include_france_travail: bool = True,
+) -> list[str]:
+    query = _clean_target_value(role, "developpeur")
+    location = _canonical_france_location(location or "France")
+    suffix = ""
+    radius = _normalize_radius_km(radius_km)
+    if radius and not _is_country_wide_france_location(location):
+        suffix += f";rayon={radius}"
+    if remote:
+        suffix += ";teletravail=1"
+    if contract:
+        suffix += f";typeContrat={contract}"
+    wttj_query = urlencode({"query": query, "aroundQuery": location})
+    targets = [
+        f"france_travail:{query};lieu={_clean_france_travail_value(location, 'France')};range=0-49{suffix}",
+        f"wttj:{wttj_query}",
+        f"apec:{query};location={location}",
+        f"adzuna:{query};location={location};results=50",
+        f"jooble:{query};location={location}",
+    ]
+    return targets if include_france_travail else targets[1:]
+
+
+def _france_direct_targets_for_intent(
+    role: str,
+    location: str,
+    *,
+    radius_km: str = "",
+    contract: str = "",
+    remote: bool = False,
+) -> list[str]:
+    targets = _france_direct_targets(
+        role,
+        location,
+        radius_km=radius_km,
+        contract=contract,
+        remote=remote,
+    )
+    broader_role = _secondary_france_role_variant(role)
+    if broader_role and _norm_token(broader_role) != _norm_token(role):
+        targets.extend(_france_direct_targets(
+            broader_role,
+            location,
+            radius_km=radius_km,
+            contract=contract,
+            remote=remote,
+            include_france_travail=False,
+        ))
+    return dedupe_targets(targets)
+
+
+def _france_targets_from_intent(
+    search_text: str,
+    fallback_location: str = "France",
+    radius_km: str = "",
+) -> list[str]:
+    intent = parse_search_intent([search_text], fallback_location) if str(search_text or "").strip() else None
+    if intent:
+        return [
+            *_france_direct_targets_for_intent(
+                intent.role,
+                intent.location,
+                radius_km=radius_km,
+                contract=intent.contract,
+                remote=intent.remote,
+            ),
+            *FRANCE_SITE_TARGETS,
+        ]
     if fallback_location and fallback_location.lower() != "france":
-        return [f"france_travail:developpeur;lieu={_clean_france_travail_value(fallback_location, 'France')};range=0-49", *FRANCE_JOB_TARGETS[1:]]
+        return [
+            *_france_direct_targets("developpeur", fallback_location, radius_km=radius_km),
+            *FRANCE_SITE_TARGETS,
+        ]
     return list(FRANCE_JOB_TARGETS)
 
 
@@ -326,6 +480,7 @@ def job_targets(
     *,
     search_text: str = "",
     location: str = "",
+    radius_km: str = "",
 ) -> list[str]:
     focus = job_market_focus(market_focus)
     targets = split_configured_targets(raw)
@@ -333,19 +488,37 @@ def job_targets(
         if focus == "india":
             return list(INDIA_JOB_TARGETS)
         if focus == "france":
-            return _france_targets_from_intent(search_text, location or "France")
+            return _france_targets_from_intent(search_text, location or "France", radius_km)
         return list(DEFAULT_JOB_TARGETS)
 
     if focus == "france":
-        plain_france_target = france_travail_target_from_plain(targets, location or "France")
+        plain_france_target = france_travail_target_from_plain(targets, location or "France", radius_km)
         if plain_france_target:
-            targets = [plain_france_target, *FRANCE_JOB_TARGETS[1:]]
-        elif str(search_text or "").strip() and any(_is_generic_france_travail_target(target) for target in targets):
-            profile_france_targets = _france_targets_from_intent(search_text, location or "France")
-            profile_france_target = profile_france_targets[0] if profile_france_targets else ""
-            if profile_france_target:
+            intent = parse_search_intent(targets, location or "France")
+            if intent:
                 targets = [
-                    profile_france_target if _is_generic_france_travail_target(target) else target
+                    *_france_direct_targets_for_intent(
+                        intent.role,
+                        intent.location,
+                        radius_km=radius_km,
+                        contract=intent.contract,
+                        remote=intent.remote,
+                    ),
+                    *FRANCE_SITE_TARGETS,
+                ]
+            else:
+                targets = [plain_france_target, *FRANCE_JOB_TARGETS[1:]]
+        elif str(search_text or "").strip() and any(_is_generic_france_travail_target(target) for target in targets):
+            profile_france_targets = _france_targets_from_intent(search_text, location or "France", radius_km)
+            direct_replacements = {
+                _france_direct_prefix(target): target
+                for target in profile_france_targets[:len(FRANCE_DIRECT_SOURCE_TARGETS)]
+                if _france_direct_prefix(target)
+            }
+            if direct_replacements:
+                targets = [
+                    direct_replacements.get(_france_direct_prefix(target), target)
+                    if _is_generic_france_direct_target(target) else target
                     for target in targets
                 ]
 
@@ -402,11 +575,14 @@ def job_targets(
             "reims",
             "dijon",
             "welcometothejungle",
+            "wttj",
             "hellowork",
             "apec",
             "cadremploi",
             "meteojob",
             "lesjeudis",
+            "adzuna",
+            "jooble",
             "linkedin",
             "indeed",
             "smartrecruiters",
@@ -458,6 +634,14 @@ def discovery_location(cfg: dict | None, profile: dict | None = None) -> str:
     return ""
 
 
+def discovery_radius_km(cfg: dict | None) -> str:
+    cfg = cfg or {}
+    for key in ("job_search_radius_km", "job_radius_km", "target_radius_km", "radius_km"):
+        if key in cfg:
+            return _normalize_radius_km(cfg.get(key), default="")
+    return "25"
+
+
 def remote_preference(cfg: dict | None) -> str:
     """One of: remote, hybrid, onsite, any (default any)."""
     value = str((cfg or {}).get("remote_preference") or "").strip().lower()
@@ -481,6 +665,7 @@ def profile_for_discovery(profile: dict | None, cfg: dict) -> dict:
     # Carry resolved location + remote preference so the query planner can target
     # the user's region without every caller threading extra args.
     profile["_discovery_location"] = intent.location if intent else base_location
+    profile["_discovery_radius_km"] = discovery_radius_km(cfg)
     profile["_remote_preference"] = "remote" if intent and intent.remote else remote_preference(cfg)
     if intent and intent.contract:
         profile["_discovery_contract"] = intent.contract
