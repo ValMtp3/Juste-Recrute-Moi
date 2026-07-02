@@ -146,10 +146,7 @@ def _search_params(target: str) -> dict[str, str]:
         default_range = "0-149"
 
     target_range = parsed.get("range")
-    if not target_range or target_range == "0-49":
-        range_val = default_range
-    else:
-        range_val = target_range
+    range_val = default_range if not target_range or target_range == "0-49" else target_range
 
     params = {
         "motsCles": parsed.get("motsCles") or parsed.get("q") or parsed.get("query") or "developpeur",

@@ -6,7 +6,6 @@ from time import monotonic
 from typing import Any
 
 import httpx
-from urllib.parse import urlencode
 
 from discovery.job_offer import JobOffer, offer_to_lead
 from discovery.normalizer import clean_text
@@ -76,7 +75,7 @@ def _search_params(target: str) -> dict[str, str]:
 async def _json_search(params: dict[str, str]) -> dict:
     if not params.get("app_id") or not params.get("app_key"):
         return {"results": []}
-    
+
     url = "https://api.adzuna.com/v1/api/jobs/fr/search/1"
     headers = {
         "Accept": "application/json",
@@ -95,10 +94,10 @@ async def _json_search(params: dict[str, str]) -> dict:
 def offer_from_result(row: dict) -> JobOffer:
     company = row.get("company") or {}
     location = row.get("location") or {}
-    
+
     salary_min = row.get("salary_min")
     salary_max = row.get("salary_max")
-    
+
     contract_type = str(row.get("contract_type") or row.get("contract_time") or "").strip()
     remote = True if "remote" in str(row.get("title", "")).lower() or "télétravail" in str(row.get("description", "")).lower() else None
 
@@ -133,12 +132,12 @@ async def scrape_target(target: str) -> list[dict]:
     now = monotonic()
     if cached and cached[0] > now:
         return list(cached[1])
-        
+
     try:
         payload = await _json_search(params)
-    except httpx.HTTPStatusError as exc:
+    except httpx.HTTPStatusError:
         raise
-        
+
     rows = payload.get("results") if isinstance(payload, dict) else []
     leads = [
         offer_to_lead(offer)

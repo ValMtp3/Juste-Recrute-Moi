@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import json
 from time import monotonic
 from typing import Any
 
@@ -102,12 +101,12 @@ async def scrape_target(target: str) -> list[dict]:
     now = monotonic()
     if cached and cached[0] > now:
         return list(cached[1])
-        
+
     try:
         payload = await _json_search(params, api_key)
-    except httpx.HTTPStatusError as exc:
+    except httpx.HTTPStatusError:
         raise
-        
+
     rows = payload.get("jobs") if isinstance(payload, dict) else []
     leads = [
         offer_to_lead(offer)

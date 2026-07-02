@@ -22,6 +22,10 @@ env:
     PYSEC-2026-139 PYSEC-2025-191 PYSEC-2025-197 PYSEC-2025-189 PYSEC-2025-190
     PYSEC-2025-217 PYSEC-2025-214 PYSEC-2025-218 PYSEC-2025-211 PYSEC-2025-212 PYSEC-2025-213
     PYSEC-2025-215 PYSEC-2025-216
+  # glib 0.18 is pulled by the current Tauri/wry GTK stack. Keep this scoped and
+  # remove it once Tauri can move Linux GTK deps to glib >= 0.20.
+  CARGO_AUDIT_IGNORE_VULNS: >-
+    RUSTSEC-2024-0429
 
 jobs:
   dependency-audit:
@@ -66,7 +70,11 @@ jobs:
         run: |
           cargo install cargo-audit --locked
           cd src-tauri
-          cargo audit
+          audit_args=()
+          for vuln in $CARGO_AUDIT_IGNORE_VULNS; do
+            audit_args+=(--ignore "$vuln")
+          done
+          cargo audit "${audit_args[@]}"
 
   frontend:
     name: Frontend

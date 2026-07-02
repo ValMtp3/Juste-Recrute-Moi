@@ -47,6 +47,8 @@ describe("data hook stability contracts", () => {
     expect(useDueFollowups).toContain("lastLoggedErrorRef");
     expect(useDueFollowups).toContain("new AbortController()");
     expect(useDueFollowups).toContain("isAbortLikeError");
+    expect(useDueFollowups).toContain("isDocumentVisible");
+    expect(useDueFollowups).toContain("visibilitychange");
     expect(useDueFollowups).toContain('addLog?.(message, "system", "followups")');
     expect(useDueFollowups).not.toContain(".then(r => (r.ok ? r.json() : null))");
     expect(useDueFollowups).not.toContain("return r.json()");

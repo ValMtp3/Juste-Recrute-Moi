@@ -442,7 +442,8 @@ def _ensure_browser_runtime_executable_permissions(path: Path | None = None) -> 
 
 
 def _clear_macos_extended_attrs(path: Path) -> None:
-    if sys_platform() != "darwin" or not hasattr(os, "listxattr"):
+    removexattr = getattr(os, "removexattr", None)
+    if sys_platform() != "darwin" or not hasattr(os, "listxattr") or removexattr is None:
         return
     candidates = [path, *path.rglob("*")]
     for candidate in candidates:
@@ -453,7 +454,7 @@ def _clear_macos_extended_attrs(path: Path) -> None:
         for attr in attrs:
             if attr.startswith("com.apple."):
                 try:
-                    os.removexattr(candidate, attr)
+                    removexattr(candidate, attr)
                 except OSError:
                     continue
 

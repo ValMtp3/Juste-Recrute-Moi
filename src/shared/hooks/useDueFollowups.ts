@@ -17,6 +17,10 @@ function readableDueFollowupsError(error: unknown) {
   return trimmed;
 }
 
+function isDocumentVisible() {
+  return typeof document === "undefined" || document.visibilityState !== "hidden";
+}
+
 export function useDueFollowups(api: ApiFetch | null, addLog?: (msg: string, kind: LogLine["kind"], src?: string) => void) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const lastLoggedErrorRef = useRef<string | null>(null);
@@ -28,7 +32,9 @@ export function useDueFollowups(api: ApiFetch | null, addLog?: (msg: string, kin
     }
     let alive = true;
     const controller = new AbortController();
-    const load = () => api(`/api/v1/followups/due?limit=25`, { signal: controller.signal })
+    const load = () => {
+      if (!isDocumentVisible()) return;
+      void api(`/api/v1/followups/due?limit=25`, { signal: controller.signal })
       .then(async r => {
         if (!r.ok) throw new Error(await responseErrorMessage(r, `Relances dues indisponibles (${r.status})`));
         return readJsonResponse(
@@ -52,12 +58,22 @@ export function useDueFollowups(api: ApiFetch | null, addLog?: (msg: string, kin
         lastLoggedErrorRef.current = message;
         addLog?.(message, "system", "followups");
       });
+    };
+    const refreshWhenVisible = () => {
+      if (isDocumentVisible()) load();
+    };
     load();
     const interval = setInterval(load, 60000);
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", refreshWhenVisible);
+    }
     return () => {
       alive = false;
       controller.abort();
       clearInterval(interval);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", refreshWhenVisible);
+      }
     };
   }, [api, addLog]);
   return leads;
