@@ -1,8 +1,10 @@
 from __future__ import annotations
 import logging
+import re
+import unicodedata
 
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import unquote_plus, urlparse
 
 from discovery.normalizer import clean_text, is_recent, strip_html_text
 from discovery.sources.common import json_get, text_lead
@@ -30,6 +32,184 @@ def _host_is(host: str, domain: str) -> bool:
     return host == domain or host.endswith(f".{domain}")
 
 
+_FILTER_STOPWORDS = {
+    "a",
+    "and",
+    "au",
+    "aux",
+    "de",
+    "des",
+    "du",
+    "en",
+    "et",
+    "for",
+    "la",
+    "le",
+    "les",
+    "of",
+    "pour",
+    "the",
+}
+
+_ROLE_ALIASES = {
+    "ai": ("ai", "ia", "machine learning", "ml"),
+    "back": ("back", "backend", "back end", "server"),
+    "backend": ("backend", "back end", "server"),
+    "commercial": ("commercial", "sales", "business developer", "business development"),
+    "data": ("data",),
+    "developpeur": ("developpeur", "developer", "software engineer", "ingenieur logiciel"),
+    "developer": ("developer", "developpeur", "software engineer", "ingenieur logiciel"),
+    "devops": ("devops", "sre", "platform engineer"),
+    "front": ("front", "frontend", "front end"),
+    "frontend": ("frontend", "front end"),
+    "ia": ("ia", "ai", "machine learning", "ml"),
+    "ingenieur": ("ingenieur", "engineer"),
+    "marketing": ("marketing", "growth"),
+    "product": ("product", "produit"),
+    "sales": ("sales", "commercial", "business developer", "business development"),
+}
+
+_CONTRACT_TERMS = {
+    "APP": ("alternance", "apprentissage", "apprenticeship"),
+    "CDD": ("cdd", "fixed term", "fixed-term"),
+    "CDI": ("cdi", "permanent", "full time", "full-time"),
+    "LIB": ("freelance", "contractor", "independent"),
+    "MIS": ("stage", "internship", "intern"),
+}
+
+_REMOTE_TERMS = ("remote", "hybrid", "teletravail", "work from home", "wfh")
+
+
+def _normalize_filter_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    without_accents = "".join(ch for ch in normalized if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9+#.]+", " ", without_accents.lower()).strip()
+
+
+def _contains_term(text: str, term: str) -> bool:
+    normalized = _normalize_filter_text(term)
+    if not normalized:
+        return False
+    if " " in normalized:
+        return normalized in text
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(normalized)}(?![a-z0-9])", text))
+
+
+def _lead_filter_text(lead: dict) -> str:
+    meta = lead.get("source_meta") if isinstance(lead.get("source_meta"), dict) else {}
+    meta_text = " ".join(str(value) for value in meta.values() if isinstance(value, (str, int, float)))
+    return _normalize_filter_text("\n".join([
+        str(lead.get("title") or ""),
+        str(lead.get("company") or ""),
+        str(lead.get("location") or ""),
+        str(lead.get("description") or ""),
+        meta_text,
+    ]))
+
+
+def _query_token_groups(query: str) -> list[tuple[str, ...]]:
+    tokens = [
+        token
+        for token in _normalize_filter_text(query).split()
+        if token not in _FILTER_STOPWORDS and (len(token) >= 3 or token in _ROLE_ALIASES)
+    ]
+    return [tuple(_ROLE_ALIASES.get(token, (token,))) for token in tokens]
+
+
+def _target_param(params: dict[str, str], *names: str) -> str:
+    for name in names:
+        value = params.get(name.lower())
+        if value:
+            return value
+    return ""
+
+
+def _truthy_param(value: str) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _matches_query_filter(lead: dict, query: str) -> bool:
+    groups = _query_token_groups(query)
+    if not groups:
+        return True
+    text = _lead_filter_text(lead)
+    return any(any(_contains_term(text, term) for term in group) for group in groups)
+
+
+def _matches_location_filter(lead: dict, location: str, remote_allowed: bool) -> bool:
+    normalized = _normalize_filter_text(location)
+    if not normalized or normalized == "france":
+        return True
+    text = _lead_filter_text(lead)
+    if _contains_term(text, normalized):
+        return True
+    return remote_allowed and any(_contains_term(text, term) for term in _REMOTE_TERMS)
+
+
+def _matches_contract_filter(lead: dict, contract: str) -> bool:
+    normalized = _normalize_filter_text(contract).upper()
+    if not normalized:
+        return True
+    terms = _CONTRACT_TERMS.get(normalized, (normalized.lower(),))
+    text = _lead_filter_text(lead)
+    return any(_contains_term(text, term) for term in terms)
+
+
+def _matches_remote_filter(lead: dict, remote: bool) -> bool:
+    if not remote:
+        return True
+    text = _lead_filter_text(lead)
+    return any(_contains_term(text, term) for term in _REMOTE_TERMS)
+
+
+def _parse_ats_target(target: str) -> tuple[str, str, dict[str, str]]:
+    parts = str(target or "").strip().split(":", 2)
+    if len(parts) < 3 or parts[0].lower() != "ats":
+        return "", "", {}
+    provider = parts[1].strip().lower()
+    chunks = [chunk.strip() for chunk in parts[2].replace("|", ";").split(";") if chunk.strip()]
+    if not chunks:
+        return provider, "", {}
+    params: dict[str, str] = {}
+    for chunk in chunks[1:]:
+        if "=" not in chunk:
+            continue
+        key, value = chunk.split("=", 1)
+        params[key.strip().lower()] = unquote_plus(value.strip())
+    return provider, chunks[0], params
+
+
+def _filter_target_leads(leads: list[dict], params: dict[str, str]) -> list[dict]:
+    query = _target_param(params, "query", "role", "q")
+    location = _target_param(params, "location", "lieu", "where", "aroundQuery")
+    contract = _target_param(params, "typeContrat", "contract", "contrat")
+    remote = _truthy_param(_target_param(params, "remote", "teletravail"))
+    if not any((query, location, contract, remote)):
+        return leads
+
+    results: list[dict] = []
+    for lead in leads:
+        if not _matches_query_filter(lead, query):
+            continue
+        if not _matches_location_filter(lead, location, remote):
+            continue
+        if not _matches_contract_filter(lead, contract):
+            continue
+        if not _matches_remote_filter(lead, remote):
+            continue
+        meta = dict(lead.get("source_meta") or {})
+        if query:
+            meta.setdefault("target_query", query)
+        if location:
+            meta.setdefault("target_location", location)
+        if contract:
+            meta.setdefault("target_contract", contract)
+        if remote:
+            meta.setdefault("target_remote", "true")
+        results.append({**lead, "source_meta": meta})
+    return results
+
+
 async def scrape_greenhouse(slug: str) -> list[dict]:
     data = await json_get(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs", {"content": "true"})
     if not isinstance(data, dict):
@@ -54,7 +234,7 @@ async def scrape_greenhouse(slug: str) -> list[dict]:
             "platform": "greenhouse",
             "description": desc[:1200],
             "posted_date": updated,
-            "source_meta": {"ats": "greenhouse", "slug": slug},
+            "source_meta": {"source": "ats", "source_reliability": "stable", "ats": "greenhouse", "slug": slug},
         }))
     return results
 
@@ -84,7 +264,7 @@ async def scrape_lever(slug: str) -> list[dict]:
             "platform": "lever",
             "description": clean_text("\n".join(parts))[:1200],
             "posted_date": created,
-            "source_meta": {"ats": "lever", "slug": slug},
+            "source_meta": {"source": "ats", "source_reliability": "stable", "ats": "lever", "slug": slug},
         }))
     return results
 
@@ -109,7 +289,7 @@ async def scrape_ashby(slug: str) -> list[dict]:
             "platform": "ashby",
             "description": desc[:1200],
             "posted_date": posted,
-            "source_meta": {"ats": "ashby", "slug": slug},
+            "source_meta": {"source": "ats", "source_reliability": "stable", "ats": "ashby", "slug": slug},
         }))
     return results
 
@@ -167,7 +347,7 @@ async def scrape_workable(slug: str) -> list[dict]:
             "description": desc[:1200],
             "posted_date": posted,
             "location": location,
-            "source_meta": {"ats": "workable", "slug": slug},
+            "source_meta": {"source": "ats", "source_reliability": "stable", "ats": "workable", "slug": slug},
         }))
     return results
 
@@ -268,17 +448,23 @@ async def scrape_direct_ats_url(url: str) -> list[dict]:
 async def scrape_target(target: str) -> list[dict]:
     lower = target.lower()
     if lower.startswith("ats:greenhouse:"):
-        return await scrape_greenhouse(target.split(":", 2)[2].strip())
+        _, slug, params = _parse_ats_target(target)
+        return _filter_target_leads(await scrape_greenhouse(slug), params)
     if lower.startswith("ats:lever:"):
-        return await scrape_lever(target.split(":", 2)[2].strip())
+        _, slug, params = _parse_ats_target(target)
+        return _filter_target_leads(await scrape_lever(slug), params)
     if lower.startswith("ats:ashby:"):
-        return await scrape_ashby(target.split(":", 2)[2].strip())
+        _, slug, params = _parse_ats_target(target)
+        return _filter_target_leads(await scrape_ashby(slug), params)
     if lower.startswith("ats:workable:"):
-        return await scrape_workable(target.split(":", 2)[2].strip())
+        _, slug, params = _parse_ats_target(target)
+        return _filter_target_leads(await scrape_workable(slug), params)
     if lower.startswith("ats:smartrecruiters:"):
-        return await scrape_smartrecruiters(target.split(":", 2)[2].strip())
+        _, slug, params = _parse_ats_target(target)
+        return _filter_target_leads(await scrape_smartrecruiters(slug), params)
     if lower.startswith("ats:teamtailor:"):
-        return await scrape_teamtailor(target.split(":", 2)[2].strip())
+        _, slug, params = _parse_ats_target(target)
+        return _filter_target_leads(await scrape_teamtailor(slug), params)
     if lower.startswith(("http://", "https://")):
         return await scrape_direct_ats_url(target)
     return []

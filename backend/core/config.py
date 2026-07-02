@@ -49,6 +49,26 @@ FRANCE_DIRECT_SOURCE_TARGETS = [
     "jooble:developpeur;location=France",
 ]
 
+FRANCE_ATS_SOURCE_BOARDS = [
+    ("greenhouse", "mistralai"),
+    ("greenhouse", "doctolib"),
+    ("greenhouse", "contentsquare"),
+    ("greenhouse", "algolia"),
+    ("greenhouse", "criteo"),
+    ("lever", "qonto"),
+    ("lever", "datadog"),
+    ("lever", "blablacar"),
+    ("lever", "swile"),
+    ("lever", "payfit"),
+    ("smartrecruiters", "Ubisoft2"),
+    ("teamtailor", "alan"),
+]
+
+FRANCE_ATS_SOURCE_TARGETS = [
+    f"ats:{provider}:{slug};query=developpeur;location=France"
+    for provider, slug in FRANCE_ATS_SOURCE_BOARDS
+]
+
 FRANCE_SITE_TARGETS = [
     "site:hellowork.com/fr-fr/emplois France",
     "site:cadremploi.fr/emploi France",
@@ -68,7 +88,7 @@ FRANCE_SITE_TARGETS = [
     "site:apply.workable.com France",
 ]
 
-FRANCE_JOB_TARGETS = [*FRANCE_DIRECT_SOURCE_TARGETS, *FRANCE_SITE_TARGETS]
+FRANCE_JOB_TARGETS = [*FRANCE_DIRECT_SOURCE_TARGETS, *FRANCE_ATS_SOURCE_TARGETS, *FRANCE_SITE_TARGETS]
 
 GENERIC_FRANCE_TRAVAIL_ROLES = {
     "developpeur",
@@ -223,6 +243,38 @@ def _france_direct_prefix(target: str) -> str:
         if lower.startswith(f"{prefix}:"):
             return prefix
     return ""
+
+
+def _target_params_from_body(body: str) -> dict[str, str]:
+    params: dict[str, str] = {}
+    for part in str(body or "").replace("|", ";").split(";"):
+        if "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        params[key.strip().lower()] = value.strip()
+    return params
+
+
+def _france_ats_key(target: str) -> str:
+    raw = str(target or "").strip()
+    parts = raw.split(":", 2)
+    if len(parts) < 3 or parts[0].lower() != "ats":
+        return ""
+    slug = parts[2].replace("|", ";").split(";", 1)[0].strip().lower()
+    provider = parts[1].strip().lower()
+    return f"{provider}:{slug}" if provider and slug else ""
+
+
+def _is_generic_france_ats_target(target: str) -> bool:
+    if not _france_ats_key(target):
+        return False
+    body = str(target or "").strip().split(":", 2)[2]
+    params = _target_params_from_body(body)
+    query = _norm_token(params.get("query") or params.get("role") or "")
+    location = _norm_token(params.get("location") or params.get("lieu") or "")
+    generic_query = not query or query in GENERIC_FRANCE_TRAVAIL_ROLES
+    generic_location = not location or location == "france"
+    return generic_query and generic_location
 
 
 def _is_generic_france_direct_target(target: str) -> bool:
@@ -438,6 +490,26 @@ def _france_direct_targets(
     return targets if include_france_travail else targets[1:]
 
 
+def _france_ats_targets(
+    role: str,
+    location: str,
+    *,
+    contract: str = "",
+    remote: bool = False,
+) -> list[str]:
+    query = _clean_target_value(role, "developpeur")
+    location = _canonical_france_location(location or "France")
+    suffix = f";query={query};location={location}"
+    if remote:
+        suffix += ";remote=1"
+    if contract:
+        suffix += f";typeContrat={contract}"
+    return [
+        f"ats:{provider}:{slug}{suffix}"
+        for provider, slug in FRANCE_ATS_SOURCE_BOARDS
+    ]
+
+
 def _france_direct_targets_for_intent(
     role: str,
     location: str,
@@ -481,11 +553,18 @@ def _france_targets_from_intent(
                 contract=intent.contract,
                 remote=intent.remote,
             ),
+            *_france_ats_targets(
+                intent.role,
+                intent.location,
+                contract=intent.contract,
+                remote=intent.remote,
+            ),
             *FRANCE_SITE_TARGETS,
         ]
     if fallback_location and fallback_location.lower() != "france":
         return [
             *_france_direct_targets("developpeur", fallback_location, radius_km=radius_km),
+            *_france_ats_targets("developpeur", fallback_location),
             *FRANCE_SITE_TARGETS,
         ]
     return list(FRANCE_JOB_TARGETS)
@@ -521,11 +600,21 @@ def job_targets(
                         contract=intent.contract,
                         remote=intent.remote,
                     ),
+                    *_france_ats_targets(
+                        intent.role,
+                        intent.location,
+                        contract=intent.contract,
+                        remote=intent.remote,
+                    ),
                     *FRANCE_SITE_TARGETS,
                 ]
             else:
                 targets = [plain_france_target, *FRANCE_JOB_TARGETS[1:]]
-        elif str(search_text or "").strip() and any(_is_generic_france_travail_target(target) for target in targets):
+        elif str(search_text or "").strip() and any(
+            _is_generic_france_direct_target(target) or _is_generic_france_ats_target(target)
+            for target in targets
+        ):
+            intent = parse_search_intent([search_text], location or "France")
             profile_france_targets = _france_targets_from_intent(search_text, location or "France", radius_km)
             direct_replacements = {
                 _france_direct_prefix(target): target
@@ -533,9 +622,27 @@ def job_targets(
                 if _france_direct_prefix(target)
             }
             if direct_replacements:
+                ats_replacements = {
+                    _france_ats_key(target): target
+                    for target in (
+                        _france_ats_targets(
+                            intent.role,
+                            intent.location,
+                            contract=intent.contract,
+                            remote=intent.remote,
+                        )
+                        if intent else []
+                    )
+                    if _france_ats_key(target)
+                }
                 targets = [
                     direct_replacements.get(_france_direct_prefix(target), target)
                     if _is_generic_france_direct_target(target) else target
+                    for target in targets
+                ]
+                targets = [
+                    ats_replacements.get(_france_ats_key(target), target)
+                    if _is_generic_france_ats_target(target) else target
                     for target in targets
                 ]
 

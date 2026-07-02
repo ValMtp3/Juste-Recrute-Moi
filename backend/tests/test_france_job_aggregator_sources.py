@@ -32,6 +32,10 @@ def test_france_market_targets_prioritize_stable_and_best_effort_sources():
     assert "apec:developpeur;location=France" in targets
     assert "adzuna:developpeur;location=France;results=50" in targets
     assert "jooble:developpeur;location=France" in targets
+    assert "ats:greenhouse:mistralai;query=developpeur;location=France" in targets
+    assert "ats:greenhouse:doctolib;query=developpeur;location=France" in targets
+    assert "ats:smartrecruiters:Ubisoft2;query=developpeur;location=France" in targets
+    assert "ats:teamtailor:alan;query=developpeur;location=France" in targets
 
 
 def test_france_market_plain_search_keeps_fallback_sources():
@@ -42,6 +46,8 @@ def test_france_market_plain_search_keeps_fallback_sources():
     assert "apec:data;location=Paris" in targets
     assert "adzuna:data;location=Paris;results=50" in targets
     assert "jooble:data;location=Paris" in targets
+    assert "ats:greenhouse:mistralai;query=data;location=Paris" in targets
+    assert "ats:smartrecruiters:Ubisoft2;query=data;location=Paris" in targets
     assert "https://remotive.com/api/remote-jobs" not in targets
     assert "https://jobicy.com/api/v2/remote-jobs?count=50" not in targets
     assert any("welcometothejungle" in target for target in targets)
@@ -61,6 +67,7 @@ def test_france_market_targets_apply_location_radius_to_direct_sources():
     assert "apec:data;location=Montpellier" in targets
     assert "adzuna:data;location=Montpellier;results=50" in targets
     assert "jooble:data;location=Montpellier" in targets
+    assert "ats:greenhouse:mistralai;query=data;location=Montpellier" in targets
 
 
 def test_france_market_adds_broader_variants_outside_france_travail():
@@ -84,6 +91,7 @@ def test_france_market_remote_search_uses_direct_remote_filter():
     targets = job_targets("data Montpellier télétravail", "france", radius_km="25")
 
     assert targets[0] == "france_travail:data;lieu=Montpellier;range=0-49;rayon=25;teletravail=1"
+    assert "ats:greenhouse:mistralai;query=data;location=Montpellier;remote=1" in targets
 
 
 def test_france_market_radius_is_bounded_or_ignored():
@@ -130,11 +138,29 @@ def test_france_market_replaces_generic_direct_sources_with_profile_intent():
     assert not any("developpeur" in target.lower() and "france" in target.lower() for target in targets)
 
 
+def test_france_market_replaces_generic_ats_sources_with_profile_intent():
+    targets = job_targets(
+        "\n".join([
+            "ats:greenhouse:mistralai;query=developpeur;location=France",
+            "ats:smartrecruiters:Ubisoft2;query=developpeur;location=France",
+        ]),
+        "france",
+        search_text="Data analyst Lyon",
+        location="Lyon",
+        radius_km="30",
+    )
+
+    assert "ats:greenhouse:mistralai;query=Data analyst;location=Lyon" in targets
+    assert "ats:smartrecruiters:Ubisoft2;query=Data analyst;location=Lyon" in targets
+    assert not any("query=developpeur;location=France" in target for target in targets)
+
+
 def test_france_market_plain_search_detects_role_location_and_contract():
     targets = job_targets("data Montpellier CDI", "france")
 
     assert targets[0] == "france_travail:data;lieu=Montpellier;range=0-49;typeContrat=CDI"
     assert any("hellowork" in target for target in targets)
+    assert "ats:greenhouse:mistralai;query=data;location=Montpellier;typeContrat=CDI" in targets
 
 
 def test_france_search_intent_parses_role_location_contract_and_remote():
@@ -171,6 +197,7 @@ def test_france_default_targets_use_profile_search_intent():
     )
 
     assert targets[0] == "france_travail:IA;lieu=Montpellier;range=0-49;rayon=25;teletravail=1;typeContrat=APP"
+    assert "ats:greenhouse:mistralai;query=IA;location=Montpellier;remote=1;typeContrat=APP" in targets
 
 
 def test_france_profile_free_sources_skip_reddit():
@@ -386,6 +413,38 @@ def test_ats_target_dispatches_smartrecruiters_and_teamtailor():
         with mock.patch("discovery.sources.ats.scrape_teamtailor", return_value=[]) as teamtailor:
             await ats.scrape_target("ats:teamtailor:alan")
         teamtailor.assert_called_once_with("alan")
+
+    asyncio.run(run())
+
+
+def test_ats_target_filters_by_query_and_location():
+    async def run():
+        with mock.patch("discovery.sources.ats.scrape_smartrecruiters", return_value=[
+            {
+                "title": "Data Analyst",
+                "company": "Ubisoft",
+                "url": "https://jobs.smartrecruiters.com/Ubisoft2/data-paris",
+                "platform": "smartrecruiters",
+                "description": "Analyse produit et data pipelines.",
+                "location": "Paris, France",
+                "source_meta": {"ats": "smartrecruiters"},
+            },
+            {
+                "title": "Brand Designer",
+                "company": "Ubisoft",
+                "url": "https://jobs.smartrecruiters.com/Ubisoft2/design-lyon",
+                "platform": "smartrecruiters",
+                "description": "Design system et marque.",
+                "location": "Lyon, France",
+                "source_meta": {"ats": "smartrecruiters"},
+            },
+        ]) as smart:
+            leads = await ats.scrape_target("ats:smartrecruiters:Ubisoft2;query=data;location=Paris")
+
+        smart.assert_called_once_with("Ubisoft2")
+        assert [lead["title"] for lead in leads] == ["Data Analyst"]
+        assert leads[0]["source_meta"]["target_query"] == "data"
+        assert leads[0]["source_meta"]["target_location"] == "Paris"
 
     asyncio.run(run())
 
