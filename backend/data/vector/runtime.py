@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import importlib
 import os
 import platform
 import shutil
@@ -334,29 +333,6 @@ def is_native_module_reinit_error(exc: BaseException) -> bool:
     return any(marker in message for marker in _NATIVE_REINIT_ERROR_MARKERS)
 
 
-def _runtime_module_loaded(module) -> bool:
-    return module is not None
-
-
-def _runtime_module_location(module) -> str:
-    return getattr(module, "__file__", "") or ",".join(map(str, getattr(module, "__path__", []))) or "unknown location"
-
-
-def _import_runtime_module(module_name: str) -> str:
-    cached = sys.modules.get(module_name)
-    if _runtime_module_loaded(cached):
-        return ""
-    try:
-        module = importlib.import_module(module_name)
-    except Exception as exc:
-        if is_native_module_reinit_error(exc):
-            return ""
-        return f"{module_name}: {type(exc).__name__}: {exc}"
-    if not _runtime_module_loaded(module):
-        return f"{module_name}: module incomplet dans {_runtime_module_location(module)}"
-    return ""
-
-
 def _vector_runtime_import_error(path: Path | None = None) -> str:
     root = path or vector_runtime_dir()
     has_payload = _runtime_has_any_vector_payload(root)
@@ -367,13 +343,10 @@ def _vector_runtime_import_error(path: Path | None = None) -> str:
     add_vector_runtime_to_path(root)
     try:
         for module_name in ("pyarrow", "lancedb"):
-            cached = sys.modules.get(module_name)
-            module_available = cached is not None or bool(importlib.util.find_spec(module_name))
-            if not module_available:
+            if module_name in sys.modules:
+                continue
+            if not importlib.util.find_spec(module_name):
                 return f"le module {module_name} est introuvable"
-            error = _import_runtime_module(module_name)
-            if error:
-                return error
         return ""
     except (ImportError, ValueError, AttributeError) as exc:
         return f"{type(exc).__name__}: {exc}"
