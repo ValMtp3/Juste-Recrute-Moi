@@ -26,6 +26,9 @@ concurrency:
   group: test-build-${{ github.ref_name }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: "3.13"
   NODE_VERSION: "24"

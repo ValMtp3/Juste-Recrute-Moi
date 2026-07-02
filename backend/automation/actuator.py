@@ -373,7 +373,10 @@ def _vision_actions_openai_compatible(provider: str, model: str, key: str, b64: 
         body["response_format"] = {"type": "json_object"}
         r = c.chat.completions.create(**body)
     except Exception as log_exc:
-        logging.getLogger(__name__).warning('suppressed exception in backend/automation/actuator.py:_vision_actions_openai_compatible: %s', log_exc)
+        logging.getLogger(__name__).warning(
+            "suppressed exception in backend/automation/actuator.py:_vision_actions_openai_compatible: %s",
+            type(log_exc).__name__,
+        )
         body.pop("response_format", None)
         r = c.chat.completions.create(**body)
 
@@ -389,7 +392,7 @@ def _vision_actions(b64: str, ctx: str) -> _Acts:
     if provider_needs_key(provider) and not key:
         raise RuntimeError(f"Vision fallback requires an API key for provider '{provider}'")
 
-    _log.info("vision fallback via %s model=%s", provider, model)
+    _log.info("vision fallback enabled")
 
     if provider == "anthropic":
         return _vision_actions_anthropic(model, key, b64, ctx)
@@ -483,7 +486,7 @@ async def _run(job: dict, asset: str, dry_run: bool = False) -> bool | dict:
             try:
                 filled = await _fill_dom(pg, job, asset)
             except Exception as exc:
-                _log.warning("DOM fill failed: %s", exc)
+                _log.warning("DOM fill failed: %s", type(exc).__name__)
 
             if not _ready_to_submit(filled):
                 try:
@@ -491,7 +494,7 @@ async def _run(job: dict, asset: str, dry_run: bool = False) -> bool | dict:
                     if not filled.get("uploaded"):
                         filled["uploaded"] = await _upload_resume(pg, asset)
                 except Exception as exc:
-                    _log.warning("vision fallback failed: %s", exc)
+                    _log.warning("vision fallback failed: %s", type(exc).__name__)
 
             submit_btn = await _find_submit(pg)
             ready = _ready_to_submit(filled)
