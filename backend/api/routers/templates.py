@@ -17,6 +17,7 @@ from pydantic import Field
 
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024
 _ALLOWED_SUFFIXES = {".pdf", ".docx", ".txt", ".md"}
+_TEMPLATE_NOT_FOUND = "Modèle de CV introuvable. Rechargez les réglages puis réessayez."
 
 
 class TemplateTextBody(StrictBody):
@@ -112,7 +113,7 @@ def create_router(logger: logging.Logger | None = None) -> APIRouter:
     async def get_template(template_id: str, repo: Repository = Depends(get_repository)):
         template = await asyncio.to_thread(repo.resume_templates.get_template, template_id)
         if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
+            raise HTTPException(status_code=404, detail=_TEMPLATE_NOT_FOUND)
         return template
 
     @router.post("/templates/upload")
@@ -166,14 +167,14 @@ def create_router(logger: logging.Logger | None = None) -> APIRouter:
     async def set_default(template_id: str, repo: Repository = Depends(get_repository)):
         ok = await asyncio.to_thread(repo.resume_templates.set_default_template, template_id)
         if not ok:
-            raise HTTPException(status_code=404, detail="Template not found")
+            raise HTTPException(status_code=404, detail=_TEMPLATE_NOT_FOUND)
         return {"ok": True}
 
     @router.delete("/templates/{template_id}")
     async def delete_template(template_id: str, repo: Repository = Depends(get_repository)):
         ok = await asyncio.to_thread(repo.resume_templates.delete_template, template_id)
         if not ok:
-            raise HTTPException(status_code=404, detail="Template not found")
+            raise HTTPException(status_code=404, detail=_TEMPLATE_NOT_FOUND)
         return {"ok": True}
 
     return router

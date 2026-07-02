@@ -39,6 +39,15 @@ def test_openai_success_passes_through(monkeypatch):
     assert len(vecs) == 2 and all(len(v) == emb.OPENAI_DIMS for v in vecs)
 
 
+def test_openai_inputs_are_clipped_before_api_call():
+    long_text = " ".join("x" for _ in range(emb.OPENAI_MAX_INPUT_WORDS + 300))
+
+    clipped = emb._clip_openai_inputs([long_text])[0]
+
+    assert len(clipped.split()) == emb.OPENAI_MAX_INPUT_WORDS
+    assert len(emb._clip_openai_inputs(["x" * (emb.OPENAI_MAX_INPUT_CHARS + 100)])[0]) == emb.OPENAI_MAX_INPUT_CHARS
+
+
 def test_onnx_fallback_keeps_384(monkeypatch):
     monkeypatch.setattr(emb, "active_provider", lambda: "onnx")
     monkeypatch.setattr(emb, "_onnx_embed", _raise)

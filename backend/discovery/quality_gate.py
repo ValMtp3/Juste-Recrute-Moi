@@ -126,6 +126,7 @@ def evaluate_lead_quality(
     min_quality: int = MIN_DEFAULT_QUALITY,
     target_level: str = "any",
     max_age_days: int = 7,
+    target_location: str = "",
 ) -> dict:
     text = _lead_text(lead)
     reasons: list[str] = []
@@ -140,6 +141,13 @@ def evaluate_lead_quality(
     if not str(lead.get("company") or "").strip():
         penalties += 8
         reasons.append("missing company")
+
+    if target_location and target_location.lower() != "france":
+        lead_location = str(lead.get("location") or "").lower()
+        loc_lower = target_location.lower()
+        if loc_lower not in lead_location and loc_lower not in text.lower():
+            penalties += 35
+            reasons.append(f"location mismatch ({target_location})")
 
     fresh, fresh_reason = _freshness(lead, max_age_days=max_age_days)
     reasons.append(fresh_reason)

@@ -5,16 +5,19 @@ import os
 import time
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile
 
 from api.dependencies import get_repository
 from api.scheduler import ensure_ghost_job
 from api.startup_validation import configuration_warnings
-from core.types import PreferencesBody, ResetDataBody, SettingsBody, TemplateBody
+from core.logging import get_logger
+from core.types import PreferencesBody, RebuildVectorsBody, ResetDataBody, SettingsBody, TemplateBody
 from data.repository import Repository
 
 
 MASK = "__JHM_SECRET_SET__"
+_log = get_logger(__name__)
+MAX_BACKUP_UPLOAD_SIZE = 512 * 1024 * 1024
 LEGACY_BULLET_MASK = "\u2022" * 20
 LEGACY_MOJIBAKE_BULLET_MASK = "\u00e2\u20ac\u00a2" * 20
 LEGACY_DOUBLE_ENCODED_BULLET_MASK = "\u00c3\u00a2\u00e2\u201a\u00ac\u00c2\u00a2" * 20
@@ -194,6 +197,49 @@ def _provider_key(cfg: dict, provider: str) -> str:
     ).strip()
 
 
+def _rebuild_vector_tables() -> dict:
+    vectors_dropped: list[str] = []
+    errors: list[str] = []
+    summary: dict[str, object] = {"vectors_dropped": vectors_dropped, "errors": errors}
+    try:
+        from data.graph.profile_vectors import vec_table_names
+        from data.vector.connection import vec
+
+        for name in list(vec_table_names() or []):
+            try:
+                vec.drop_table(name)
+                vectors_dropped.append(name)
+            except Exception as exc:
+                errors.append(f"vector {name}: {exc}")
+    except Exception as exc:
+        errors.append(f"vector store: {exc}")
+
+    try:
+        from data.graph.profile import sync_vectors_from_graph
+
+        summary["sync"] = sync_vectors_from_graph()
+    except Exception as exc:
+        summary["sync"] = {"status": "error", "synced": 0, "error": str(exc)}
+        errors.append(f"vector sync: {exc}")
+    return summary
+
+
+async def _read_backup_upload(file: UploadFile, max_bytes: int = MAX_BACKUP_UPLOAD_SIZE) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(status_code=413, detail="Sauvegarde trop volumineuse")
+        chunks.append(chunk)
+    if not chunks:
+        raise HTTPException(status_code=400, detail="Sauvegarde vide ou illisible")
+    return b"".join(chunks)
+
+
 async def validate_provider_settings(repo: Repository, incoming: dict | None = None) -> dict:
     from llm import _KEY_NAMES, _OPENAI_COMPAT_BASE_URLS
 
@@ -248,10 +294,23 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
     @router.get("/settings")
     async def get_cfg(repo: Repository = Depends(get_repository)):
         settings = await asyncio.to_thread(repo.settings.get_settings)
+        present = sorted(key for key in sensitive_keys(settings) if settings.get(key))
+        _log.info("settings loaded: %s sensitive field(s) configured", len(present))
         for key in sensitive_keys(settings):
             if settings.get(key):
                 settings[key] = MASK
         return settings
+
+    @router.get("/settings/secrets/{key}")
+    async def reveal_secret(key: str, repo: Repository = Depends(get_repository)):
+        settings = await asyncio.to_thread(repo.settings.get_settings)
+        if key not in sensitive_keys(settings):
+            raise HTTPException(status_code=404, detail="Secret inconnu. Rechargez les réglages puis réessayez.")
+        value = str(settings.get(key) or "")
+        if not value:
+            raise HTTPException(status_code=404, detail="Aucun secret n'est enregistré pour ce champ.")
+        _log.info("settings secret revealed through local UI: %s", key)
+        return {"key": key, "value": value}
 
     @router.get("/settings/validate")
     async def validate_settings(repo: Repository = Depends(get_repository)):
@@ -323,12 +382,12 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
         """Launch the CLI's own browser sign-in; the UI then polls subscription-status."""
         from llm import SUBSCRIPTION_CLI_PROVIDERS, subscription_cli
         if provider not in SUBSCRIPTION_CLI_PROVIDERS:
-            raise HTTPException(status_code=400, detail="unknown subscription provider")
+            raise HTTPException(status_code=400, detail="Fournisseur d'abonnement inconnu. Rechargez les réglages puis réessayez.")
         try:
             return subscription_cli.login(provider)
         except subscription_cli.CliNotInstalled:
             return {"started": False, "error": "not_installed",
-                    "hint": subscription_cli.install_hint(provider), "detail": "CLI provider is not installed"}
+                    "hint": subscription_cli.install_hint(provider), "detail": "Le CLI de ce fournisseur n'est pas installé."}
 
     @router.post("/settings")
     async def save_cfg(body: SettingsBody, repo: Repository = Depends(get_repository)):
@@ -341,6 +400,11 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
             await asyncio.to_thread(repo.settings.save_settings, payload)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        _log.info(
+            "settings saved: %s key(s), sensitive configured=%s",
+            len(payload),
+            sorted(key for key in sensitive_keys({**old, **payload}) if payload.get(key) or old.get(key)),
+        )
         if payload.get("ghost_mode") == "true":
             ensure_ghost_job(scheduler, ghost_tick)
         return {"ok": True}
@@ -359,6 +423,69 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
             from llm.client import reset_client_cache
 
             await asyncio.to_thread(reset_client_cache)
+        return {"ok": True, "summary": summary}
+
+    @router.get("/data/export")
+    async def export_data():
+        """Download a complete local backup: settings/secrets, profile, leads,
+        scores, follow-up state, generated documents, graph, and vector files."""
+        from data.backup import export_app_data_backup
+
+        content, filename, summary = await asyncio.to_thread(export_app_data_backup)
+        _log.info(
+            "data export created: files=%s bytes=%s warnings=%s",
+            summary.get("files_exported"),
+            summary.get("bytes_exported"),
+            len(summary.get("warnings") or []),
+        )
+        return Response(
+            content,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
+
+    @router.post("/data/import")
+    async def import_data(
+        confirm: str = Form(...),
+        file: UploadFile = File(...),
+    ):
+        """Replace the current local data directory with a previously exported
+        archive. Requires confirm=IMPORT because this overwrites local state."""
+        if confirm.strip().upper() != "IMPORT":
+            raise HTTPException(status_code=422, detail="Tapez IMPORT pour confirmer la restauration.")
+        filename = (file.filename or "").lower()
+        if not filename.endswith(".zip"):
+            raise HTTPException(status_code=400, detail="Une archive .zip exportée par Juste Recrute Moi est attendue.")
+
+        from data.backup import import_app_data_backup
+
+        content = await _read_backup_upload(file)
+        try:
+            summary = await asyncio.to_thread(import_app_data_backup, content)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            _log.exception("data import failed")
+            raise HTTPException(status_code=500, detail="La restauration de la sauvegarde a échoué.") from exc
+
+        from llm.client import reset_client_cache
+
+        await asyncio.to_thread(reset_client_cache)
+        _log.info(
+            "data import restored: files=%s bytes=%s errors=%s",
+            summary.get("files_restored"),
+            summary.get("bytes_restored"),
+            len(summary.get("errors") or []),
+        )
+        return {"ok": True, "summary": summary}
+
+    @router.post("/vectors/rebuild")
+    async def rebuild_vectors(body: RebuildVectorsBody):
+        summary = await asyncio.to_thread(_rebuild_vector_tables)
+        _log.info("vector tables rebuilt from settings UI: %s", summary)
         return {"ok": True, "summary": summary}
 
     return router

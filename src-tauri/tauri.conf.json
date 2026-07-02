@@ -1,10 +1,10 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Juste Recrute Moi",
-  "version": "1.2.0",
+  "version": "1.2.5",
   "identifier": "com.valentinfiess.justerecrutemoi",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "node scripts/check-sidecar.mjs",
     "frontendDist": "../dist"

@@ -7,22 +7,22 @@ La cible publique stable de cette passe est l'installateur desktop Windows. Les 
 Les machines locales servent a valider le comportement, pas a produire les installateurs publics signes :
 
 ```powershell
-npm install
+pnpm install
 cd backend
 uv sync --dev
 cd ..
-npm run release:smoke
-npm run smoke:windows-update
+pnpm release:smoke
+pnpm smoke:windows-update
 ```
 
-`npm run release:smoke` est le controle local rapide recommande. Il construit le chemin frontend/backend de release et teste le sidecar sans demander les secrets de signature Tauri.
+`pnpm release:smoke` est le controle local rapide recommande. Il construit le chemin frontend/backend de release et teste le sidecar sans demander les secrets de signature Tauri.
 
-`npm run smoke:windows-update` lance les controles statiques Windows. Pour tester un vrai installateur :
+`pnpm smoke:windows-update` lance les controles statiques Windows. Pour tester un vrai installateur :
 
 ```powershell
 $env:JHM_WINDOWS_INSTALLER_SMOKE = "1"
 $env:JHM_NEW_INSTALLER = "path\to\Juste-Recrute-Moi_<version>_x64-setup.exe"
-npm run smoke:windows-update
+pnpm smoke:windows-update
 ```
 
 Pour tester une mise a jour par-dessus une version deja installee :
@@ -31,7 +31,7 @@ Pour tester une mise a jour par-dessus une version deja installee :
 $env:JHM_WINDOWS_UPDATE_SMOKE = "1"
 $env:JHM_OLD_INSTALLER = "path\to\previous\Juste-Recrute-Moi_<old>_x64-setup.exe"
 $env:JHM_NEW_INSTALLER = "path\to\new\Juste-Recrute-Moi_<new>_x64-setup.exe"
-npm run smoke:windows-update
+pnpm smoke:windows-update
 ```
 
 ## Packaging et signature
@@ -41,7 +41,7 @@ Le packaging Windows public et la signature updater doivent venir de GitHub Acti
 - `TAURI_SIGNING_PRIVATE_KEY`
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, si la cle est chiffree
 
-Ne perdez pas de temps a produire localement un installateur public signe. `npm run release:windows` et `npm run package:windows` ne sont utiles en local que pour une repetition explicite avec les variables de signature disponibles. Sinon, utilisez `npm run release:smoke` et laissez la CI taggee construire l'installateur.
+Ne perdez pas de temps a produire localement un installateur public signe. `pnpm release:windows` et `pnpm package:windows` ne sont utiles en local que pour une repetition explicite avec les variables de signature disponibles. Sinon, utilisez `pnpm release:smoke` et laissez la CI taggee construire l'installateur.
 
 | Artefact | Usage |
 | --- | --- |
@@ -54,7 +54,7 @@ Ne perdez pas de temps a produire localement un installateur public signe. `npm 
 Ne construisez un MSI que pour un deploiement Windows administre :
 
 ```powershell
-npm run package:windows:msi
+pnpm package:windows:msi
 ```
 
 ## Controles CI obligatoires

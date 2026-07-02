@@ -19,13 +19,14 @@ _LLM_SETTINGS = {"evaluator_provider": "codex_cli"}
 
 
 def test_off_field_prefilter_flags_wrong_field_only():
-    assert ev._off_field_prefilter({"gaps": ["wrong-field cap: not technical"]}, {}) is True
-    assert ev._off_field_prefilter({"gaps": ["stack cap: no exact evidence"]}, {}) is False
+    assert ev._off_field_prefilter({"score": 15, "applied_cap": 15, "gaps": ["wrong-field cap: not technical"]}, {}) is True
+    assert ev._off_field_prefilter({"score": 42, "applied_cap": 42, "gaps": ["wrong-field cap: ambiguous"]}, {}) is False
+    assert ev._off_field_prefilter({"score": 15, "applied_cap": 15, "gaps": ["stack cap: no exact evidence"]}, {}) is False
     assert ev._off_field_prefilter({"gaps": []}, {}) is False
 
 
 def test_prefilter_can_be_disabled():
-    base = {"gaps": ["wrong-field cap: x"]}
+    base = {"score": 15, "applied_cap": 15, "gaps": ["wrong-field cap: x"]}
     assert ev._off_field_prefilter(base, {"prefilter_off_field": "false"}) is False
     assert ev._off_field_prefilter(base, {"prefilter_off_field": "true"}) is True
 
@@ -58,3 +59,37 @@ def test_score_runs_llm_for_on_field(monkeypatch):
     out = ev.score("Senior AI Engineer. Python, PyTorch, LangChain, RAG, vector DBs.", _AI_PROFILE, _LLM_SETTINGS)
     assert calls["n"] == 1, "an on-field lead must still get the full evaluation"
     assert out["scored_by"] == "llm"
+
+
+def test_marketing_candidate_is_not_prefiltered_as_wrong_field(monkeypatch):
+    monkeypatch.setattr(ev, "_evaluator_llm_requested", lambda settings=None: True)
+    calls = {"n": 0}
+    profile = {
+        "s": "Growth marketing specialist with SEO and lifecycle campaigns.",
+        "skills": [{"n": "SEO"}, {"n": "Lifecycle marketing"}],
+        "exp": [{"role": "Growth Marketer", "co": "Acme", "d": "SEO and lifecycle campaigns"}],
+    }
+
+    def _llm(jd, candidate_data, baseline, preferences=""):
+        calls["n"] += 1
+        return {**baseline, "score": 72, "reason": "marketing fit", "scored_by": "llm"}
+
+    monkeypatch.setattr(ev, "_score_with_llm", _llm)
+    out = ev.score("Job Title: Marketing Manager\nDescription: SEO, lifecycle campaigns, analytics.", profile, _LLM_SETTINGS)
+
+    assert calls["n"] == 1
+    assert out["scored_by"] == "llm"
+
+
+def test_score_exposes_llm_fallback_error(monkeypatch):
+    monkeypatch.setattr(ev, "_evaluator_llm_requested", lambda settings=None: True)
+
+    def _llm_timeout(*_args, **_kwargs):
+        raise TimeoutError("Request timed out.")
+
+    monkeypatch.setattr(ev, "_score_with_llm", _llm_timeout)
+
+    out = ev.score("AI Engineer. Python, RAG, FastAPI.", _AI_PROFILE, _LLM_SETTINGS)
+
+    assert out["scored_by"] == "deterministic_fallback"
+    assert out["fallback_error"] == "Request timed out."

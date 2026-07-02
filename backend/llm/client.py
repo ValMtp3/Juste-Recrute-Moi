@@ -2,6 +2,7 @@ import asyncio
 import concurrent.futures
 import logging
 import os
+import re
 import threading
 import time
 from urllib.parse import urlparse
@@ -25,6 +26,11 @@ _TIMEOUT = httpx.Timeout(120.0, connect=10.0)
 # Number of retries (after the first attempt) for transient LLM errors. (C2)
 _MAX_LLM_RETRIES = 3
 _RETRY_BASE_DELAY = 1.0  # seconds; doubles each retry → 1s, 2s, 4s
+_MAX_RETRY_DELAY = 30.0
+_RATE_LIMIT_MIN_DELAY = 2.5
+_RATE_LIMIT_MAX_DELAY = 20.0
+_LLM_COOLDOWN_UNTIL = 0.0
+_LLM_COOLDOWN_LOCK = threading.Lock()
 
 # H5: a dedicated, bounded thread pool for blocking LLM calls. Using the default
 # asyncio executor meant a burst of slow (up to 120s) generations could occupy
@@ -85,27 +91,92 @@ async def acall_raw(s: str, u: str, step: str | None = None) -> str:
     return await loop.run_in_executor(LLM_EXECUTOR, call_raw, s, u, step)
 
 
+def _iter_llm_error_causes(exc: Exception):
+    yield exc
+    for attempt in getattr(exc, "failed_attempts", None) or []:
+        nested = getattr(attempt, "exception", None)
+        if isinstance(nested, Exception):
+            yield nested
+    for attr in ("__cause__", "__context__"):
+        nested = getattr(exc, attr, None)
+        if isinstance(nested, Exception):
+            yield nested
+
+
 def _is_retryable_llm_error(exc: Exception) -> bool:
     """True for transient errors worth retrying (rate limit, connection, 5xx).
 
     Permanent errors — authentication, invalid request, 4xx other than 429 —
     return False so they propagate immediately rather than wasting retries.
     """
-    if isinstance(
-        exc,
-        (
-            openai.RateLimitError,
-            openai.APIConnectionError,
-            openai.APITimeoutError,
-            anthropic.RateLimitError,
-            anthropic.APIConnectionError,
-            anthropic.APITimeoutError,
-        ),
-    ):
-        return True
-    # HTTP 5xx from either SDK (APIStatusError subclasses expose status_code).
-    status = getattr(exc, "status_code", None)
-    return isinstance(status, int) and 500 <= status < 600
+    for candidate in _iter_llm_error_causes(exc):
+        if isinstance(
+            candidate,
+            (
+                openai.RateLimitError,
+                openai.APIConnectionError,
+                openai.APITimeoutError,
+                anthropic.RateLimitError,
+                anthropic.APIConnectionError,
+                anthropic.APITimeoutError,
+            ),
+        ):
+            return True
+        status = getattr(candidate, "status_code", None)
+        if isinstance(status, int) and (status == 429 or 500 <= status < 600):
+            return True
+    return False
+
+
+def _is_rate_limit_llm_error(exc: Exception) -> bool:
+    for candidate in _iter_llm_error_causes(exc):
+        if isinstance(candidate, (openai.RateLimitError, anthropic.RateLimitError)):
+            return True
+        status = getattr(candidate, "status_code", None)
+        if isinstance(status, int) and status == 429:
+            return True
+    return False
+
+
+def _retry_delay_from_error(exc: Exception, fallback: float) -> float:
+    for candidate in _iter_llm_error_causes(exc):
+        response = getattr(candidate, "response", None)
+        headers = getattr(response, "headers", None) or getattr(candidate, "headers", None) or {}
+        for header in ("retry-after-ms", "Retry-After-Ms"):
+            raw = headers.get(header) if hasattr(headers, "get") else None
+            if raw:
+                try:
+                    return min(_MAX_RETRY_DELAY, max(0.1, float(raw) / 1000))
+                except ValueError:
+                    pass
+        for header in ("retry-after", "Retry-After"):
+            raw = headers.get(header) if hasattr(headers, "get") else None
+            if raw:
+                try:
+                    return min(_MAX_RETRY_DELAY, max(0.1, float(raw)))
+                except ValueError:
+                    pass
+        message = str(candidate)
+        match = re.search(r"try again in ([0-9]+(?:\.[0-9]+)?)\s*(ms|s)", message, flags=re.I)
+        if match:
+            value = float(match.group(1))
+            delay = value / 1000 if match.group(2).lower() == "ms" else value
+            return min(_MAX_RETRY_DELAY, max(0.1, delay))
+    return min(_MAX_RETRY_DELAY, max(0.1, fallback))
+
+
+def _respect_llm_cooldown() -> None:
+    with _LLM_COOLDOWN_LOCK:
+        wait = _LLM_COOLDOWN_UNTIL - time.monotonic()
+    if wait > 0:
+        time.sleep(wait)
+
+
+def _set_llm_cooldown(seconds: float) -> None:
+    until = time.monotonic() + max(0.0, seconds)
+    global _LLM_COOLDOWN_UNTIL
+    with _LLM_COOLDOWN_LOCK:
+        _LLM_COOLDOWN_UNTIL = max(_LLM_COOLDOWN_UNTIL, until)
 
 
 def is_transient_llm_error(exc: Exception) -> bool:
@@ -123,18 +194,23 @@ def _retry_llm_call(fn, *, max_retries: int = _MAX_LLM_RETRIES):
     delay = _RETRY_BASE_DELAY
     for attempt in range(max_retries + 1):
         try:
+            _respect_llm_cooldown()
             return fn()
         except Exception as exc:
             if attempt >= max_retries or not _is_retryable_llm_error(exc):
                 raise
+            wait = _retry_delay_from_error(exc, delay)
+            if _is_rate_limit_llm_error(exc):
+                wait = min(_RATE_LIMIT_MAX_DELAY, max(_RATE_LIMIT_MIN_DELAY, wait))
+                _set_llm_cooldown(wait)
             _log.warning(
                 "Erreur LLM temporaire (tentative %d/%d) ; nouvel essai dans %.0fs : %s",
                 attempt + 1,
                 max_retries,
-                delay,
+                wait,
                 exc,
             )
-            time.sleep(delay)
+            time.sleep(wait)
             delay *= 2
 # STABILITY: thread-safe LLM repository singleton
 _repo_lock = threading.RLock()

@@ -10,15 +10,15 @@ Run this and nothing else:
 It is IDEMPOTENT — it checks what's already in place and only does the missing
 work, then starts the app:
 
-  1. prerequisites: `uv` and `npm` are on PATH
+  1. prerequisites: `uv` and `pnpm` are on PATH
   2. backend Python deps        -> `uv sync` (applies the lockfile)
-  3. frontend deps              -> `npm install` (only if node_modules is missing)
+  3. frontend deps              -> `pnpm install` (only if node_modules is missing)
   4. ONNX embedding model       -> downloaded into the dev sidecar's app-data dir
                                    (so semantic search works in dev instead of the
                                    hash fallback) — skipped if already present
   5. Playwright Chromium        -> installed (portfolio crawl / web scout) — skipped
                                    if already present
-  6. launch                     -> `npm run tauri dev`
+  6. launch                     -> `pnpm tauri dev`
 
 No manual downloads, no figuring things out. Just `python startup.py`.
 """
@@ -80,7 +80,7 @@ def app_data_dir() -> Path:
 
 
 def run(command: str, *, cwd: Path | None = None, env: dict | None = None, stdin_text: str | None = None) -> int:
-    """Run a shell command (string form so Windows finds uv/npm shims). Streams output."""
+    """Run a shell command (string form so Windows finds uv/pnpm shims). Streams output."""
     merged_env = {**os.environ, **(env or {})}
     completed = subprocess.run(
         command,
@@ -110,10 +110,10 @@ def main() -> None:
 
     # 1) prerequisites
     step("Checking prerequisites")
-    missing = [tool for tool in ("uv", "npm") if shutil.which(tool) is None]
+    missing = [tool for tool in ("uv", "pnpm") if shutil.which(tool) is None]
     if missing:
         fail(f"missing required tools on PATH: {', '.join(missing)}. Install them, then re-run.")
-    ok("uv + npm found")
+    ok("uv + pnpm found")
 
     # 2) backend deps (idempotent — uv sync is a no-op when the venv matches the lock)
     step("Backend Python deps (uv sync)")
@@ -121,9 +121,9 @@ def main() -> None:
     ok("backend venv matches the lockfile")
 
     # 3) frontend deps
-    step("Frontend deps (npm install)")
+    step("Frontend deps (pnpm install)")
     if args.force or not (ROOT / "node_modules").exists():
-        require("npm install", cwd=ROOT)
+        require("pnpm install", cwd=ROOT)
         ok("node_modules installed")
     else:
         ok("node_modules already present (use --force to refresh)")
@@ -148,13 +148,13 @@ def main() -> None:
 
     if args.no_run:
         print("\n" + _c("[ok] Local environment ready.", "1;32"))
-        print("  Launch any time with:  python startup.py   (or  npm run tauri dev)")
+        print("  Launch any time with:  python startup.py   (or  pnpm dev:local)")
         return
 
     # 6) launch the full app (frontend + Rust shell + Python sidecar)
-    step("Launching Juste Recrute Moi  (npm run tauri dev)")
+    step("Launching Juste Recrute Moi  (pnpm tauri dev)")
     print("  (Ctrl-C to stop. The app window will open once the Rust shell builds.)")
-    sys.exit(run("npm run tauri dev", cwd=ROOT))
+    sys.exit(run("pnpm tauri dev", cwd=ROOT))
 
 
 if __name__ == "__main__":

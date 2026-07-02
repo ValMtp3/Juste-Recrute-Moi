@@ -275,6 +275,42 @@ def _fallback_site_queries(profile: dict, site_domains: list[str], seniority_hin
     return [f"site:{d} ({top}) ({seniority_hint})" for d in site_domains]
 
 
+def _site_domain(query: str) -> str:
+    if not str(query or "").strip().lower().startswith("site:"):
+        return ""
+    return str(query).strip()[5:].split()[0].strip().strip('"')
+
+
+def _site_query_variants(profile: dict, queries: list[str], seniority_hint: str) -> list[str]:
+    """Add one deterministic broad variant per site: query.
+
+    The LLM/fallback query stays first and focused. The extra variant increases
+    recall for browser/Google scans without adding another model call.
+    """
+    terms = _profile_search_terms(profile)
+    primary_terms = terms[:3] or _role_terms(profile)[:3]
+    if not primary_terms:
+        return queries
+    primary = " OR ".join(f'"{term}"' for term in primary_terms)
+    out: list[str] = []
+    seen: set[str] = set()
+    for query in queries:
+        clean = re.sub(r"\s+", " ", str(query or "")).strip()
+        key = clean.lower()
+        if clean and key not in seen:
+            seen.add(key)
+            out.append(clean)
+        domain = _site_domain(clean)
+        if not domain:
+            continue
+        variant = f'site:{domain} ({primary}) ("hiring" OR "jobs" OR "careers" OR "open roles") ({seniority_hint})'
+        variant_key = variant.lower()
+        if variant_key not in seen:
+            seen.add(variant_key)
+            out.append(variant)
+    return out
+
+
 def generate(profile: dict, urls: list[str], market_focus: str = "global") -> list[str]:
     """
     Main entry point.  Returns a new URL list where every 'site:' entry has
@@ -434,6 +470,8 @@ Generate the queries now."""
     except Exception as exc:
         _log.warning("Le LLM n'a pas répondu (%s) ; utilisation des requêtes locales", exc)
         smart = _fallback_site_queries(profile, site_domains, seniority_hint)
+
+    smart = _site_query_variants(profile, smart, seniority_hint)
 
     if focus == "india":
         smart = [_india_clause(q) for q in smart]

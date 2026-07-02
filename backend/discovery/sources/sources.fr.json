@@ -1,9 +1,17 @@
 {
   "market_focus": "france",
   "free_source_targets": [
-    "france_travail:developpeur;lieu=France;range=0-49",
+    "france_travail:developpeur;lieu=France;range=0-149",
     "ats:greenhouse:mistralai",
+    "ats:greenhouse:doctolib",
+    "ats:greenhouse:contentsquare",
+    "ats:greenhouse:algolia",
+    "ats:greenhouse:criteo",
     "ats:lever:qonto",
+    "ats:lever:datadog",
+    "ats:lever:blablacar",
+    "ats:lever:swile",
+    "ats:lever:payfit",
     "ats:smartrecruiters:Ubisoft2",
     "ats:teamtailor:alan"
   ],

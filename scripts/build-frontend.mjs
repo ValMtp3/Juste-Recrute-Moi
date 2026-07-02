@@ -1,16 +1,18 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 
+const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+
 const commands = [
-  ["typecheck", process.platform === "win32" ? "npx.cmd" : "npx", ["tsc", "--noEmit"]],
-  ["vite build", process.platform === "win32" ? "npx.cmd" : "npx", ["vite", "build"]],
+  ["typecheck", pnpm, ["exec", "tsc", "--noEmit"]],
+  ["vite build", pnpm, ["exec", "vite", "build"]],
 ];
 
 let failed = false;
 
 function run(name, command, args) {
   const child = spawn(command, args, {
-    shell: true,
+    shell: process.platform === "win32",
     stdio: ["ignore", "pipe", "pipe"],
   });
 

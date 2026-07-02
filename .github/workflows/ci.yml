@@ -13,6 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  PNPM_VERSION: "10.33.2"
   # pip-audit currently reports no fixed versions for these transitive ML advisories.
   # Keep the audit strict for all other packages; remove entries as upstream fixes land.
   PIP_AUDIT_IGNORE_VULNS: >-
@@ -21,6 +22,11 @@ env:
     PYSEC-2026-139 PYSEC-2025-191 PYSEC-2025-197 PYSEC-2025-189 PYSEC-2025-190
     PYSEC-2025-217 PYSEC-2025-214 PYSEC-2025-218 PYSEC-2025-211 PYSEC-2025-212 PYSEC-2025-213
     PYSEC-2025-215 PYSEC-2025-216
+  # glib 0.18 is pulled by the current Tauri/wry GTK stack. quick-xml < 0.41 is
+  # still pinned by the latest Tauri plist/notification stack. Keep this scoped
+  # and remove entries as upstream Tauri deps publish compatible fixes.
+  CARGO_AUDIT_IGNORE_VULNS: >-
+    RUSTSEC-2024-0429 RUSTSEC-2026-0194 RUSTSEC-2026-0195
 
 jobs:
   dependency-audit:
@@ -31,13 +37,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: npm
+          cache: pnpm
 
       - name: Audit frontend dependencies
-        run: npm audit --audit-level=moderate
+        run: pnpm audit --audit-level=moderate
 
       - uses: actions/setup-python@v6
         with:
@@ -61,7 +71,11 @@ jobs:
         run: |
           cargo install cargo-audit --locked
           cd src-tauri
-          cargo audit
+          audit_args=()
+          for vuln in $CARGO_AUDIT_IGNORE_VULNS; do
+            audit_args+=(--ignore "$vuln")
+          done
+          cargo audit "${audit_args[@]}"
 
   frontend:
     name: Frontend
@@ -70,17 +84,20 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: npm
-      - run: npm ci
-      - run: npm run version:check
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run test:behavioral
-      - run: npm run test:coverage
-      - run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm version:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test:behavioral
+      - run: pnpm test:coverage
+      - run: pnpm build
 
   website:
     name: Website
@@ -92,13 +109,16 @@ jobs:
         working-directory: website
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: npm
-          cache-dependency-path: website/package-lock.json
-      - run: npm ci
-      - run: npm run build
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
 
   backend:
     name: Backend
@@ -157,10 +177,14 @@ jobs:
             patchelf \
             wget
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: npm
+          cache: pnpm
 
       - uses: actions/setup-python@v6
         with:
@@ -175,13 +199,13 @@ jobs:
           workspaces: "src-tauri -> target"
 
       - name: Installer les dépendances frontend
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Installer les dépendances backend
         run: cd backend && uv sync --dev --frozen
 
       - name: Run release smoke
-        run: npm run release:smoke
+        run: pnpm release:smoke
 
   backend-domains:
     name: Backend domain tests

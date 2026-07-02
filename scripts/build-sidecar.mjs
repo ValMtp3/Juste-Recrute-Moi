@@ -29,7 +29,7 @@ function run(command, args, options = {}) {
         PYINSTALLER_CONFIG_DIR: pyinstallerConfigDir,
         HF_HOME: join(backendDir, ".hf-cache"),
       },
-      shell: true,
+      shell: process.platform === "win32",
       stdio: "inherit",
     });
 
@@ -52,7 +52,7 @@ function capture(command, args, options = {}) {
         ...process.env,
         PYTHONNOUSERSITE: "1",
       },
-      shell: true,
+      shell: process.platform === "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
 
@@ -119,7 +119,7 @@ async function getRustTriple() {
   return new Promise((resolveTriple, reject) => {
     const child = spawn("rustc", ["-vV"], {
       cwd: repoRoot,
-      shell: true,
+      shell: process.platform === "win32",
       stdio: ["ignore", "pipe", "inherit"],
     });
 

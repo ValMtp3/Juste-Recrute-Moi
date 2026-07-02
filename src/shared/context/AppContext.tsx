@@ -1,12 +1,13 @@
 import { useCallback, useState } from "react";
 import type { Lead, View } from "../../types";
 import { ONBOARDING_KEY } from "../lib/leadUtils";
+import { readLocalStorage, removeLocalStorage } from "../lib/storage";
 
 export function useAppShellState() {
   const [view, setView] = useState<View>("dashboard");
   const [sel, setSel] = useState<Lead | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(() => localStorage.getItem(ONBOARDING_KEY) !== "done");
+  const [showOnboarding, setShowOnboarding] = useState(() => readLocalStorage(ONBOARDING_KEY) !== "done");
   const [applyDraft, setApplyDraft] = useState("");
   const [applyAutoFocus, setApplyAutoFocus] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -21,7 +22,7 @@ export function useAppShellState() {
   }, []);
   const openSettings = useCallback(() => setShowSettings(true), []);
   const openSetupGuide = useCallback(() => {
-    localStorage.removeItem(ONBOARDING_KEY);
+    removeLocalStorage(ONBOARDING_KEY);
     setShowOnboarding(true);
   }, []);
 
