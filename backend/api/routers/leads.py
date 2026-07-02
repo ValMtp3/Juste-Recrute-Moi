@@ -20,6 +20,7 @@ from data.repository import Repository
 MANUAL_FEEDBACK_TIMEOUT_SECONDS = 8
 _background_tasks: set[asyncio.Task] = set()
 _INVALID_JOB_ID = "Identifiant d'offre invalide. Rechargez la liste puis réessayez."
+_PDF_ASSET_RE = re.compile(r"^[A-Za-z0-9_.-]+\.pdf$")
 
 
 def _manual_generation_failed_message(lead: dict, exc: Exception) -> str:
@@ -42,6 +43,13 @@ def _asset_path(path: str) -> str:
     if os.path.commonpath([assets_root, resolved]) != assets_root:
         raise HTTPException(status_code=404, detail="Fichier introuvable")
     return resolved
+
+
+def _pdf_asset_path(filename: str) -> str:
+    name = os.path.basename(filename)
+    if not _PDF_ASSET_RE.fullmatch(name):
+        raise HTTPException(status_code=404, detail="Fichier introuvable")
+    return os.path.join(default_assets_dir(), name)
 
 
 def annotate_job_lead(lead: dict) -> dict:
@@ -342,15 +350,15 @@ def create_router(manager) -> APIRouter:
             if not base_dir:
                 base_dir = default_assets_dir()
             filename = f"{job_id}_cl_v{version}.pdf" if is_cover else f"{job_id}_v{version}.pdf"
-            path = _asset_path(os.path.join(base_dir, filename))
+            path = _pdf_asset_path(os.path.basename(_asset_path(os.path.join(base_dir, filename))))
             missing = "Lettre pas encore générée" if is_cover else "CV pas encore généré"
         elif is_cover:
-            path = _asset_path(lead.get("cover_letter_asset") or "") if lead.get("cover_letter_asset") else ""
+            path = _pdf_asset_path(os.path.basename(_asset_path(lead.get("cover_letter_asset") or ""))) if lead.get("cover_letter_asset") else ""
             filename = f"{job_id}_cover_letter.pdf"
             missing = "Lettre pas encore générée"
         else:
             raw_path = lead.get("resume_asset") or lead.get("asset") or ""
-            path = _asset_path(raw_path) if raw_path else ""
+            path = _pdf_asset_path(os.path.basename(_asset_path(raw_path))) if raw_path else ""
             filename = f"{job_id}_resume.pdf"
             missing = "CV pas encore généré"
         if not path or not os.path.exists(path):

@@ -560,7 +560,7 @@ def _project_impact(block: str, title: str) -> str:
 
 
 def _nearest_repo_link(links: list[dict[str, str]], title: str) -> str:
-    github_links = [link["href"] for link in links if "github.com" in link.get("href", "").lower()]
+    github_links = [link["href"] for link in links if _url_host_is(link.get("href", ""), "github.com")]
     if not github_links:
         return ""
     title_key = re.sub(r"[^a-z0-9]+", "", title.lower())
@@ -652,12 +652,16 @@ def _external_links(pages: list[PageSnapshot]) -> dict[str, str]:
     for page in pages:
         for link in page.links:
             href = link.get("href", "")
-            lower = href.lower()
-            if "linkedin.com" in lower and "linkedin" not in out:
+            if _url_host_is(href, "linkedin.com") and "linkedin" not in out:
                 out["linkedin"] = href
-            if "github.com" in lower and "github" not in out:
+            if _url_host_is(href, "github.com") and "github" not in out:
                 out["github"] = href
     return out
+
+
+def _url_host_is(url: str, domain: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    return host == domain or host.endswith(f".{domain}")
 
 
 def _collect_reference_links(pages: list[PageSnapshot], limit: int = 60) -> list[dict[str, str]]:

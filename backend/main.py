@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import socket
 import sys
 import time
@@ -89,6 +90,10 @@ def _parse_args():
     return parser.parse_args()
 
 
+def _write_boot_value(name: str, value: str | int) -> None:
+    os.write(sys.stdout.fileno(), f"{name}{value}\n".encode())
+
+
 if __name__ == "__main__":
     import uvicorn
 
@@ -98,7 +103,7 @@ if __name__ == "__main__":
     # the same socket to uvicorn — no re-bind, no port-steal race.
     sock = _reserve_socket(args.port)
     port = sock.getsockname()[1]
-    sys.stdout.write(f"JHM_TOKEN={_API_TOKEN}\n")
-    sys.stdout.write(f"PORT:{port}\n")
+    _write_boot_value("JHM_TOKEN=", _API_TOKEN)
+    _write_boot_value("PORT:", port)
     sys.stdout.flush()
     uvicorn.Server(uvicorn.Config(gateway_app, log_level="warning")).run(sockets=[sock])

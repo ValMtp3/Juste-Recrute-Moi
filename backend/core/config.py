@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from dataclasses import dataclass
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 
 DEFAULT_JOB_TARGETS = [
@@ -388,7 +388,24 @@ def job_market_focus(value) -> str:
 
 def is_hn_target(target: str) -> bool:
     lower = target.lower()
-    return lower.startswith("hn:") or "hn-hiring" in lower or "hackernews" in lower or "news.ycombinator.com" in lower
+    host = _configured_target_host(lower)
+    return (
+        lower.startswith("hn:")
+        or "hn-hiring" in lower
+        or "hackernews" in lower
+        or host == "news.ycombinator.com"
+        or host.endswith(".news.ycombinator.com")
+    )
+
+
+def _configured_target_host(target: str) -> str:
+    raw = str(target or "").strip().lower()
+    if raw.startswith("site:"):
+        raw = raw[5:].split()[0]
+    if not raw:
+        return ""
+    parsed = urlparse(raw if raw.startswith(("http://", "https://")) else f"https://{raw}")
+    return parsed.hostname or ""
 
 
 def _france_direct_targets(

@@ -14,7 +14,8 @@ def is_ats_target(target: str) -> bool:
         return True
     if not lower.startswith(("http://", "https://")):
         return False
-    return any(host in lower for host in (
+    host = urlparse(target).hostname or ""
+    return any(_host_is(host, domain) for domain in (
         "greenhouse.io",
         "lever.co",
         "ashbyhq.com",
@@ -22,6 +23,11 @@ def is_ats_target(target: str) -> bool:
         "smartrecruiters.com",
         "teamtailor.com",
     ))
+
+
+def _host_is(host: str, domain: str) -> bool:
+    host = host.lower()
+    return host == domain or host.endswith(f".{domain}")
 
 
 async def scrape_greenhouse(slug: str) -> list[dict]:
@@ -235,24 +241,24 @@ async def scrape_teamtailor(slug: str) -> list[dict]:
 
 async def scrape_direct_ats_url(url: str) -> list[dict]:
     parsed = urlparse(url)
-    host = parsed.netloc.lower()
+    host = (parsed.hostname or "").lower()
     path = parsed.path.strip("/").split("/")
-    if "greenhouse.io" in host and path:
-        slug = path[-1] if "boards.greenhouse.io" in host else path[0]
+    if _host_is(host, "greenhouse.io") and path:
+        slug = path[-1] if _host_is(host, "boards.greenhouse.io") else path[0]
         return await scrape_greenhouse(slug)
-    if "lever.co" in host and path:
+    if _host_is(host, "lever.co") and path:
         return await scrape_lever(path[0])
-    if "ashbyhq.com" in host and path:
+    if _host_is(host, "ashbyhq.com") and path:
         return await scrape_ashby(path[0])
-    if "workable.com" in host and path:
+    if _host_is(host, "workable.com") and path:
         slug = path[0] if path[0] not in {"j", "api"} else ""
         if slug:
             return await scrape_workable(slug)
-    if "smartrecruiters.com" in host and path:
-        slug = path[0] if "jobs.smartrecruiters.com" in host else path[-1]
+    if _host_is(host, "smartrecruiters.com") and path:
+        slug = path[0] if _host_is(host, "jobs.smartrecruiters.com") else path[-1]
         if slug:
             return await scrape_smartrecruiters(slug)
-    if "teamtailor.com" in host:
+    if _host_is(host, "teamtailor.com"):
         slug = host.split(".teamtailor.com")[0].replace("www.", "")
         if slug:
             return await scrape_teamtailor(slug)

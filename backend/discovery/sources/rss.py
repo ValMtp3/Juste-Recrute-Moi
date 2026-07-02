@@ -29,24 +29,28 @@ def is_rss_target(u: str) -> bool:
 
 
 def platform_from_url(u: str, fallback: str = "scout") -> str:
-    host = urlparse(u).netloc.lower()
-    if "remoteok.com" in host:
+    host = (urlparse(u).hostname or "").lower()
+    if _host_is(host, "remoteok.com"):
         return "remoteok"
-    if "remotive.com" in host:
+    if _host_is(host, "remotive.com"):
         return "remotive"
-    if "jobicy.com" in host:
+    if _host_is(host, "jobicy.com"):
         return "jobicy"
-    if "weworkremotely.com" in host:
+    if _host_is(host, "weworkremotely.com"):
         return "weworkremotely"
-    if "greenhouse.io" in host:
+    if _host_is(host, "greenhouse.io"):
         return "greenhouse"
-    if "lever.co" in host:
+    if _host_is(host, "lever.co"):
         return "lever"
-    if "ashbyhq.com" in host:
+    if _host_is(host, "ashbyhq.com"):
         return "ashby"
-    if "workable.com" in host:
+    if _host_is(host, "workable.com"):
         return "workable"
     return fallback
+
+
+def _host_is(host: str, domain: str) -> bool:
+    return host == domain or host.endswith(f".{domain}")
 
 
 def lead_source(item: dict) -> str:

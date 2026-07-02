@@ -494,10 +494,10 @@ def _subscription_call(provider, attempt, fallback, *, step):
         try:
             return attempt()
         except _sub.CliTimeout:
-            _log.warning("%s CLI d'abonnement trop lent (étape=%s) ; nouvel essai", provider, step)
+            _log.warning("CLI d'abonnement trop lent (étape=%s) ; nouvel essai", step)
             return attempt()
     except _sub.CliError:
-        _log.warning("%s CLI d'abonnement indisponible (étape=%s)", provider, step)
+        _log.warning("CLI d'abonnement indisponible (étape=%s)", step)
         return fallback()
 
 
@@ -588,7 +588,7 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
 
     elif p in _OPENAI_COMPAT_PROVIDERS:
         if not k:
-            _log.warning("%s : aucune clé configurée (étape=%s) ; repli local", p, step)
+            _log.warning("fournisseur compatible : aucune clé configurée (étape=%s) ; repli local", step)
             return _parse_fallback(u, m)
         if p == "perplexity":
             schema = m.model_json_schema()
@@ -607,7 +607,7 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
         try:
             client = _client_openai_compat(p, k)
         except ValueError:
-            _log.warning("%s : configuration invalide (étape=%s)", p, step)
+            _log.warning("fournisseur compatible : configuration invalide (étape=%s)", step)
             return _parse_fallback(u, m)
         compat_client = instructor.from_openai(
             client,
@@ -632,7 +632,7 @@ def _call_llm_once(s: str, u: str, m: type[BaseModel], step: str | None = None):
 
     else:  # ollama / default
         b = get_setting("ollama_url", "http://localhost:11434/v1")
-        _log.info("ollama at %s model=%s (step=%s)", b, model, step)
+        _log.info("ollama configured (step=%s)", step)
         ollama_client = instructor.from_openai(
             _openai(base_url=b, api_key="ollama", timeout=_TIMEOUT, max_retries=0)
         )
@@ -730,7 +730,7 @@ def _call_raw_once(s: str, u: str, step: str | None = None) -> str:
         try:
             compat_raw_client = _client_openai_compat(p, k)
         except ValueError:
-            _log.warning("%s : configuration invalide (étape=%s)", p, step)
+            _log.warning("fournisseur compatible : configuration invalide (étape=%s)", step)
             return ""
         # Perplexity included: it serves only the OpenAI-compatible
         # chat-completions API (no Responses API).

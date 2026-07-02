@@ -4,6 +4,7 @@ import logging
 import asyncio
 import os
 import re
+from urllib.parse import urlparse
 
 from data.repository import Repository, create_repository
 
@@ -41,8 +42,8 @@ def _contact_from_text(text: str) -> dict:
         phone = match.group(0).strip()
 
     urls = re.findall(r"(?:https?://)?(?:www\.)?[A-Za-z0-9.-]+\.[A-Za-z]{2,}(?:/[^\s),;]*)?", text or "")
-    linkedin = next((url for url in urls if "linkedin.com" in url.lower()), "")
-    github = next((url for url in urls if "github.com" in url.lower()), "")
+    linkedin = next((url for url in urls if _url_host_is(url, "linkedin.com")), "")
+    github = next((url for url in urls if _url_host_is(url, "github.com")), "")
     website = next((url for url in urls if url not in {linkedin, github} and "@" not in url), "")
 
     def norm_url(url: str) -> str:
@@ -57,6 +58,12 @@ def _contact_from_text(text: str) -> dict:
         "github": norm_url(github),
         "website": norm_url(website or github or linkedin),
     }
+
+
+def _url_host_is(url: str, domain: str) -> bool:
+    candidate = url if url.startswith(("http://", "https://")) else f"https://{url}"
+    host = (urlparse(candidate).hostname or "").lower()
+    return host == domain or host.endswith(f".{domain}")
 
 
 def get_lead_for_fire_sync(job_id: str, repo: Repository | None = None) -> tuple[dict, str]:
