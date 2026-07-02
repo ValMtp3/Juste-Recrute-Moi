@@ -1,8 +1,104 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Icon from "../../shared/components/Icon";
-import type { ApiFetch } from "../../types";
+import type { ApiFetch, View } from "../../types";
 import { emitAppEvent } from "../../shared/lib/appEvents";
+import { ONBOARDING_KEY } from "../../shared/lib/leadUtils";
+import { writeLocalStorage } from "../../shared/lib/storage";
+import { readJsonResponse, responseErrorMessage as sharedResponseErrorMessage } from "../../shared/lib/httpError";
+
+type ResultStats = {
+  skills?: number;
+  experience?: number;
+  projects?: number;
+  certifications?: number;
+  repos_fetched?: number;
+  repos_enriched?: number;
+  projects_extracted?: number;
+  skills_extracted?: number;
+  readmes_read?: number;
+  languages_read?: number;
+  manifests_read?: number;
+  pages_scanned?: number;
+  links_seen?: number;
+  llm_used?: boolean;
+};
+
+type PortfolioSkill = { name?: string; n?: string };
+type PortfolioProject = { title?: string; stack?: string; impact?: string };
+type IngestionResult = {
+  status?: string;
+  source?: string;
+  errorMsg?: string;
+  error?: string;
+  importError?: string | null;
+  stats?: ResultStats;
+  github_user?: { avatar?: string; login?: string; bio?: string };
+  errors?: string[];
+  screenshot_b64?: string;
+  candidate?: { summary?: string };
+  identity?: unknown;
+  skills?: PortfolioSkill[];
+  projects?: PortfolioProject[];
+  achievements?: unknown[];
+  experience?: unknown[];
+  education?: unknown[];
+  certifications?: unknown[];
+  exp?: unknown[];
+  imported?: { stats?: ResultStats };
+};
+
+type ActiveOperation =
+  | "template"
+  | "manual"
+  | "resume"
+  | "raw"
+  | "linkedin"
+  | "github"
+  | "portfolio-scan"
+  | "portfolio-import"
+  | "json-import";
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+
+const asResult = (value: unknown): IngestionResult => asRecord(value) as IngestionResult;
+
+function readableIngestionError(message: string, status?: number) {
+  const trimmed = String(message || "").trim();
+  const lower = trimmed.toLowerCase();
+  if (status === 413 || lower.includes("fichier trop volumineux") || lower.includes("file too large")) {
+    return "Fichier trop volumineux. Réduisez-le puis réessayez.";
+  }
+  if (status === 429 || lower.includes("too many requests") || lower.includes("trop de requêtes")) {
+    return trimmed || "Trop de requêtes. Patientez un instant, puis réessayez.";
+  }
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed")) {
+    return "Backend local injoignable. Relancez Juste Recrute Moi puis réessayez.";
+  }
+  if (lower.includes("unexpected token") || lower.includes("json.parse") || lower.includes("json invalide")) {
+    return "JSON invalide. Vérifiez les guillemets, virgules et accolades, ou téléchargez le modèle.";
+  }
+  if (status === 401 || lower.includes("bad credentials") || lower.includes("token invalide")) {
+    return "Token GitHub invalide. Vérifiez le token ou relancez sans token.";
+  }
+  if (status === 403 || lower.includes("rate limit") || lower.includes("api rate")) {
+    return "Limite GitHub atteinte. Ajoutez un token GitHub ou réessayez plus tard.";
+  }
+  if (status === 404 || lower.includes("not found")) {
+    return "Profil ou ressource introuvable. Vérifiez l'identifiant, l'URL ou la visibilité publique.";
+  }
+  if (lower.includes("validation") || lower.includes("field required") || lower.includes("body.") || lower.includes("value_error")) {
+    return "Certains champs ne respectent pas le format attendu. Téléchargez le modèle puis réessayez.";
+  }
+  if (lower.includes("portfolio") && (lower.includes("impossible") || lower.includes("failed") || lower.includes("timeout"))) {
+    return "Le portfolio n'a pas pu être lu. Vérifiez que l'URL est publique, puis réessayez.";
+  }
+  if (lower.includes("import échoué") || lower.includes("ingest failed")) {
+    return "L'import n'a pas été accepté. Vérifiez le format et réessayez.";
+  }
+  return trimmed || "L'import n'a pas pu être terminé.";
+}
 
 async function responseErrorMessage(response: Response, fallback: string) {
       // M3 : afficher le délai Retry-After au lieu d'une erreur 429 générique.
@@ -12,30 +108,26 @@ async function responseErrorMessage(response: Response, fallback: string) {
       return `Trop de requêtes. Patientez ${retryAfter} seconde${retryAfter === 1 ? "" : "s"}, puis réessayez.`;
     }
   }
-  try {
-    const data = await response.clone().json();
-    const detail = data?.detail ?? data?.error;
-    if (typeof detail === "string" && detail.trim()) return detail;
-    if (detail) return JSON.stringify(detail);
-  } catch {
-    // Fall through to text/plain error bodies.
-  }
-  try {
-    const text = await response.text();
-    if (text.trim()) return text;
-  } catch {
-    // Fall through to the caller-provided fallback.
-  }
-  return fallback;
+  const message = await sharedResponseErrorMessage(response, fallback);
+  return readableIngestionError(message, response.status);
 }
 
 function requestErrorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback;
+  return readableIngestionError(error instanceof Error && error.message ? error.message : fallback);
 }
 
-export function IngestionView({ api }: { api: ApiFetch }) {
+async function parseSuccessfulIngestionJson(response: Response) {
+  return readJsonResponse(
+    response,
+    "Réponse du backend illisible. Relancez Juste Recrute Moi puis réessayez.",
+  );
+}
+
+export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view: View) => void }) {
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activeOperation, setActiveOperation] = useState<ActiveOperation | null>(null);
+  const operationInFlightRef = useRef(false);
   const [activeTab, setActiveTab] = useState<"resume" | "manual" | "raw" | "template" | "linkedin" | "github" | "portfolio" | "json-import">("resume");
 
   // Forms
@@ -52,32 +144,57 @@ export function IngestionView({ api }: { api: ApiFetch }) {
 
   // LinkedIn tab state
   const [linkedinFile, setLinkedinFile] = useState<File | null>(null);
-  const [linkedinResult, setLinkedinResult] = useState<any>(null);
+  const [linkedinResult, setLinkedinResult] = useState<IngestionResult | null>(null);
   // GitHub tab state
   const [githubUsername, setGithubUsername] = useState("");
   const [githubToken, setGithubToken] = useState("");
-  const [githubResult, setGithubResult] = useState<any>(null);
+  const [githubResult, setGithubResult] = useState<IngestionResult | null>(null);
   const [showToken, setShowToken] = useState(false);
   const [githubMaxRepos, setGithubMaxRepos] = useState(100);
   // Portfolio tab state
   const [portfolioUrl, setPortfolioUrl] = useState("");
-  const [portfolioResult, setPortfolioResult] = useState<any>(null);
+  const [portfolioResult, setPortfolioResult] = useState<IngestionResult | null>(null);
   // JSON import tab state
   const [jsonText, setJsonText] = useState("");
   const [jsonError, setJsonError] = useState<string | null>(null);
-  const [jsonResult, setJsonResult] = useState<any>(null);
+  const [jsonResult, setJsonResult] = useState<IngestionResult | null>(null);
 
   // Load existing template on mount
   useEffect(() => {
     if (activeTab !== "template" || templateLoaded) return;
     api(`/api/v1/template`)
-      .then(r => r.json())
-      .then(d => { setTemplate(d.template || ""); setTemplateLoaded(true); })
-      .catch(() => {});
+      .then(async r => {
+        if (!r.ok) throw new Error(await responseErrorMessage(r, "Le modèle de CV n'a pas pu être chargé."));
+        return readJsonResponse<{ template?: string }>(
+          r,
+          "Le modèle de CV a répondu dans un format illisible.",
+        );
+      })
+      .then(d => { setTemplate(d.template || ""); setTemplateLoaded(true); setErrorMessage(null); })
+      .catch(err => {
+        setTemplateLoaded(true);
+        setErrorMessage(requestErrorMessage(err, "Le modèle de CV n'a pas pu être chargé."));
+      });
   }, [activeTab, api, templateLoaded]);
 
-  const saveTemplate = async () => {
+  const startOperation = (operation: ActiveOperation) => {
+    if (operationInFlightRef.current) return false;
+    operationInFlightRef.current = true;
+    setActiveOperation(operation);
     setStatus("loading");
+    return true;
+  };
+
+  const finishOperation = (nextStatus: "idle" | "done" | "error") => {
+    operationInFlightRef.current = false;
+    setActiveOperation(null);
+    setStatus(nextStatus);
+  };
+
+  const isActiveOperation = (operation: ActiveOperation) => status === "loading" && activeOperation === operation;
+
+  const saveTemplate = async () => {
+    if (!startOperation("template")) return;
     setErrorMessage(null);
     try {
       const r = await api(`/api/v1/template`, {
@@ -86,19 +203,19 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         body: JSON.stringify({ template }),
       });
       if (r.ok) {
-        setStatus("done");
+        finishOperation("done");
       } else {
         setErrorMessage(await responseErrorMessage(r, "Le modèle de CV n'a pas pu être enregistré."));
-        setStatus("error");
+        finishOperation("error");
       }
     } catch (err) {
       setErrorMessage(requestErrorMessage(err, "Le modèle de CV n'a pas pu être enregistré."));
-      setStatus("error");
+      finishOperation("error");
     }
   };
 
-  const addManual = async (type: string, data: any) => {
-    setStatus("loading");
+  const addManual = async (type: string, data: Record<string, string>) => {
+    if (!startOperation("manual")) return;
     setErrorMessage(null);
     try {
       const endpointType = type === "exp" ? "experience" : type;
@@ -106,7 +223,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         method: type === "identity" ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
       });
       if (r.ok) {
-        setStatus("done");
+        finishOperation("done");
+        writeLocalStorage(ONBOARDING_KEY, "done");
         if (type === "skill")   setSkillForm({ n: "", cat: "technical" });
         if (type === "exp")     setExpForm({ role: "", co: "", period: "", d: "" });
         if (type === "project") setProjForm({ title: "", stack: "", repo: "", impact: "" });
@@ -118,39 +236,40 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         emitAppEvent("graph-refresh");
       } else {
         setErrorMessage(await responseErrorMessage(r, "Le contexte du profil n'a pas pu être enregistré."));
-        setStatus("error");
+        finishOperation("error");
       }
     } catch (err) {
       setErrorMessage(requestErrorMessage(err, "Le contexte du profil n'a pas pu être enregistré."));
-      setStatus("error");
+      finishOperation("error");
     }
   };
 
   const ingestResume = async (file: File) => {
-    setStatus("loading");
+    if (!startOperation("resume")) return;
     setErrorMessage(null);
     const fd = new FormData();
     fd.append("file", file);
     try {
       const r = await api(`/api/v1/ingest`, { method: "POST", body: fd, timeoutMs: 0 });
       if (r.ok) {
-        await r.json().catch(() => ({}));
+        await parseSuccessfulIngestionJson(r);
+        writeLocalStorage(ONBOARDING_KEY, "done");
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
-        setStatus("done");
+        finishOperation("done");
       } else {
         setErrorMessage(await responseErrorMessage(r, "Ce CV n'a pas pu être importé."));
-        setStatus("error");
+        finishOperation("error");
       }
     } catch (err) {
       setErrorMessage(requestErrorMessage(err, "Ce CV n'a pas pu être importé."));
-      setStatus("error");
+      finishOperation("error");
     }
   };
 
   const ingestLinkedin = async () => {
     if (!linkedinFile) return;
-    setStatus("loading");
+    if (!startOperation("linkedin")) return;
     setLinkedinResult(null);
     const fd = new FormData();
     fd.append("file", linkedinFile);
@@ -158,7 +277,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       const isPdf = linkedinFile.name.toLowerCase().endsWith(".pdf");
       const r = await api(isPdf ? `/api/v1/ingest` : `/api/v1/ingest/linkedin`, { method: "POST", body: fd, timeoutMs: 0 });
       if (r.ok) {
-        const data = await r.json();
+        const data = asResult(await parseSuccessfulIngestionJson(r));
         setLinkedinResult(isPdf ? {
           status: "ok",
           source: "pdf",
@@ -171,20 +290,20 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         } : data);
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
-        setStatus("idle");
+        writeLocalStorage(ONBOARDING_KEY, "done");
+        finishOperation("idle");
       } else {
-        const data = await r.json().catch(() => ({}));
-        setLinkedinResult({ errorMsg: data?.detail || `Import échoué (${r.status})` });
-        setStatus("idle");
+        setLinkedinResult({ errorMsg: await responseErrorMessage(r, "Le contexte LinkedIn n'a pas pu être importé.") });
+        finishOperation("idle");
       }
-    } catch (err: any) {
-      setLinkedinResult({ errorMsg: err?.message || "Le contexte LinkedIn n'a pas pu être importé." });
-      setStatus("idle");
+    } catch (err: unknown) {
+      setLinkedinResult({ errorMsg: requestErrorMessage(err, "Le contexte LinkedIn n'a pas pu être importé.") });
+      finishOperation("idle");
     }
   };
 
   const ingestGithub = async () => {
-    setStatus("loading");
+    if (!startOperation("github")) return;
     setGithubResult(null);
     try {
       const r = await api(`/api/v1/ingest/github`, {
@@ -194,24 +313,24 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         timeoutMs: 0,
       });
       if (r.ok) {
-        const data = await r.json();
+        const data = asResult(await parseSuccessfulIngestionJson(r));
         setGithubResult(data);
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
-        setStatus("idle");
+        writeLocalStorage(ONBOARDING_KEY, "done");
+        finishOperation("idle");
       } else {
-        const data = await r.json().catch(() => ({}));
-        setGithubResult({ errorMsg: data?.detail || `Import GitHub échoué (${r.status})` });
-        setStatus("idle");
+        setGithubResult({ errorMsg: await responseErrorMessage(r, "Import GitHub échoué.") });
+        finishOperation("idle");
       }
-    } catch (err: any) {
-      setGithubResult({ errorMsg: err?.message || "Le backend local est injoignable." });
-      setStatus("idle");
+    } catch (err: unknown) {
+      setGithubResult({ errorMsg: requestErrorMessage(err, "Le backend local est injoignable.") });
+      finishOperation("idle");
     }
   };
 
   const scanPortfolio = async (autoImport = false) => {
-    setStatus("loading");
+    if (!startOperation("portfolio-scan")) return;
     if (!autoImport) setPortfolioResult(null);
     try {
       const r = await api(`/api/v1/ingest/portfolio`, {
@@ -220,23 +339,23 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         body: JSON.stringify({ url: portfolioUrl, auto_import: autoImport }),
         timeoutMs: 0,
       });
-      const data = await r.json().catch(() => ({}));
       if (r.ok) {
+        const data = asResult(await parseSuccessfulIngestionJson(r));
         setPortfolioResult(data);
-        setStatus("idle");
+        finishOperation("idle");
       } else {
-        setPortfolioResult({ errorMsg: data?.detail || "Impossible de récupérer le portfolio." });
-        setStatus("idle");
+        setPortfolioResult({ errorMsg: await responseErrorMessage(r, "Impossible de récupérer le portfolio.") });
+        finishOperation("idle");
       }
-    } catch (err: any) {
-      setPortfolioResult({ errorMsg: err?.message || "Impossible de récupérer le portfolio." });
-      setStatus("idle");
+    } catch (err: unknown) {
+      setPortfolioResult({ errorMsg: requestErrorMessage(err, "Impossible de récupérer le portfolio.") });
+      finishOperation("idle");
     }
   };
 
   const importPortfolioResult = async () => {
     if (!portfolioResult || portfolioResult.errorMsg || portfolioResult.error) return;
-    setStatus("loading");
+    if (!startOperation("portfolio-import")) return;
     setPortfolioResult({ ...portfolioResult, importError: null });
     const payload = {
       candidate: portfolioResult.candidate,
@@ -255,27 +374,32 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         body: JSON.stringify(payload),
         timeoutMs: 0,
       });
-      const data = await r.json().catch(() => ({}));
       if (!r.ok) {
-        setPortfolioResult({ ...portfolioResult, importError: data?.detail || `Import échoué (${r.status})` });
-        setStatus("idle");
+        setPortfolioResult({ ...portfolioResult, importError: await responseErrorMessage(r, "Le portfolio n'a pas pu être importé.") });
+        finishOperation("idle");
         return;
       }
+      const data = asResult(await parseSuccessfulIngestionJson(r));
       setPortfolioResult({ ...portfolioResult, imported: data });
+      writeLocalStorage(ONBOARDING_KEY, "done");
       emitAppEvent("profile-refresh");
       emitAppEvent("graph-refresh");
-      setStatus("idle");
-    } catch (err: any) {
-      setPortfolioResult({ ...portfolioResult, importError: err?.message || "Le portfolio n'a pas pu être importé." });
-      setStatus("idle");
+      finishOperation("idle");
+    } catch (err: unknown) {
+      setPortfolioResult({ ...portfolioResult, importError: requestErrorMessage(err, "Le portfolio n'a pas pu être importé.") });
+      finishOperation("idle");
     }
   };
 
   const downloadProfileTemplate = async () => {
+    setJsonError(null);
     try {
       const r = await api(`/api/v1/ingest/profile/template`);
-      if (!r.ok) throw new Error(`Téléchargement du modèle échoué (${r.status})`);
-      const data = await r.json();
+      if (!r.ok) throw new Error(await responseErrorMessage(r, "Le modèle n'a pas pu être téléchargé."));
+      const data = await readJsonResponse(
+        r,
+        "Le modèle de profil a répondu dans un format illisible.",
+      );
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -283,22 +407,22 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       a.download = "jhm_profile_template.json";
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      setJsonError("Le modèle n'a pas pu être téléchargé.");
+    } catch (err: unknown) {
+      setJsonError(requestErrorMessage(err, "Le modèle n'a pas pu être téléchargé."));
     }
   };
 
   const importProfileJson = async () => {
     setJsonError(null);
     setJsonResult(null);
-    let parsed: any;
+    let parsed: unknown;
     try {
       parsed = JSON.parse(jsonText);
-    } catch (err: any) {
-      setJsonError(err?.message || "JSON invalide.");
+    } catch (err: unknown) {
+      setJsonError(readableIngestionError(requestErrorMessage(err, "JSON invalide.")));
       return;
     }
-    setStatus("loading");
+    if (!startOperation("json-import")) return;
     try {
       const r = await api(`/api/v1/ingest/profile`, {
         method: "POST",
@@ -306,24 +430,25 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         body: JSON.stringify(parsed),
         timeoutMs: 0,
       });
-      const data = await r.json().catch(() => ({}));
       if (r.ok) {
+        const data = asResult(await parseSuccessfulIngestionJson(r));
         setJsonResult(data);
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
-        setStatus("idle");
+        writeLocalStorage(ONBOARDING_KEY, "done");
+        finishOperation("idle");
       } else {
-        setJsonError(data?.detail ? JSON.stringify(data.detail) : `Import échoué (${r.status})`);
-        setStatus("idle");
+        setJsonError(await responseErrorMessage(r, "Le profil JSON n'a pas pu être importé."));
+        finishOperation("idle");
       }
-    } catch {
-      setJsonError("Le profil JSON n'a pas pu être importé.");
-      setStatus("idle");
+    } catch (err: unknown) {
+      setJsonError(requestErrorMessage(err, "Le profil JSON n'a pas pu être importé."));
+      finishOperation("idle");
     }
   };
 
   const ingestRaw = async () => {
-    setStatus("loading");
+    if (!startOperation("raw")) return;
     setErrorMessage(null);
     const fd = new FormData();
     fd.append("raw", rawText);
@@ -332,16 +457,45 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       if (r.ok) {
         emitAppEvent("profile-refresh");
         emitAppEvent("graph-refresh");
-        setStatus("done");
+        writeLocalStorage(ONBOARDING_KEY, "done");
+        finishOperation("done");
         setRawText("");
       } else {
         setErrorMessage(await responseErrorMessage(r, "Impossible de synchroniser le contexte brut."));
-        setStatus("error");
+        finishOperation("error");
       }
     } catch (err) {
       setErrorMessage(requestErrorMessage(err, "Impossible de synchroniser le contexte brut."));
-      setStatus("error");
+      finishOperation("error");
     }
+  };
+
+  const isBusy = status === "loading";
+  const hasIdentityDraft = Object.values(identityForm).some(value => value.trim());
+
+  const importResumeFile = (file?: File | null) => {
+    if (!file) return;
+    const lower = file.name.toLowerCase();
+    if (!lower.endsWith(".pdf") && !lower.endsWith(".docx") && !lower.endsWith(".txt") && !lower.endsWith(".md")) {
+      setStatus("error");
+      setErrorMessage("Format non supporté. Importez un CV en PDF, DOCX, TXT ou Markdown.");
+      return;
+    }
+    void ingestResume(file);
+  };
+
+  const selectLinkedinFile = (file?: File | null) => {
+    if (!file) return;
+    const lower = file.name.toLowerCase();
+    if (!lower.endsWith(".zip") && !lower.endsWith(".pdf")) {
+      setLinkedinFile(null);
+      setLinkedinResult({ errorMsg: "Format non supporté. Importez un export LinkedIn ZIP ou un PDF de profil LinkedIn." });
+      setStatus("idle");
+      return;
+    }
+    setLinkedinFile(file);
+    setLinkedinResult(null);
+    setStatus("idle");
   };
 
   const TABS = [
@@ -368,7 +522,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
       <div className="ingestion-shell">
         <div className="ingestion-hero">
           <div className="ingestion-hero-copy">
-            <span className="eyebrow">Pipeline append-only</span>
+            <span className="eyebrow">Ajout progressif</span>
             <h2>Ajouter du contexte</h2>
             <p>Fusionnez CV, dépôts, pages portfolio, exports et notes manuelles dans un graphe d'identité propre.</p>
           </div>
@@ -381,12 +535,18 @@ export function IngestionView({ api }: { api: ApiFetch }) {
           </div>
         </div>
 
-        <div className="ingestion-tabs" role="tablist" aria-label="Context source">
+        <div className="ingestion-tabs" role="tablist" aria-label="Sources de contexte">
           {TABS.map(t => (
-            <button key={t.id} onClick={() => { setActiveTab(t.id); setStatus("idle"); setErrorMessage(null); }}
+            <button key={t.id} onClick={() => {
+              if (isBusy) return;
+              setActiveTab(t.id);
+              setStatus("idle");
+              setErrorMessage(null);
+            }}
               className={`ingestion-tab ingestion-accent-${t.accent} ${activeTab === t.id ? "active" : ""}`}
               role="tab"
-              aria-selected={activeTab === t.id}>
+              aria-selected={activeTab === t.id}
+              disabled={isBusy}>
               <span className="ingestion-tab-icon"><Icon name={t.icon} size={15} /></span>
               <span className="ingestion-tab-copy">
                 <strong>{t.label}</strong>
@@ -398,7 +558,12 @@ export function IngestionView({ api }: { api: ApiFetch }) {
 
         {status === "done" && (
           <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} className="ingestion-alert success">
-            <Icon name="check" size={18} /><div style={{fontWeight:600}}>Enregistré avec succès.</div>
+            <Icon name="check" size={18} />
+            <div style={{fontWeight:600}}>Enregistré avec succès. Le profil et le graphe vont se rafraîchir.</div>
+            <div className="ingestion-alert-actions">
+              <button className="btn btn-ghost" onClick={() => setView("profile")}>Voir le profil</button>
+              <button className="btn btn-ghost" onClick={() => setView("graph")}>Voir le graphe</button>
+            </div>
           </motion.div>
         )}
         {status === "error" && (
@@ -408,13 +573,23 @@ export function IngestionView({ api }: { api: ApiFetch }) {
         )}
 
         {activeTab === "resume" && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} className="card col gap-4" style={{ padding: "64px 32px", alignItems: "center", textAlign: "center", border: "2px dashed var(--line)", background: "var(--paper-2)" }}>
+          <motion.div
+            initial={{opacity:0}}
+            animate={{opacity:1}}
+            className="card col gap-4"
+            style={{ padding: "64px 32px", alignItems: "center", textAlign: "center", border: "2px dashed var(--line)", background: "var(--paper-2)" }}
+            onDragOver={e => e.preventDefault()}
+            onDrop={e => {
+              e.preventDefault();
+              importResumeFile(e.dataTransfer.files[0]);
+            }}
+          >
             <div style={{ width: 64, height: 64, borderRadius: 16, background: "var(--teal-soft)", color: "var(--teal)", display: "grid", placeItems: "center" }}><Icon name="upload" size={28} /></div>
             <div style={{ fontWeight: 600, fontSize: 18 }}>Déposez un CV récent</div>
             <div style={{ fontSize: 14, color: "var(--ink-3)", maxWidth: 360, lineHeight: 1.5 }}>PDF, DOCX, TXT ou Markdown. L'agent détecte compétences, rôles et projets, puis les ajoute au graphe.</div>
-            <input type="file" accept=".pdf,.docx,.txt,.md" onChange={e => e.target.files?.[0] && ingestResume(e.target.files[0])} style={{ display: "none" }} id="resume-in" />
-            <button className="btn btn-primary" style={{ marginTop: 16, padding: "12px 32px", fontSize: 15 }} onClick={() => document.getElementById("resume-in")?.click()}>Choisir un fichier CV</button>
-            {status === "loading" && <div className="mono pulse" style={{ fontSize: 12, marginTop: 16 }}>Analyse du CV, enregistrement du profil, synchronisation du graphe...</div>}
+            <input type="file" accept=".pdf,.docx,.txt,.md" onChange={e => { importResumeFile(e.target.files?.[0]); e.currentTarget.value = ""; }} style={{ display: "none" }} id="resume-in" />
+            <button className="btn btn-primary" style={{ marginTop: 16, padding: "12px 32px", fontSize: 15 }} onClick={() => document.getElementById("resume-in")?.click()} disabled={isBusy}>Choisir un fichier CV</button>
+            {isActiveOperation("resume") && <div className="mono pulse" style={{ fontSize: 12, marginTop: 16 }}>Analyse du CV, enregistrement du profil, synchronisation du graphe...</div>}
           </motion.div>
         )}
 
@@ -430,7 +605,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                  <option value="language">Langage</option>
                 <option value="framework">Framework</option>
               </select>
-               <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("skill", skillForm)} disabled={status==="loading" || !skillForm.n.trim()}>Ajouter la compétence</button>
+               <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("skill", skillForm)} disabled={isBusy || !skillForm.n.trim()}>Ajouter la compétence</button>
             </div>
             <div className="card col gap-4" style={{ padding: 24 }}>
               <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="brief" size={16}/> Ajouter une expérience</h3>
@@ -438,7 +613,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
               <input className="field-input" placeholder="Entreprise" value={expForm.co} onChange={v => setExpForm({...expForm, co: v.target.value})} />
               <input className="field-input" placeholder="Période (ex. 2022-2024)" value={expForm.period} onChange={v => setExpForm({...expForm, period: v.target.value})} />
               <textarea className="field-input" placeholder="Description" rows={3} value={expForm.d} onChange={v => setExpForm({...expForm, d: v.target.value})} />
-              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("exp", expForm)} disabled={status==="loading" || (!expForm.role.trim() && !expForm.co.trim())}>Ajouter l'expérience</button>
+              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("exp", expForm)} disabled={isBusy || (!expForm.role.trim() && !expForm.co.trim())}>Ajouter l'expérience</button>
             </div>
             <div className="card col gap-4" style={{ padding: 24 }}>
               <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="layers" size={16}/> Ajouter un projet</h3>
@@ -446,7 +621,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
               <input className="field-input" placeholder="Stack (séparée par des virgules)" value={projForm.stack} onChange={v => setProjForm({...projForm, stack: v.target.value})} />
               <input className="field-input" placeholder="URL du repo (facultatif)" value={projForm.repo} onChange={v => setProjForm({...projForm, repo: v.target.value})} />
               <textarea className="field-input" placeholder="Impact / description" rows={3} value={projForm.impact} onChange={v => setProjForm({...projForm, impact: v.target.value})} />
-              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("project", projForm)} disabled={status==="loading" || !projForm.title.trim()}>Ajouter le projet</button>
+              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("project", projForm)} disabled={isBusy || !projForm.title.trim()}>Ajouter le projet</button>
             </div>
             <div className="card col gap-4" style={{ padding: 24 }}>
               <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="user" size={16}/> Contact et liens</h3>
@@ -458,24 +633,24 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                 <input className="field-input" placeholder="Portfolio / site web" value={identityForm.website_url} onChange={v => setIdentityForm({...identityForm, website_url: v.target.value})} />
                 <input className="field-input" placeholder="Ville / localisation" value={identityForm.city} onChange={v => setIdentityForm({...identityForm, city: v.target.value})} />
               </div>
-              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("identity", identityForm)} disabled={status==="loading"}>Enregistrer le contact</button>
+              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("identity", identityForm)} disabled={isBusy || !hasIdentityDraft}>Enregistrer le contact</button>
             </div>
             <div className="grid-2 gap-4">
               <div className="card col gap-4" style={{ padding: 24 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="file" size={16}/> Ajouter une formation</h3>
                 <input className="field-input" placeholder="Diplôme, école, année" value={eduForm.title} onChange={v => setEduForm({...eduForm, title: v.target.value})} />
-                <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("education", eduForm)} disabled={status==="loading" || !eduForm.title.trim()}>Ajouter la formation</button>
+                <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("education", eduForm)} disabled={isBusy || !eduForm.title.trim()}>Ajouter la formation</button>
               </div>
               <div className="card col gap-4" style={{ padding: 24 }}>
                 <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="check" size={16}/> Ajouter une certification</h3>
                 <input className="field-input" placeholder="Certification, organisme, année" value={certForm.title} onChange={v => setCertForm({...certForm, title: v.target.value})} />
-                <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("certification", certForm)} disabled={status==="loading" || !certForm.title.trim()}>Ajouter la certification</button>
+                <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("certification", certForm)} disabled={isBusy || !certForm.title.trim()}>Ajouter la certification</button>
               </div>
             </div>
             <div className="card col gap-4" style={{ padding: 24 }}>
               <h3 style={{ fontSize: 16, fontWeight: 600, display: "flex", gap: 8, alignItems: "center" }}><Icon name="trending" size={16}/> Ajouter une réussite</h3>
               <input className="field-input" placeholder="Prix, publication, jalon livré, résultat de concours" value={achievementForm.title} onChange={v => setAchievementForm({...achievementForm, title: v.target.value})} />
-              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("achievement", achievementForm)} disabled={status==="loading" || !achievementForm.title.trim()}>Ajouter la réussite</button>
+              <button className="btn btn-primary" style={{alignSelf:"flex-start",padding:"10px 24px"}} onClick={() => addManual("achievement", achievementForm)} disabled={isBusy || !achievementForm.title.trim()}>Ajouter la réussite</button>
             </div>
           </motion.div>
         )}
@@ -484,8 +659,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
           <motion.div initial={{opacity:0}} animate={{opacity:1}} className="card col gap-4" style={{ padding: 24 }}>
             <div className="eyebrow">Agrégateur de texte brut</div>
             <textarea className="field-input" placeholder="Collez du texte non structuré depuis LinkedIn, un site personnel ou des notes..." rows={16} value={rawText} onChange={v => setRawText(v.target.value)} style={{ fontSize: 14, lineHeight: 1.6 }} />
-            <button className="btn btn-primary" style={{ padding: 16, fontSize: 15 }} onClick={ingestRaw} disabled={status==="loading"}>
-              {status === "loading" ? "Traitement..." : "Synchroniser le contexte brut"}
+            <button className="btn btn-primary" style={{ padding: 16, fontSize: 15 }} onClick={ingestRaw} disabled={isBusy || !rawText.trim()}>
+              {isActiveOperation("raw") ? "Traitement..." : "Synchroniser le contexte brut"}
             </button>
           </motion.div>
         )}
@@ -499,8 +674,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
               onDrop={e => {
                 e.preventDefault();
                 const f = e.dataTransfer.files[0];
-                const lower = f?.name.toLowerCase() || "";
-                if (f && (lower.endsWith(".zip") || lower.endsWith(".pdf"))) { setLinkedinFile(f); setLinkedinResult(null); }
+                if (f) selectLinkedinFile(f);
               }}
               onClick={() => document.getElementById("linkedin-zip-in")?.click()}
             >
@@ -515,12 +689,12 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                 Utilisez un export LinkedIn ZIP pour un import structuré, ou un PDF de profil LinkedIn pour une extraction rapide.
               </div>
               <input type="file" accept=".zip,.pdf,application/zip,application/pdf" id="linkedin-zip-in" style={{ display: "none" }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) { setLinkedinFile(f); setLinkedinResult(null); } }} />
+                onChange={e => { selectLinkedinFile(e.target.files?.[0]); e.currentTarget.value = ""; }} />
             </div>
             <button className="btn btn-primary" style={{ padding: 16, fontSize: 15 }}
-              disabled={!linkedinFile || status === "loading"}
+              disabled={!linkedinFile || isBusy}
               onClick={ingestLinkedin}>
-              {status === "loading" ? "Import..." : linkedinFile?.name.toLowerCase().endsWith(".pdf") ? "Importer le PDF LinkedIn" : "Importer les données LinkedIn"}
+              {isActiveOperation("linkedin") ? "Import..." : linkedinFile?.name.toLowerCase().endsWith(".pdf") ? "Importer le PDF LinkedIn" : "Importer les données LinkedIn"}
             </button>
             {linkedinResult?.errorMsg && (
               <div style={{ padding: 16, background: "var(--bad-soft)", color: "var(--bad)", borderRadius: 12, border: "1px solid var(--bad)", fontSize: 14 }}>
@@ -576,11 +750,11 @@ export function IngestionView({ api }: { api: ApiFetch }) {
               </div>
             </div>
             <button className="btn btn-primary" style={{ padding: 16, fontSize: 15 }}
-              disabled={!githubUsername.trim() || status === "loading"}
+              disabled={!githubUsername.trim() || isBusy}
               onClick={ingestGithub}>
-              {status === "loading" ? "Scan GitHub et synchronisation du graphe..." : "Scanner le profil GitHub"}
+              {isActiveOperation("github") ? "Scan GitHub et synchronisation du graphe..." : "Scanner le profil GitHub"}
             </button>
-            {status === "loading" && (
+            {isActiveOperation("github") && (
               <div className="ingestion-progress-card" role="status" aria-live="polite">
                 <div className="ingestion-progress-head">
                   <span className="ingestion-progress-spinner" aria-hidden="true" />
@@ -619,8 +793,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                 <div style={{ fontSize: 12, color: "var(--ink-4)", lineHeight: 1.5 }}>
                   Lecture de {githubResult.stats?.readmes_read ?? 0} README, {githubResult.stats?.languages_read ?? 0} cartes de langages et {githubResult.stats?.manifests_read ?? 0} manifestes.
                 </div>
-                {githubResult.errors?.length > 0 && (
-                  <div style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.5 }}>{githubResult.errors[0]}</div>
+                {Boolean(githubResult.errors?.length) && (
+                  <div style={{ fontSize: 13, color: "var(--ink-4)", lineHeight: 1.5 }}>{readableIngestionError(githubResult.errors?.[0] || "")}</div>
                 )}
               </div>
             )}
@@ -636,12 +810,12 @@ export function IngestionView({ api }: { api: ApiFetch }) {
           <motion.div initial={{opacity:0}} animate={{opacity:1}} className="col gap-4">
             <div className="card col gap-4" style={{ padding: 24 }}>
               <h3 style={{ fontSize: 16, fontWeight: 600 }}>URL de votre portfolio ou site personnel</h3>
-              <input className="field-input" placeholder="https://yoursite.com" value={portfolioUrl}
+              <input className="field-input" placeholder="https://votresite.fr" value={portfolioUrl}
                 onChange={e => { setPortfolioUrl(e.target.value); setPortfolioResult(null); }} />
               <button className="btn btn-primary" style={{ alignSelf: "flex-start", padding: "10px 24px" }}
-                disabled={!portfolioUrl.trim() || status === "loading"}
+                disabled={!portfolioUrl.trim() || isBusy}
                 onClick={() => scanPortfolio(false)}>
-                {status === "loading" ? "Lecture du site..." : "Scanner le portfolio"}
+                {isActiveOperation("portfolio-scan") ? "Lecture du site..." : "Scanner le portfolio"}
               </button>
             </div>
             {portfolioResult?.errorMsg && (
@@ -652,7 +826,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
             {portfolioResult && !portfolioResult.errorMsg && (
               <div className="card col gap-3" style={{ padding: 24 }}>
                 {portfolioResult.screenshot_b64 && (
-                  <img src={`data:image/png;base64,${portfolioResult.screenshot_b64}`} alt="Portfolio screenshot" style={{ maxHeight: 160, width: "100%", objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }} />
+                  <img src={`data:image/png;base64,${portfolioResult.screenshot_b64}`} alt="Capture du portfolio analysé" style={{ maxHeight: 160, width: "100%", objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }} />
                 )}
                 {portfolioResult.candidate ? (
                   <>
@@ -673,7 +847,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                         <div style={{ marginBottom: 14 }}>
                           <div className="eyebrow" style={{ marginBottom: 8 }}>Compétences</div>
                           <div className="row gap-1" style={{ flexWrap: "wrap" }}>
-                            {portfolioResult.skills.map((skill: any, idx: number) => (
+                            {portfolioResult.skills?.map((skill, idx) => (
                               <span key={`${skill.name || skill.n}-${idx}`} className="pill" style={{ fontSize: 11 }}>{skill.name || skill.n}</span>
                             ))}
                           </div>
@@ -683,7 +857,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                         <div>
                           <div className="eyebrow" style={{ marginBottom: 8 }}>Projets</div>
                           <div className="col gap-2">
-                            {portfolioResult.projects.map((project: any, idx: number) => (
+                            {portfolioResult.projects?.map((project, idx) => (
                               <div key={`${project.title}-${idx}`} style={{ padding: 12, border: "1px solid var(--line)", borderRadius: 8, background: "var(--paper)" }}>
                                 <div style={{ fontWeight: 650, marginBottom: 4 }}>{project.title}</div>
                                 {project.stack && <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 6 }}>{project.stack}</div>}
@@ -700,9 +874,9 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                       </div>
                     ) : (
                       <button className="btn btn-primary" style={{ alignSelf: "flex-start", padding: "10px 24px" }}
-                        disabled={status === "loading"}
+                        disabled={isBusy}
                         onClick={importPortfolioResult}>
-                        {status === "loading" ? "Import..." : "Importer les éléments affichés dans Profil"}
+                        {isActiveOperation("portfolio-import") ? "Import..." : "Importer les éléments affichés dans Profil"}
                       </button>
                     )}
                     {portfolioResult.importError && (
@@ -713,7 +887,7 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                   </>
                 ) : (
                   <div style={{ fontSize: 13, color: "var(--ink-3)", lineHeight: 1.5 }}>
-                    {portfolioResult.error || "Aucune donnée structurée n'a été extraite."}
+                    {portfolioResult.error ? readableIngestionError(portfolioResult.error) : "Aucune donnée structurée n'a été extraite."}
                   </div>
                 )}
               </div>
@@ -736,9 +910,9 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                 placeholder={`{\n  "candidate": { "name": "..." },\n  "skills": []\n}`}
                 style={{ minHeight: 220, fontSize: 13, lineHeight: 1.6, fontFamily: "var(--font-mono)" }} />
               <button className="btn btn-primary" style={{ alignSelf: "flex-start", padding: "10px 24px" }}
-                disabled={!jsonText.trim() || status === "loading"}
+                disabled={!jsonText.trim() || isBusy}
                 onClick={importProfileJson}>
-                {status === "loading" ? "Import..." : "Importer le profil"}
+                {isActiveOperation("json-import") ? "Import..." : "Importer le profil"}
               </button>
             </div>
             {jsonError && (
@@ -787,8 +961,8 @@ export function IngestionView({ api }: { api: ApiFetch }) {
                 style={{ fontSize: 13, lineHeight: 1.65, fontFamily: "var(--font-mono)" }}
               />
               <div className="row gap-3" style={{ alignItems: "center" }}>
-                <button className="btn btn-primary" style={{ padding: "12px 28px", fontSize: 14 }} onClick={saveTemplate} disabled={status==="loading"}>
-                  {status === "loading" ? "Enregistrement..." : "Enregistrer le modèle"}
+                <button className="btn btn-primary" style={{ padding: "12px 28px", fontSize: 14 }} onClick={saveTemplate} disabled={isBusy}>
+                  {isActiveOperation("template") ? "Enregistrement..." : "Enregistrer le modèle"}
                 </button>
                 {template && (
                   <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => { setTemplate(""); }}>

@@ -50,12 +50,14 @@ Prérequis :
 - Python 3.13+ ;
 - Rust stable ;
 - uv ;
+- pnpm 10.33.2, via Corepack ou installation locale ;
 - Git.
 
 Installation :
 
 ```bash
-npm ci
+corepack enable
+pnpm install
 cd backend
 uv sync --dev
 cd ..
@@ -64,13 +66,13 @@ cd ..
 Lancer l'app desktop :
 
 ```bash
-npm run tauri dev
+pnpm dev:local
 ```
 
 Lancer le frontend seul :
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 ## Tests Et Vérifications
@@ -78,9 +80,9 @@ npm run dev
 Frontend :
 
 ```bash
-npm run typecheck
-npm test
-npm run build
+pnpm typecheck
+pnpm test
+pnpm build
 ```
 
 Backend :

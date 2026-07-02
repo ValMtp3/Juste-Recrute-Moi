@@ -187,6 +187,22 @@ export default function Icon({ name, size = 16, stroke = 1.7, color = "currentCo
           <path d="m10 12 9-9 3 3-3 3 2 2-3 3-2-2-3 3" />
         </svg>
       );
+    case "eye":
+      return (
+        <svg {...props}>
+          <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      );
+    case "eye-off":
+      return (
+        <svg {...props}>
+          <path d="M3 3l18 18" />
+          <path d="M10.6 10.6a3 3 0 0 0 3.8 3.8" />
+          <path d="M9.9 5.4A10.5 10.5 0 0 1 12 5c6.5 0 10 7 10 7a18.7 18.7 0 0 1-2.1 3.1" />
+          <path d="M6.6 6.6C3.6 8.6 2 12 2 12s3.5 7 10 7a10.7 10.7 0 0 0 4.5-1" />
+        </svg>
+      );
     case "globe":
       return (
         <svg {...props}>

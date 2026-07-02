@@ -3,7 +3,7 @@ import { basename, join, resolve } from "node:path";
 import process from "node:process";
 
 const usage = `Usage: node scripts/verify-updater-release.mjs <release-assets-dir> <version-or-tag>`;
-const [releaseDirRaw, versionRaw] = process.argv.slice(2);
+const [releaseDirRaw, versionRaw] = process.argv.slice(2).filter((arg) => arg !== "--");
 
 if (!releaseDirRaw || !versionRaw) {
   console.error(usage);

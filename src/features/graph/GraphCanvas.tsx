@@ -20,6 +20,8 @@ type SimLink = { source: string | SimNode; target: string | SimNode; type: strin
 
 const W = 1200;
 const H = 760;
+const GRAPH_PRESETTLE_TICKS = 90;
+const GRAPH_ALPHA_MIN = 0.02;
 
 // One palette + size per type. Skills grow with how connected they are, giving a
 // natural hierarchy with no extra UI.
@@ -33,11 +35,11 @@ const TYPE_META: Record<string, { tone: string; radius: number; z: number }> = {
 const toneOf = (type: string) => TYPE_META[type]?.tone ?? "blue";
 
 const FILTERS: { key: string; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "Project", label: "Projects" },
-  { key: "Skill", label: "Skills" },
-  { key: "Experience", label: "Experience" },
-  { key: "Credential", label: "Credentials" },
+  { key: "all", label: "Tout" },
+  { key: "Project", label: "Projets" },
+  { key: "Skill", label: "Compétences" },
+  { key: "Experience", label: "Expériences" },
+  { key: "Credential", label: "Diplômes" },
 ];
 
 const REL_COPY: Record<string, string> = {
@@ -145,11 +147,11 @@ export function GraphCanvas({ nodes, edges }: { nodes: RawNode[]; edges: RawEdge
 
     // Pre-settle off-screen so the first painted frame is already laid out and
     // fit, then run live for a short, gentle, animated cool-down.
-    for (let i = 0; i < 90; i += 1) sim.tick();
+    for (let i = 0; i < GRAPH_PRESETTLE_TICKS; i += 1) sim.tick();
     paint();
     fitToView(simNodes);
     setReady(true);
-    sim.on("tick", paint).alpha(0.5).alphaDecay(0.035).restart();
+    sim.on("tick", paint).alpha(0.5).alphaDecay(0.035).alphaMin(GRAPH_ALPHA_MIN).restart();
     simRef.current = sim;
     return () => { sim.stop(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -279,11 +281,11 @@ export function GraphCanvas({ nodes, edges }: { nodes: RawNode[]; edges: RawEdge
             </button>
           ))}
         </div>
-        <input className="field-input kg-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search nodes…" aria-label="Search graph nodes" />
+        <input className="field-input kg-search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Rechercher un nœud..." aria-label="Rechercher dans le graphe" />
         <div className="kg-zoom">
-          <button className="btn btn-icon" onClick={() => setZoom(z => Math.max(0.25, z / 1.15))} aria-label="Zoom out">−</button>
-          <button className="btn btn-icon" onClick={() => setZoom(z => Math.min(2.8, z * 1.15))} aria-label="Zoom in">+</button>
-          <button className="btn" onClick={() => fitToView(simRef.current?.nodes() || simNodes)}>Fit</button>
+          <button className="btn btn-icon" onClick={() => setZoom(z => Math.max(0.25, z / 1.15))} aria-label="Zoom arrière">−</button>
+          <button className="btn btn-icon" onClick={() => setZoom(z => Math.min(2.8, z * 1.15))} aria-label="Zoom avant">+</button>
+          <button className="btn" onClick={() => fitToView(simRef.current?.nodes() || simNodes)}>Ajuster</button>
         </div>
       </div>
 
@@ -300,7 +302,7 @@ export function GraphCanvas({ nodes, edges }: { nodes: RawNode[]; edges: RawEdge
             onPointerUp={onStagePointerUp}
             onPointerLeave={onStagePointerUp}
             role="application"
-            aria-label="Interactive knowledge graph. Scroll to zoom, drag to pan, click a node to focus."
+            aria-label="Graphe de connaissances interactif. Molette pour zoomer, glisser pour déplacer, cliquer sur un nœud pour le focaliser."
           >
             <g ref={viewRef} className={`kg-view ${ready ? "ready" : ""}`} transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
               {simLinks.map((edge, i) => {
@@ -336,8 +338,8 @@ export function GraphCanvas({ nodes, edges }: { nodes: RawNode[]; edges: RawEdge
             </g>
           </svg>
 
-          {!ready && simNodes.length > 0 && <div className="kg-overlay">Laying out graph…</div>}
-          {ready && !simNodes.length && <div className="kg-overlay">No {filter === "all" ? "" : `${filter.toLowerCase()} `}nodes yet. Add context to build your graph.</div>}
+          {!ready && simNodes.length > 0 && <div className="kg-overlay">Placement du graphe...</div>}
+          {ready && !simNodes.length && <div className="kg-overlay">Aucun nœud disponible. Ajoutez du contexte pour construire le graphe.</div>}
 
           <div className="kg-legend" aria-hidden="true">
             {Object.entries(TYPE_META).filter(([type]) => type !== "Candidate").map(([type, meta]) => (
@@ -355,7 +357,7 @@ export function GraphCanvas({ nodes, edges }: { nodes: RawNode[]; edges: RawEdge
               </div>
               <div className="profile-card-title kg-inspector-title">{selectedNode.label}</div>
               {selectedNode.subtitle && <p className="kg-inspector-sub">{selectedNode.subtitle}</p>}
-              <span className="eyebrow">{connections.length} connection{connections.length === 1 ? "" : "s"}</span>
+              <span className="eyebrow">{connections.length} relation{connections.length === 1 ? "" : "s"}</span>
               <ul className="kg-conn-list">
                 {connections.map(({ node, rel }) => (
                   <li key={node.id}>
@@ -366,14 +368,14 @@ export function GraphCanvas({ nodes, edges }: { nodes: RawNode[]; edges: RawEdge
                     </button>
                   </li>
                 ))}
-                {!connections.length && <li className="kg-conn-empty">No connections yet.</li>}
+                {!connections.length && <li className="kg-conn-empty">Aucune relation pour l'instant.</li>}
               </ul>
             </>
           ) : (
             <div className="kg-inspector-hint">
-              <span className="eyebrow">Explore</span>
-              <h3>Click any node to focus it</h3>
-              <p>See what each project, skill, and role connects to. Scroll to zoom, drag to pan, drag a node to rearrange.</p>
+              <span className="eyebrow">Explorer</span>
+              <h3>Cliquez un nœud pour le focaliser</h3>
+              <p>Voyez à quoi chaque projet, compétence ou rôle se rattache. Molette pour zoomer, glisser pour déplacer, glisser un nœud pour réorganiser.</p>
             </div>
           )}
         </aside>

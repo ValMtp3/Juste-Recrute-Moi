@@ -205,6 +205,19 @@ def _filter_rows(rows: list[dict], allowed_ids: set[str] | None, limit: int) -> 
     return [row for row in rows if str(row.get("id") or "") in allowed_ids][:limit]
 
 
+def _table_vector_dim(table) -> int | None:
+    try:
+        schema = table.to_arrow().schema
+        value = getattr(schema.field("vector").type, "list_size", None)
+        return int(value) if value else None
+    except Exception as log_exc:
+        logging.getLogger(__name__).debug(
+            "vector dim check skipped in backend/ranking/semantic.py:_table_vector_dim: %s",
+            log_exc,
+        )
+        return None
+
+
 def _table_search(
     table_name: str,
     query: list[float],
@@ -226,6 +239,15 @@ def _table_search(
         table = store.open_table(table_name)
     except Exception as log_exc:
         logging.getLogger(__name__).warning('suppressed exception in backend/ranking/semantic.py:_table_search: %s', log_exc)
+        return []
+    table_dim = _table_vector_dim(table)
+    if table_dim and len(query) != table_dim:
+        _log.info(
+            "semantic vector table %s skipped: query dim %s != table dim %s",
+            table_name,
+            len(query),
+            table_dim,
+        )
         return []
     try:
         # LanceDB returns rows ordered by similarity. Prefer cosine when supported.

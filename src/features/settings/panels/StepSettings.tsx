@@ -1,5 +1,5 @@
-import type { Cfg } from "./shared";
-import { SectionLabel, STEPS, StepCard } from "./shared";
+import { STEPS, type Cfg } from "./config";
+import { SectionLabel, StepCard } from "./shared";
 import type { ApiFetch } from "../../../types";
 
 export function StepSettings({ cfg, onChange, api }: { cfg: Cfg; onChange: (k: keyof Cfg, v: string) => void; api?: ApiFetch | null }) {

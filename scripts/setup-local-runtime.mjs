@@ -1,6 +1,6 @@
 // One-time (idempotent) local dev runtime setup.
 //
-// `npm run tauri dev` runs the backend from your venv but does NOT auto-download
+// `pnpm tauri dev` runs the backend from your venv but does NOT auto-download
 // the heavy runtime pack (that only happens on first launch of the *packaged*
 // app). So in dev the embedding model is missing (falls back to hashing) and the
 // Playwright browser may be absent (portfolio crawl / web scout can't launch).
@@ -12,8 +12,8 @@
 //
 // Safe to re-run: each step skips work that's already present.
 //
-//   npm run setup:local      # run once; then `npm run tauri dev` has everything
-//   npm run dev:local        # setup + tauri dev in one command
+//   pnpm setup:local      # run once; then `pnpm tauri dev` has everything
+//   pnpm dev:local        # setup + tauri dev in one command
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -90,4 +90,4 @@ run(
   ["run", "python", "-m", "playwright", "install", "chromium"],
 );
 
-console.log("\n[setup:local] Done. `npm run tauri dev` now has the full runtime — semantic embeddings + browser. No first-run download needed.");
+console.log("\n[setup:local] Done. `pnpm tauri dev` now has the full runtime — semantic embeddings + browser. No first-run download needed.");

@@ -1,12 +1,42 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { settingsApi } from "../../../api/settings";
-import type { Cfg } from "./shared";
-import { ApiKeyInput, GLOBAL_MODEL_FIELD, isSubscriptionProvider, KEY_FIELD, ModelChips, ProviderPills, SectionLabel, SubscriptionNote, type SubStatus } from "./shared";
+import { GLOBAL_MODEL_FIELD, isSubscriptionProvider, KEY_FIELD, type Cfg, type SubStatus } from "./config";
+import { ApiKeyInput, ModelChips, ProviderPills, SectionLabel, SubscriptionNote } from "./shared";
 import type { ApiFetch } from "../../../types";
+import { readJsonResponse, responseErrorMessage } from "../../../shared/lib/httpError";
 
 type KeyStatus = "ok" | "invalid_key" | "unreachable" | "not_configured" | "unchecked";
 type ProviderValidation = { status: KeyStatus; latency_ms?: number };
 type ValidationResult = Record<string, ProviderValidation | string[]>;
+
+function readableGlobalSettingsError(error: unknown, fallback: string) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return fallback;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("unknown subscription provider") || lower.includes("fournisseur d'abonnement inconnu")) {
+    return "Fournisseur d'abonnement inconnu. Rechargez les réglages puis réessayez.";
+  }
+  if (lower.includes("cli provider is not installed") || lower.includes("cli de ce fournisseur")) {
+    return "Le CLI de ce fournisseur n'est pas installé. Suivez l'aide d'installation puis réessayez.";
+  }
+  if (lower.includes("oauth") || lower.includes("subscription") || lower.includes("abonnement")) {
+    return "La connexion à l'abonnement n'a pas pu démarrer. Vérifiez le fournisseur, puis réessayez.";
+  }
+  if (lower.includes("api key") || lower.includes("invalid_key") || lower.includes("unauthorized")) {
+    return "Une clé fournisseur semble invalide. Vérifiez la clé enregistrée, puis relancez la vérification.";
+  }
+  if (lower.includes("unreachable") || lower.includes("timeout")) {
+    return "Le fournisseur ne répond pas pour l'instant. Réessayez dans quelques secondes.";
+  }
+  if (lower.includes("vérification") || lower.includes("validation")) {
+    return fallback;
+  }
+  return trimmed;
+}
 
 export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; set: (k: keyof Cfg) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void; prov: string; api: ApiFetch }) {
   const [checking, setChecking] = useState(false);
@@ -14,30 +44,73 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
   const [err, setErr] = useState<string | null>(null);
   const [subStatus, setSubStatus] = useState<Record<string, SubStatus>>({});
   const [signingIn, setSigningIn] = useState(false);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   const signIn = async () => {
+    if (signingIn) return;
     setSigningIn(true);
+    setSubscriptionError(null);
     try {
       await settingsApi.subscriptionLogin(api, prov);
       // L'OAuth navigateur se fait à côté ; on attend que le statut passe connecté.
       const start = Date.now();
-      while (Date.now() - start < 120000) {
+      let connected = false;
+      while (mountedRef.current && Date.now() - start < 120000) {
         await new Promise(res => window.setTimeout(res, 2500));
+        if (!mountedRef.current) return;
         try {
-          const d = await (await settingsApi.subscriptionStatus(api)).json();
+          const statusResponse = await settingsApi.subscriptionStatus(api);
+          if (!statusResponse.ok) throw new Error(await responseErrorMessage(statusResponse, `Le statut d'abonnement a renvoyé ${statusResponse.status}`));
+          const d = await readJsonResponse<Record<string, SubStatus>>(
+            statusResponse,
+            "Le statut d'abonnement a répondu dans un format illisible.",
+          );
+          if (!mountedRef.current) return;
           setSubStatus(d || {});
-          if (d?.[prov]?.logged_in) break;
-        } catch { /* keep polling */ }
+          if (d?.[prov]?.logged_in) {
+            connected = true;
+            setSubscriptionError(null);
+            break;
+          }
+        } catch (statusError) {
+          if (mountedRef.current) {
+            setSubscriptionError(readableGlobalSettingsError(statusError, "Statut d'abonnement indisponible. Terminez l'authentification dans le navigateur, puis réessayez."));
+          }
+        }
       }
+      if (!connected && mountedRef.current) setSubscriptionError("Connexion non confirmée. Terminez l'authentification dans le navigateur, puis relancez la vérification.");
+    } catch (error) {
+      if (mountedRef.current) setSubscriptionError(readableGlobalSettingsError(error, "La connexion à l'abonnement n'a pas pu démarrer."));
     } finally {
-      setSigningIn(false);
+      if (mountedRef.current) setSigningIn(false);
     }
   };
 
   useEffect(() => {
     if (!isSubscriptionProvider(prov)) return;
     let alive = true;
-    settingsApi.subscriptionStatus(api).then(r => r.json()).then(d => { if (alive) setSubStatus(d || {}); }).catch(() => {});
+    settingsApi.subscriptionStatus(api)
+      .then(async r => {
+        if (!r.ok) throw new Error(await responseErrorMessage(r, `Le statut d'abonnement a renvoyé ${r.status}`));
+        return readJsonResponse<Record<string, SubStatus>>(
+          r,
+          "Le statut d'abonnement a répondu dans un format illisible.",
+        );
+      })
+      .then(d => {
+        if (!alive) return;
+        setSubStatus(d || {});
+        setSubscriptionError(null);
+      })
+      .catch(error => {
+        if (!alive) return;
+        setSubscriptionError(readableGlobalSettingsError(error, "Le statut d'abonnement n'a pas pu être chargé."));
+      });
     return () => { alive = false; };
   }, [prov, api]);
 
@@ -55,10 +128,13 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
     setErr(null);
     try {
       const r = await settingsApi.validate(api, cfg);
-      if (!r.ok) throw new Error(`Le serveur a renvoyé ${r.status}`);
-      setResults(await r.json());
+      if (!r.ok) throw new Error(await responseErrorMessage(r, "La vérification des clés a échoué"));
+      setResults(await readJsonResponse<ValidationResult>(
+        r,
+        "La vérification des clés a répondu dans un format illisible.",
+      ));
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "La vérification des clés a échoué");
+      setErr(readableGlobalSettingsError(e, "La vérification des clés a échoué"));
     } finally {
       setChecking(false);
     }
@@ -97,10 +173,13 @@ export function GlobalSettings({ cfg, set, onChange, prov, api }: { cfg: Cfg; se
             <div style={{ padding: 16, borderRadius: 14, background: "var(--paper-2)", border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 12 }}>
               <ProviderPills value={prov} onChange={v => onChange("llm_provider", v)} />
               {prov !== "ollama" && !isSubscriptionProvider(prov) && (
-                <ApiKeyInput value={cfg[KEY_FIELD[prov]] as string} onChange={v => onChange(KEY_FIELD[prov], v)} provider={prov} />
+                <ApiKeyInput value={cfg[KEY_FIELD[prov]] as string} onChange={v => onChange(KEY_FIELD[prov], v)} provider={prov} api={api} secretKey={KEY_FIELD[prov]} />
               )}
               {isSubscriptionProvider(prov) && (
-                <SubscriptionNote provider={prov} status={subStatus[prov]} onSignIn={signIn} busy={signingIn} />
+                <>
+                  <SubscriptionNote provider={prov} status={subStatus[prov]} onSignIn={signIn} busy={signingIn} />
+                  {subscriptionError && <div role="alert" style={{ color: "var(--bad)", fontSize: 12, lineHeight: 1.45 }}>{subscriptionError}</div>}
+                </>
               )}
               {prov === "ollama" && (
                 <input type="text" placeholder="http://localhost:11434/v1" value={cfg.ollama_url} onChange={set("ollama_url")} className="mono field-input"

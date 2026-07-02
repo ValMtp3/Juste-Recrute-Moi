@@ -1,4 +1,5 @@
 from regression_support import *  # noqa: F401,F403
+from types import SimpleNamespace
 
 class RegressionTests(unittest.TestCase):
     def test_job_evaluator_is_deterministic_and_quantified(self):
@@ -160,6 +161,26 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual([name for name, _sim in result["skill_matches"]], ["FastAPI"])
         self.assertEqual([name for name, _sim in result["project_matches"]], ["Waldo"])
 
+    def test_semantic_skips_vector_tables_with_incompatible_dimensions(self):
+        from ranking import semantic
+
+        profile = {
+            "skills": [{"n": "FastAPI"}],
+            "projects": [{"title": "Waldo", "stack": ["FastAPI", "RAG"]}],
+        }
+        store = _FakeSemanticStore({
+            "skills": [{"id": semantic._h("FastAPI"), "n": "FastAPI", "_distance": 0.01}],
+            "projects": [{"id": semantic._h("Waldo"), "title": "Waldo", "_distance": 0.01}],
+        })
+
+        with mock.patch.object(semantic, "_vec_store", return_value=store), \
+             mock.patch.object(semantic, "_embed_jd", return_value=[0.0] * 1536), \
+             mock.patch.object(semantic, "_table_vector_dim", return_value=384):
+            result = semantic.semantic_fit("Need FastAPI RAG engineer", candidate_data=profile)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result["source"], "local-profile")
+
     def test_semantic_uses_profile_signal_when_vector_fallback_is_weak(self):
         from ranking import semantic
 
@@ -260,3 +281,67 @@ class RegressionTests(unittest.TestCase):
 
         self.assertIs(semantic_fit.call_args.kwargs["candidate_data"], profile)
         self.assertTrue(any("Semantic fit" in point for point in result["match_points"]))
+
+    def test_evaluator_second_pass_skips_low_baseline_in_lean_mode(self):
+        from ranking.evaluator import score
+
+        baseline = {
+            "score": 40,
+            "reason": "Weak but adjacent role.",
+            "match_points": [],
+            "gaps": ["Missing required evidence."],
+            "applied_cap": None,
+        }
+
+        with mock.patch("ranking.evaluator._evaluator_llm_requested", return_value=True), \
+             mock.patch("ranking.evaluator.score_job_lead", return_value=SimpleNamespace(as_dict=lambda: dict(baseline))), \
+             mock.patch("ranking.evaluator._score_with_llm", side_effect=AssertionError("LLM should not run")):
+            result = score("Job Title: Adjacent Analyst", _sample_scoring_profile(), {"llm_scan_mode": "lean"})
+
+        self.assertEqual(result["scored_by"], "deterministic_triage")
+        self.assertEqual(result["llm_scan_mode"], "lean")
+        self.assertIn("below the lean full-AI review threshold", result["reason"])
+
+    def test_evaluator_thorough_mode_runs_second_pass_on_low_baseline(self):
+        from ranking.evaluator import score
+
+        baseline = {
+            "score": 40,
+            "reason": "Weak but adjacent role.",
+            "match_points": [],
+            "gaps": ["Missing required evidence."],
+            "applied_cap": None,
+        }
+        llm_result = {"score": 52, "reason": "Worth a closer read.", "match_points": ["Some overlap."], "gaps": []}
+
+        with mock.patch("ranking.evaluator._evaluator_llm_requested", return_value=True), \
+             mock.patch("ranking.evaluator.score_job_lead", return_value=SimpleNamespace(as_dict=lambda: dict(baseline))), \
+             mock.patch("ranking.evaluator._score_with_llm", return_value=llm_result) as score_with_llm:
+            result = score("Job Title: Adjacent Analyst", _sample_scoring_profile(), {"llm_scan_mode": "thorough"})
+
+        score_with_llm.assert_called_once()
+        self.assertEqual(result["scored_by"], "llm")
+        self.assertEqual(result["llm_scan_mode"], "thorough")
+
+    def test_evaluator_balanced_mode_runs_second_pass_inside_hard_cap(self):
+        from ranking.evaluator import score
+
+        baseline = {
+            "score": 38,
+            "reason": "Seniority mismatch.",
+            "match_points": ["Stack overlap."],
+            "gaps": ["seniority cap: senior role requires 5+ years"],
+            "applied_cap": 38,
+        }
+
+        llm_result = {**baseline, "score": 38, "reason": "Seniority cap still applies."}
+
+        with mock.patch("ranking.evaluator._evaluator_llm_requested", return_value=True), \
+             mock.patch("ranking.evaluator.score_job_lead", return_value=SimpleNamespace(as_dict=lambda: dict(baseline))), \
+             mock.patch("ranking.evaluator._score_with_llm", return_value=llm_result) as score_with_llm:
+            result = score("Job Title: Senior Engineer", _sample_scoring_profile(), {"llm_scan_mode": "balanced"})
+
+        score_with_llm.assert_called_once()
+        self.assertEqual(result["scored_by"], "llm")
+        self.assertEqual(result["llm_scan_mode"], "balanced")
+        self.assertLessEqual(result["score"], 38)

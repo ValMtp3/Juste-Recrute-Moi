@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib.util
-import importlib
 import os
 import platform
 import shutil
@@ -35,6 +34,10 @@ _INSTALL_PROGRESS: dict = {
     "started_at": None,
     "updated_at": None,
 }
+_NATIVE_REINIT_ERROR_MARKERS = (
+    "initialized once per interpreter",
+    "cannot load module more than once per process",
+)
 
 warnings.filterwarnings(
     "ignore",
@@ -325,6 +328,11 @@ def clear_vector_runtime_modules() -> None:
             sys.modules.pop(key, None)
 
 
+def is_native_module_reinit_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return any(marker in message for marker in _NATIVE_REINIT_ERROR_MARKERS)
+
+
 def _vector_runtime_import_error(path: Path | None = None) -> str:
     root = path or vector_runtime_dir()
     has_payload = _runtime_has_any_vector_payload(root)
@@ -333,17 +341,12 @@ def _vector_runtime_import_error(path: Path | None = None) -> str:
     if getattr(sys, "frozen", False) and not vector_runtime_files_complete(root):
         return "les fichiers du runtime vectoriel sont incomplets"
     add_vector_runtime_to_path(root)
-    clear_vector_runtime_modules()
     try:
-        if not importlib.util.find_spec("lancedb"):
-            return "le module lancedb est introuvable"
-        if not importlib.util.find_spec("pyarrow"):
-            return "le module pyarrow est introuvable"
         for module_name in ("pyarrow", "lancedb"):
-            try:
-                importlib.import_module(module_name)
-            except Exception as exc:
-                return f"{module_name}: {type(exc).__name__}: {exc}"
+            if module_name in sys.modules:
+                continue
+            if not importlib.util.find_spec(module_name):
+                return f"le module {module_name} est introuvable"
         return ""
     except (ImportError, ValueError, AttributeError) as exc:
         return f"{type(exc).__name__}: {exc}"
@@ -412,7 +415,8 @@ def _ensure_browser_runtime_executable_permissions(path: Path | None = None) -> 
 
 
 def _clear_macos_extended_attrs(path: Path) -> None:
-    if sys_platform() != "darwin" or not hasattr(os, "listxattr"):
+    removexattr = getattr(os, "removexattr", None)
+    if sys_platform() != "darwin" or not hasattr(os, "listxattr") or removexattr is None:
         return
     candidates = [path, *path.rglob("*")]
     for candidate in candidates:
@@ -423,7 +427,7 @@ def _clear_macos_extended_attrs(path: Path) -> None:
         for attr in attrs:
             if attr.startswith("com.apple."):
                 try:
-                    os.removexattr(candidate, attr)
+                    removexattr(candidate, attr)
                 except OSError:
                     continue
 

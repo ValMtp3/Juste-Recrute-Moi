@@ -1,4 +1,5 @@
 from regression_support import *  # noqa: F401,F403
+from typing import ClassVar
 
 class RegressionTests(unittest.TestCase):
     def test_job_targets_only_drop_freelance_sources(self):
@@ -51,10 +52,11 @@ class RegressionTests(unittest.TestCase):
 
         targets = job_targets("", "global")
 
-        self.assertIn("site:linkedin.com/jobs", targets)
-        self.assertIn("site:indeed.com/jobs", targets)
-        self.assertIn("site:workdayjobs.com", targets)
-        self.assertIn("https://remotive.com/api/remote-jobs", targets)
+        self.assertIn("site:linkedin.com/jobs France", targets)
+        self.assertIn("site:fr.indeed.com/emplois France", targets)
+        self.assertIn("site:boards.greenhouse.io France", targets)
+        self.assertNotIn("https://remotive.com/api/remote-jobs", targets)
+        self.assertNotIn("https://weworkremotely.com/remote-jobs.rss", targets)
         self.assertNotIn("software engineer", " ".join(targets).lower())
 
     def test_india_query_generation_keeps_location_clause_on_fallback(self):
@@ -63,10 +65,10 @@ class RegressionTests(unittest.TestCase):
         with mock.patch("llm.call_llm", side_effect=RuntimeError("offline")):
             queries = query_gen.generate(_sample_scoring_profile(), ["site:jobs.lever.co"], "india")
 
-        self.assertEqual(len(queries), 1)
-        self.assertIn("site:jobs.lever.co", queries[0])
-        self.assertIn("India", queries[0])
-        self.assertIn("Indian startup", queries[0])
+        self.assertEqual(len(queries), 2)
+        self.assertTrue(all(query.startswith("site:jobs.lever.co") for query in queries))
+        self.assertTrue(all("India" in query for query in queries))
+        self.assertTrue(all("Indian startup" in query for query in queries))
 
     def test_query_generation_fallback_is_not_tech_only(self):
         from discovery import query_gen
@@ -81,10 +83,10 @@ class RegressionTests(unittest.TestCase):
         with mock.patch("llm.call_llm", side_effect=RuntimeError("offline")):
             queries = query_gen.generate(profile, ["site:linkedin.com/jobs"], "global")
 
-        self.assertEqual(len(queries), 1)
-        self.assertIn("site:linkedin.com/jobs", queries[0])
-        self.assertIn("SEO", queries[0])
-        self.assertNotIn("software engineer", queries[0].lower())
+        self.assertEqual(len(queries), 2)
+        self.assertTrue(all(query.startswith("site:linkedin.com/jobs") for query in queries))
+        self.assertTrue(any("SEO" in query for query in queries))
+        self.assertTrue(all("software engineer" not in query.lower() for query in queries))
 
     def test_query_generation_empty_llm_plan_uses_fallback(self):
         from discovery import query_gen
@@ -109,13 +111,33 @@ class RegressionTests(unittest.TestCase):
                 "france",
             )
 
-        self.assertEqual(len(queries), 2)
+        self.assertEqual(len(queries), 4)
         self.assertTrue(all(query.startswith("site:") for query in queries))
         self.assertTrue(all("Developpeur IA" in query for query in queries))
         self.assertTrue(all("France" in query for query in queries))
         self.assertTrue(all("Montpellier" in query for query in queries))
         self.assertTrue(all("télétravail" in query for query in queries))
         self.assertTrue(all("alternance" in query for query in queries))
+
+    def test_query_generation_adds_browser_volume_variant_per_site(self):
+        from discovery import query_gen
+
+        class Plan:
+            queries: ClassVar[list[str]] = ['site:jobs.lever.co "Growth Marketing" SEO']
+
+        profile = {
+            "s": "Growth Marketing Manager",
+            "skills": [{"n": "SEO"}, {"n": "Lifecycle marketing"}],
+            "projects": [],
+        }
+
+        with mock.patch("llm.call_llm", return_value=Plan()):
+            queries = query_gen.generate(profile, ["site:jobs.lever.co"], "global")
+
+        self.assertEqual(len(queries), 2)
+        self.assertEqual(queries[0], 'site:jobs.lever.co "Growth Marketing" SEO')
+        self.assertIn('"hiring" OR "jobs" OR "careers" OR "open roles"', queries[1])
+        self.assertIn('"Growth Marketing Manager"', queries[1])
 
     def test_desired_position_is_merged_into_discovery_profile(self):
         from discovery.targets import profile_for_discovery
@@ -225,7 +247,7 @@ class RegressionTests(unittest.TestCase):
 
         self.assertEqual(
             targets_from_settings("data, paris", ""),
-            ["france_travail:data;lieu=paris;range=0-49"],
+            ["france_travail:data;lieu=Paris;range=0-49"],
         )
 
 class TestScoringEngineCaps(unittest.TestCase):
@@ -406,6 +428,24 @@ class TestLeadQualityGate(unittest.TestCase):
         })
         self.assertFalse(quality["accepted"])
         self.assertIn("thin scraped posting", quality["reason"])
+
+    def test_french_job_posting_terms_are_accepted(self):
+        quality = self._quality({
+            "title": "Développeur IA Python en alternance",
+            "company": "Acme France",
+            "url": "https://candidat.francetravail.fr/offres/recherche/detail/123ABC",
+            "platform": "france_travail",
+            "description": (
+                "Offre d'emploi en alternance. Vos missions : développer des API Python, "
+                "automatiser des workflows data et contribuer aux outils internes. "
+                "Profil recherché : développeur ou développeuse junior, télétravail hybride, "
+                "candidature via France Travail."
+            ),
+            "posted_date": "today",
+        })
+
+        self.assertTrue(quality["accepted"], quality["reason"])
+        self.assertGreaterEqual(quality["score"], 60)
 
     def test_red_flag_lead_is_rejected(self):
         quality = self._quality({

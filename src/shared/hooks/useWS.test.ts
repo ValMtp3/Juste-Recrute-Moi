@@ -34,4 +34,15 @@ describe("WebSocket progress parsing", () => {
     const prev = { ...__wsTest.emptyProgress(), updatedAt: 1 };
     expect(nextProgressFromAgentEvent(prev, "heartbeat", "noop", 99)).toBe(prev);
   });
+
+  it("keeps real-time error logs user-facing", () => {
+    expect(__wsTest.readableWsError(new Error("Failed to fetch"), "fallback")).toBe("Backend local injoignable. Nouvelle tentative automatique.");
+    expect(__wsTest.readableWsError(new SyntaxError("Unexpected token < in JSON"), "fallback")).toBe("Message temps réel ignoré : format inattendu.");
+    expect(__wsTest.readableWsError(new Error("HTTP 500"), "fallback")).toBe("Statut backend indisponible. Nouvelle tentative automatique.");
+  });
+
+  it("explains slow sidecar startup without exposing internals", () => {
+    expect(__wsTest.sidecarStartupMessage(false, false)).toBe("Backend local en démarrage : port backend et jeton API local non reçu. Nouvelle tentative automatique.");
+    expect(__wsTest.sidecarStartupMessage(true, false)).toBe("Backend local en démarrage : port backend non reçu. Nouvelle tentative automatique.");
+  });
 });

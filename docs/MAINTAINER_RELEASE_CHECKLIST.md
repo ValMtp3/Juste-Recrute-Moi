@@ -6,18 +6,18 @@ Pour la strategie complete, voir [Roadmap de release production](PRODUCTION_RELE
 
 ## Controles locaux requis
 
-- [ ] `npm ci`
-- [ ] `npm run typecheck`
-- [ ] `npm test`
-- [ ] `npm run build`
-- [ ] `npm run lint`
+- [ ] `pnpm install`
+- [ ] `pnpm typecheck`
+- [ ] `pnpm test`
+- [ ] `pnpm build`
+- [ ] `pnpm lint`
 - [ ] `cd backend && uv run python -m pytest tests -q`
 - [ ] `cd backend && uv run ruff check .`
 - [ ] `cd src-tauri && cargo check`
-- [ ] `npm run release:smoke`
-- [ ] `npm run smoke:windows-update`
+- [ ] `pnpm release:smoke`
+- [ ] `pnpm smoke:windows-update`
 
-`npm run release:smoke` est le chemin local normal. Une machine locale ne doit pas etre obligatoire pour produire un installateur public signe.
+`pnpm release:smoke` est le chemin local normal. Une machine locale ne doit pas etre obligatoire pour produire un installateur public signe.
 
 ## Controles CI de release
 
@@ -42,7 +42,7 @@ Pour la strategie complete, voir [Roadmap de release production](PRODUCTION_RELE
 
 ## Deroule de release
 
-1. Mettre les versions a jour avec `npm run version:bump -- X.Y.Z`.
+1. Mettre les versions a jour avec `pnpm version:bump -- X.Y.Z`.
 2. Lancer les controles locaux.
 3. Creer un tag `vX.Y.Z`.
 4. Pousser le tag et laisser la CI construire, signer, verifier et publier.

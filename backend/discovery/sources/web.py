@@ -10,6 +10,7 @@ from discovery.normalizer import is_recent
 from core.logging import get_logger
 
 _log = get_logger(__name__)
+_MAX_SCOUT_MARKDOWN_CHARS = 24000
 
 
 class Lead(BaseModel):
@@ -236,6 +237,20 @@ def to_markdown(html: str) -> str:
     return h.handle(html)
 
 
+def _compact_llm_markdown(md: str) -> str:
+    text = str(md or "")
+    if len(text) <= _MAX_SCOUT_MARKDOWN_CHARS:
+        return text
+    head = text[: _MAX_SCOUT_MARKDOWN_CHARS // 2]
+    tail = text[-_MAX_SCOUT_MARKDOWN_CHARS // 2 :]
+    _log.info(
+        "Markdown scout tronqué avant extraction LLM : %d -> %d caractères",
+        len(text),
+        len(head) + len(tail),
+    )
+    return f"{head}\n\n[... contenu tronqué pour limiter les tokens LLM ...]\n\n{tail}"
+
+
 async def _crawl_inner(u: str, headed: bool) -> str:
     from automation.browser_runtime import launch_chromium
     from playwright.async_api import async_playwright
@@ -272,6 +287,7 @@ def parse(md: str, src: str) -> list:
 
     from llm import call_llm
 
+    md_for_llm = _compact_llm_markdown(md)
     user = (
         "Extract every real job posting from the scraped page below.\n"
         "\n"
@@ -289,7 +305,7 @@ def parse(md: str, src: str) -> list:
         "\n"
         "Never invent a job, company, title, url, date, or skill that is not on the page; leave "
         "any unseen field empty. If the page advertises no jobs, return an empty list."
-        f"\n\nSource URL: {src}\n\n{md}"
+        f"\n\nSource URL: {src}\n\n{md_for_llm}"
     )
     o = call_llm(
         SCOUT_EXTRACT_SYSTEM + " ",
@@ -313,6 +329,7 @@ def parse(md: str, src: str) -> list:
 def parse_wellfound(md: str, src: str) -> list:
     from llm import call_llm
 
+    md_for_llm = _compact_llm_markdown(md)
     user = (
         "Extract every real startup job posting from the scraped Wellfound page below.\n"
         "\n"
@@ -330,7 +347,7 @@ def parse_wellfound(md: str, src: str) -> list:
         "\n"
         "Never invent a job, company, title, url, or any field absent from the page; leave any "
         "unseen field empty. If the page advertises no jobs, return an empty list."
-        f"\n\nSource URL: {src}\n\n{md}"
+        f"\n\nSource URL: {src}\n\n{md_for_llm}"
     )
     o = call_llm(
         WELLFOUND_EXTRACT_SYSTEM + " ",

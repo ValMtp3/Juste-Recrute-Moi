@@ -1,9 +1,49 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isAbortLikeError } from "../../api/client";
 import { parseLead, parseLeadsResponse } from "../../api/validation";
 import type { ApiFetch, Lead, LogLine } from "../../types";
 import { onAppEvent } from "../lib/appEvents";
+import { readJsonResponse, responseErrorMessage } from "../lib/httpError";
+
+function readableLeadsError(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return "Les offres n'ont pas pu être chargées.";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Backend local injoignable. Vérifiez que l'app est bien démarrée, puis réessayez.";
+  }
+  if (lower.includes("chargement des offres")) {
+    return "Les offres n'ont pas pu être chargées. Vérifiez Activité, puis réessayez.";
+  }
+  return trimmed;
+}
+
+function readableEventsError(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return "L'historique d'activité n'a pas pu être chargé.";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("failed to fetch") || lower.includes("networkerror") || lower.includes("load failed") || lower.includes("backend local")) {
+    return "Historique d'activité indisponible : backend local injoignable.";
+  }
+  if (lower.includes("historique") || lower.includes("activité") || lower.includes("events")) {
+    return "L'historique d'activité n'a pas pu être chargé. Les offres restent utilisables.";
+  }
+  return trimmed;
+}
+
+function readableLeadNotificationError(error: unknown) {
+  const raw = error instanceof Error ? error.message : String(error || "");
+  const trimmed = raw.trim();
+  if (!trimmed) return "Notification d'offre prioritaire indisponible.";
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("permission") || lower.includes("denied") || lower.includes("notification")) {
+    return "Notification d'offre prioritaire indisponible. Vérifiez l'autorisation de notifications dans les paramètres système.";
+  }
+  return trimmed;
+}
 
 export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogLine["kind"], src?: string) => void) {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -13,14 +53,16 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
   const initialLoadDone = useRef(false);
   const knownLeadIds = useRef<Set<string>>(new Set());
 
-  const notifyStrongLead = (lead: Lead) => {
+  const notifyStrongLead = useCallback((lead: Lead) => {
     const topScore = Math.max(lead.score || 0, lead.signal_score ?? 0);
     if (topScore < 80) return;
     invoke("notify_high_score_lead", {
-      title: `Strong match: ${lead.title}`,
+      title: `Offre prioritaire : ${lead.title}`,
       body: `${lead.company} · Score ${topScore}`,
-    }).catch(() => {});
-  };
+    }).catch(error => {
+      addLog?.(readableLeadNotificationError(error), "system", "notifications");
+    });
+  }, [addLog]);
 
   useEffect(() => {
     if (!api) {
@@ -43,8 +85,13 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
       if (!background) setLoading(true);
       try {
         const r = await api(`/api/v1/leads`, { signal: controller.signal });
-        if (!r.ok) throw new Error(`Lead load failed (${r.status})`);
-        const data = await r.json();
+        if (!r.ok) {
+          throw new Error(await responseErrorMessage(r, `Chargement des offres échoué (${r.status})`));
+        }
+        const data = await readJsonResponse(
+          r,
+          "Les offres ont répondu dans un format illisible. Vérifiez Activité, puis réessayez.",
+        );
         if (!alive) return;
         if (seq !== snapshotSeq) {
           if (trailingReload !== null) window.clearTimeout(trailingReload);
@@ -59,7 +106,7 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
       } catch (e) {
         if (!alive) return;
         if (controller.signal.aborted || isAbortLikeError(e)) return;
-        setError(e instanceof Error ? e.message : "Lead load failed");
+        setError(readableLeadsError(e));
       } finally {
         if (alive) {
           setLoading(false);
@@ -100,15 +147,28 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
     const offLeadsRefresh = onAppEvent("leads-refresh", onRefresh);
 
     api(`/api/v1/events?limit=200`, { signal: controller.signal })
-      .then(r => r.json())
-      .then((evts: {job_id: string; action: string; ts: string}[]) => {
+      .then(async r => {
+        if (!r.ok) throw new Error(await responseErrorMessage(r, `Historique d'activité indisponible (${r.status})`));
+        const data = await readJsonResponse(
+          r,
+          "L'historique d'activité a répondu dans un format illisible.",
+        );
+        if (!Array.isArray(data)) throw new Error("Historique d'activité invalide");
+        return data as {job_id: string; action: string; ts: string}[];
+      })
+      .then(evts => {
+        if (!alive) return;
         evts.forEach(ev => {
           const isSystem = !ev.job_id || ev.job_id === "__system__";
           const src = isSystem ? "system" : ev.job_id.slice(0, 8);
           addLog?.(`[${src}] ${ev.action}`, isSystem ? "system" : "agent", src);
         });
       })
-      .catch(() => {});
+      .catch(error => {
+        if (!alive) return;
+        if (controller.signal.aborted || isAbortLikeError(error)) return;
+        addLog?.(readableEventsError(error), "system", "events");
+      });
     return () => {
       alive = false;
       controller.abort();
@@ -117,6 +177,6 @@ export function useLeads(api: ApiFetch | null, addLog?: (msg: string, kind: LogL
       offLeadUpdated();
       offLeadsRefresh();
     };
-  }, [api]);
+  }, [api, addLog, notifyStrongLead]);
   return { leads, setLeads, loading: loading && !loaded, error };
 }

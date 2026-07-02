@@ -46,11 +46,17 @@ INTENT_TERMS = (
     "hiring", "job opening", "open role", "role available", "we're hiring",
     "we are hiring", "is hiring", "apply", "help wanted", "internship",
     "junior", "entry level", "new grad", "graduate",
+    "recrute", "recrutement", "nous recrutons", "offre d'emploi",
+    "postuler", "candidature", "candidat", "candidate", "alternance",
+    "stage", "emploi", "poste à pourvoir", "poste a pourvoir",
 )
 
 JOB_TERMS = (
     "hiring", "job opening", "open role", "full-time", "full time",
     "part-time", "part time", "apply", "salary", "remote",
+    "emploi", "offre d'emploi", "poste", "postuler", "candidature",
+    "cdi", "cdd", "alternance", "stage", "salaire", "télétravail",
+    "teletravail", "hybride",
 )
 
 URGENCY_TERMS = (

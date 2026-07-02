@@ -422,25 +422,40 @@ def test_runtime_pack_install_copies_incomplete_vector_runtime(monkeypatch, tmp_
     assert copied == [runtime_dir, browser_dir]
 
 
-def test_vector_runtime_ready_requires_real_import(monkeypatch, tmp_path):
+def test_vector_runtime_ready_checks_specs_without_importing_native_modules(monkeypatch, tmp_path):
     from data.vector import runtime
 
-    monkeypatch.setitem(sys.modules, "numpy", types.SimpleNamespace())
+    for key in ("lancedb", "pyarrow"):
+        monkeypatch.delitem(sys.modules, key, raising=False)
+    existing_numpy = types.SimpleNamespace()
+    monkeypatch.setitem(sys.modules, "numpy", existing_numpy)
     monkeypatch.setattr(runtime, "_runtime_has_any_vector_payload", lambda _path: True)
     monkeypatch.setattr(runtime, "vector_runtime_files_complete", lambda _path: True)
     monkeypatch.setattr(runtime, "add_vector_runtime_to_path", lambda _path: None)
     monkeypatch.setattr(runtime.importlib.util, "find_spec", lambda _name: object())
 
-    def import_module(name: str):
-        if name == "lancedb":
-            raise ImportError("native module load failed")
-        return types.SimpleNamespace()
+    def import_module(_name: str):
+        raise AssertionError("runtime readiness must not import native modules")
 
-    monkeypatch.setattr(runtime.importlib, "import_module", import_module)
+    monkeypatch.setattr(importlib, "import_module", import_module)
 
+    assert runtime.vector_runtime_ready(tmp_path / "vector-runtime") is True
+    assert runtime._vector_runtime_import_error(tmp_path / "vector-runtime") == ""
+    assert sys.modules["numpy"] is existing_numpy
+
+
+def test_vector_runtime_ready_reports_missing_runtime_module(monkeypatch, tmp_path):
+    from data.vector import runtime
+
+    for key in ("lancedb", "pyarrow"):
+        monkeypatch.delitem(sys.modules, key, raising=False)
+    monkeypatch.setattr(runtime, "_runtime_has_any_vector_payload", lambda _path: True)
+    monkeypatch.setattr(runtime, "vector_runtime_files_complete", lambda _path: True)
+    monkeypatch.setattr(runtime, "add_vector_runtime_to_path", lambda _path: None)
+    monkeypatch.setattr(runtime.importlib.util, "find_spec", lambda name: object() if name == "pyarrow" else None)
+
+    assert runtime._vector_runtime_import_error(tmp_path / "vector-runtime") == "le module lancedb est introuvable"
     assert runtime.vector_runtime_ready(tmp_path / "vector-runtime") is False
-    assert runtime._vector_runtime_import_error(tmp_path / "vector-runtime") == "lancedb: ImportError: native module load failed"
-    assert "numpy" not in sys.modules
 
 
 def test_hash_embedding_fallback_reports_ok(monkeypatch):
