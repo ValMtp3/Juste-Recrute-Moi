@@ -7,7 +7,7 @@ from typing import Any, Literal
 from discovery.lead_intel import canonical_lead_id, lead_id
 from discovery.sources.common import text_lead
 
-JobSource = Literal["france_travail", "jobspy", "ats", "url_import", "adzuna", "jooble"]
+JobSource = Literal["france_travail", "jobspy", "ats", "url_import", "adzuna", "jooble", "wttj", "apec"]
 
 
 @dataclass
