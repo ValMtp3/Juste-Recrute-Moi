@@ -83,7 +83,7 @@ def _target_label(target: str) -> str:
     if lower.startswith("site:"):
         domain = value[5:].split()[0].strip().strip('"') or "site"
         return f"site:{domain}"
-    if lower.startswith(("france_travail:", "jobspy:", "ats:", "import:")):
+    if lower.startswith(("france_travail:", "jobspy:", "adzuna:", "jooble:", "wttj:", "apec:", "ats:", "import:")):
         return value.split(";", 1)[0]
     if len(value) > 120:
         return value[:117] + "..."
@@ -102,6 +102,33 @@ def _target_debug_summary(targets: list[str], *, limit: int = 10) -> str:
     labels = [_target_label(target) for target in targets[:limit]]
     suffix = f" +{len(targets) - limit}" if len(targets) > limit else ""
     return ", ".join(labels) + suffix if labels else "aucune"
+
+
+def _target_kind(target: str) -> str:
+    lower = str(target or "").strip().lower()
+    if lower.startswith("france_travail:"):
+        return "France Travail"
+    if lower.startswith(("wttj:", "apec:")):
+        return "jobboards directs"
+    if lower.startswith(("adzuna:", "jooble:")):
+        return "agrégateurs directs"
+    if lower.startswith("jobspy:"):
+        return "JobSpy"
+    if lower.startswith("site:"):
+        return "sites web"
+    if lower.startswith("ats:"):
+        return "ATS directs"
+    if lower.startswith(("http://", "https://")):
+        return "flux web/API"
+    return "autres"
+
+
+def _target_mix_summary(targets: list[str]) -> str:
+    counts: dict[str, int] = {}
+    for target in targets:
+        kind = _target_kind(target)
+        counts[kind] = counts.get(kind, 0) + 1
+    return ", ".join(f"{kind}={count}" for kind, count in counts.items()) if counts else "aucune"
 
 
 def _by_source_summary(usage: dict | None, *, limit: int = 8) -> str:
@@ -174,7 +201,7 @@ TASKS = TaskRegistry()
 
 def _merge_scan_usage(total: dict, incoming: dict, target_count: int) -> None:
     total["configured"] = total.get("configured", 0) + target_count
-    for key in ("executed", "candidates", "saved", "duplicates", "filtered", "missing_url", "errors"):
+    for key in ("executed", "candidates", "saved", "duplicates", "filtered", "missing_url", "empty", "errors"):
         total[key] = total.get(key, 0) + int(incoming.get(key, 0) or 0)
     for key in ("browser_configured", "browser_executed", "browser_skipped"):
         total[key] = total.get(key, 0) + int(incoming.get(key, 0) or 0)
@@ -282,7 +309,8 @@ async def run_free_source_scan(
         "msg": (
             f"Sources gratuites : {len(leads)} nouvelle(s) {label} "
             f"({usage.get('candidates', 0)} candidat(s), {usage.get('duplicates', 0)} doublon(s), "
-            f"{usage.get('filtered', 0)} filtrée(s), {usage.get('executed', 0)} source(s) vérifiée(s))"
+            f"{usage.get('filtered', 0)} filtrée(s), {usage.get('empty', 0)} source(s) vide(s), "
+            f"{usage.get('executed', 0)} source(s) vérifiée(s))"
         ),
     })
     await manager.broadcast({
@@ -366,17 +394,21 @@ async def _run_scan_inner(
         return
 
     market_focus = cfg.get("job_market_focus", "france")
+    discovery_location = str(profile.get("_discovery_location") or "").strip() or "non précisée"
+    discovery_radius = str(profile.get("_discovery_radius_km") or "").strip() or "auto"
     raw_urls = job_targets(
         cfg.get("job_boards", ""),
         market_focus,
         search_text=str(profile.get("_discovery_search_text") or profile.get("desired_position") or profile.get("s") or ""),
         location=str(profile.get("_discovery_location") or ""),
+        radius_km=str(profile.get("_discovery_radius_km") or ""),
     )
     await manager.broadcast({
         "type": "agent",
         "event": "scan_debug_config",
         "msg": (
             f"Diagnostic scan : marché={market_focus}, profil={'oui' if has_profile_discovery_signal(profile) else 'non'}, "
+            f"localisation={discovery_location}, rayon={discovery_radius} km, "
             f"sources gratuites={'on' if free_sources_enabled(cfg) else 'off'}, X token={_yesno(cfg.get('x_bearer_token'))}, "
             f"Apify token={_yesno(cfg.get('apify_token'))}, actor={cfg.get('apify_actor') or 'défaut'}, "
             f"France Travail id={_yesno(cfg.get('france_travail_client_id'))}/secret={_yesno(cfg.get('france_travail_client_secret'))}, "
@@ -389,7 +421,7 @@ async def _run_scan_inner(
     await manager.broadcast({
         "type": "agent",
         "event": "scan_debug_targets",
-        "msg": f"Diagnostic cibles brutes ({len(raw_urls)}) : {_target_debug_summary(raw_urls)}",
+        "msg": f"Diagnostic cibles brutes ({len(raw_urls)}) : {_target_debug_summary(raw_urls)}. Mix : {_target_mix_summary(raw_urls)}",
     })
     await run_x_signal_scan(manager, cfg, "job", profile, discovery_service=discovery_service)
     await run_free_source_scan(manager, cfg, "job", profile, discovery_service=discovery_service)
@@ -406,14 +438,14 @@ async def _run_scan_inner(
 
     await manager.broadcast({"type": "agent", "event": "scout_start", "msg": f"Lancement du scan sur {len(urls)} cible(s)..."})
     leads: list[dict] = []
-    scout_usage: dict = {"configured": 0, "executed": 0, "candidates": 0, "saved": 0, "duplicates": 0, "filtered": 0, "missing_url": 0, "errors": 0, "by_source": {}}
+    scout_usage: dict = {"configured": 0, "executed": 0, "candidates": 0, "saved": 0, "duplicates": 0, "filtered": 0, "missing_url": 0, "empty": 0, "errors": 0, "by_source": {}}
     scout_errors: list[str] = []
     batch_size = int_cfg(cfg, "board_scan_batch_size", 4, 1, 12)
     batches = _target_batches(urls, batch_size)
     for batch_index, batch in enumerate(batches, start=1):
         if stop_event.is_set():
             break
-        direct_targets = [target for target in batch if str(target).lower().startswith(("france_travail:", "jobspy:", "import:", "ats:"))]
+        direct_targets = [target for target in batch if str(target).lower().startswith(("france_travail:", "jobspy:", "adzuna:", "jooble:", "wttj:", "apec:", "import:", "ats:"))]
         board_targets = [target for target in batch if target not in direct_targets]
         await manager.broadcast({
             "type": "agent",
@@ -437,7 +469,8 @@ async def _run_scan_inner(
                     f"{len(scout_result.leads)} offre(s), "
                     f"{(scout_result.usage or {}).get('candidates', 0)} candidat(s), "
                     f"{(scout_result.usage or {}).get('duplicates', 0)} doublon(s), "
-                    f"{(scout_result.usage or {}).get('filtered', 0)} filtrée(s). "
+                    f"{(scout_result.usage or {}).get('filtered', 0)} filtrée(s), "
+                    f"{(scout_result.usage or {}).get('empty', 0)} source(s) vide(s). "
                     f"Détail : {_by_source_summary(scout_result.usage)}"
                 ),
             })
@@ -459,7 +492,8 @@ async def _run_scan_inner(
         "msg": (
             f"Scan terminé : {len(leads)} nouvelle(s) offre(s) "
             f"({scout_usage.get('candidates', 0)} candidat(s), {scout_usage.get('duplicates', 0)} doublon(s), "
-            f"{scout_usage.get('filtered', 0)} filtrée(s), {scout_usage.get('errors', 0)} erreur(s) source, "
+            f"{scout_usage.get('filtered', 0)} filtrée(s), {scout_usage.get('empty', 0)} source(s) vide(s), "
+            f"{scout_usage.get('errors', 0)} erreur(s) source, "
             f"{scout_usage.get('browser_executed', 0)}/{scout_usage.get('browser_configured', 0)} cible(s) navigateur)"
         ),
     })

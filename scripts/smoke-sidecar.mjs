@@ -359,20 +359,28 @@ function requireHealth(health, options = {}) {
     fail(`Graph health must be ok, got ${graph || "(missing)"}: ${JSON.stringify(components.graph || {})}`);
   }
   if (options.vectorRequired && vector !== "ok") {
-    fail(`Vector health must be ok in release sidecars, got ${vector || "(missing)"}`);
+    fail(`Vector health must be ok in release sidecars, got ${vector || "(missing)"}: ${JSON.stringify(components.vector || {})}`);
   }
 
   return { sqlite, graph, vector, app: health.status };
+}
+
+function vectorRuntimeFilesReady(payload) {
+  return Boolean(payload?.ready || payload?.runtime?.ready);
+}
+
+function vectorRuntimeUsable(payload) {
+  return vectorRuntimeFilesReady(payload) && payload?.vector?.status === "ok";
 }
 
 async function ensureVectorRuntime(port, token) {
   const archive = localVectorRuntimeArchive();
   const runtimeRequired = process.env.JHM_VECTOR_RUNTIME_REQUIRED === "1";
   const initial = await readApi(port, token, "/api/v1/runtime/vector");
-  if (initial.ready) {
+  if (vectorRuntimeUsable(initial)) {
     return initial;
   }
-  if (!existsSync(archive)) {
+  if (!vectorRuntimeFilesReady(initial) && !existsSync(archive)) {
     const message = `Runtime pack archive not found at ${archive}; OTA install smoke skipped.`;
     if (runtimeRequired) fail(message);
     console.warn(message);
@@ -383,7 +391,7 @@ async function ensureVectorRuntime(port, token) {
   let last = initial;
   while (Date.now() < deadline) {
     last = await readApi(port, token, "/api/v1/runtime/vector");
-    if (last.ready) {
+    if (vectorRuntimeUsable(last)) {
       return last;
     }
     if (last.progress?.status === "error") {
@@ -482,7 +490,7 @@ try {
   } else {
     const vectorRuntime = await ensureVectorRuntime(handshake.port, handshake.token);
     const healthAfterRuntime = await readHealth(handshake.port, handshake.token);
-    summaryAfterRuntime = requireHealth(healthAfterRuntime, { vectorRequired: vectorRuntime.ready });
+    summaryAfterRuntime = requireHealth(healthAfterRuntime, { vectorRequired: vectorRuntimeFilesReady(vectorRuntime) });
   }
 
   console.log(`Sidecar smoke passed: ${sidecar}`);

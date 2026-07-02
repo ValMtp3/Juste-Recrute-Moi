@@ -37,8 +37,15 @@ def job_targets(
     *,
     search_text: str = "",
     location: str = "",
+    radius_km: str = "",
 ) -> list[str]:
-    return _targets().job_targets(raw, market_focus, search_text=search_text, location=location)
+    return _targets().job_targets(
+        raw,
+        market_focus,
+        search_text=search_text,
+        location=location,
+        radius_km=radius_km,
+    )
 
 
 def profile_for_discovery(profile: dict | None, cfg: dict) -> dict:
