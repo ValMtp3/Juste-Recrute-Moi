@@ -109,12 +109,12 @@ async def scrape_target(target: str) -> list[dict]:
     now = monotonic()
     if cached and cached[0] > now:
         return list(cached[1])
-        
+
     try:
         data = await _json_search(payload)
-    except httpx.HTTPStatusError as exc:
+    except httpx.HTTPStatusError:
         raise
-        
+
     rows = data.get("resultats") if isinstance(data, dict) else []
     leads = [
         offer_to_lead(offer)

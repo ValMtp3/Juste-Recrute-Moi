@@ -24,7 +24,7 @@ export interface Cfg {
   x_max_requests_per_scan: string; x_max_results_per_query: string; x_min_signal_score: string; x_hot_lead_threshold: string; x_enable_notifications: string;
   free_sources_enabled: string; free_source_targets: string; company_watchlist: string; free_source_max_requests: string; free_source_min_signal_score: string;
   custom_connectors_enabled: string; custom_connectors: string; custom_connector_headers: string;
-  desired_position: string; onboarding_target_role: string; job_boards: string; job_market_focus: string;
+  desired_position: string; onboarding_target_role: string; job_location: string; job_search_radius_km: string; job_boards: string; job_market_focus: string;
   browser_scan_enabled: string; browser_scan_concurrency: string; browser_scan_max_targets: string; llm_scan_mode: string;
   ghost_mode: string; auto_apply: string; headed_browser: string;
 }
@@ -55,7 +55,7 @@ export const EMPTY: Cfg = {
   x_max_requests_per_scan: "5", x_max_results_per_query: "50", x_min_signal_score: "60", x_hot_lead_threshold: "80", x_enable_notifications: "false",
   free_sources_enabled: "true", free_source_targets: "", company_watchlist: "", free_source_max_requests: "20", free_source_min_signal_score: "60",
   custom_connectors_enabled: "false", custom_connectors: "", custom_connector_headers: "",
-  desired_position: "", onboarding_target_role: "", job_boards: "", job_market_focus: "france",
+  desired_position: "", onboarding_target_role: "", job_location: "", job_search_radius_km: "25", job_boards: "", job_market_focus: "france",
   browser_scan_enabled: "true", browser_scan_concurrency: "4", browser_scan_max_targets: "32", llm_scan_mode: "balanced",
   ghost_mode: "false", auto_apply: "false", headed_browser: "false",
 };
@@ -173,9 +173,10 @@ export const INDIA_SOURCE_PRESET = [
 
 export const FRANCE_SOURCE_PRESET = [
   "france_travail:developpeur;lieu=France;range=0-49,",
-  "https://remotive.com/api/remote-jobs,",
-  "https://jobicy.com/api/v2/remote-jobs?count=50,",
-  "https://weworkremotely.com/remote-jobs.rss,",
+  "wttj:query=developpeur&aroundQuery=France,",
+  "apec:developpeur;location=France,",
+  "adzuna:developpeur;location=France;results=50,",
+  "jooble:developpeur;location=France,",
   "site:welcometothejungle.com/fr/jobs France,",
   "site:hellowork.com/fr-fr/emplois France,",
   "site:apec.fr/candidat/recherche-emploi.html/emploi France,",

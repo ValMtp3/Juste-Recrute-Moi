@@ -31,6 +31,16 @@ export const settingsApi = {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ confirm: "DELETE", clear_settings: !!opts?.clearSettings }),
   }),
+  exportData: (api: ApiFetch) => api("/api/v1/data/export"),
+  importData: (api: ApiFetch, file: File) => {
+    const form = new FormData();
+    form.append("confirm", "IMPORT");
+    form.append("file", file);
+    return api("/api/v1/data/import", {
+      method: "POST",
+      body: form,
+    });
+  },
   rebuildVectors: (api: ApiFetch) => api("/api/v1/vectors/rebuild", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

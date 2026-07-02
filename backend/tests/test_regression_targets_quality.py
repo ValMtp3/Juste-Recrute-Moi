@@ -1,4 +1,5 @@
 from regression_support import *  # noqa: F401,F403
+from typing import ClassVar
 
 class RegressionTests(unittest.TestCase):
     def test_job_targets_only_drop_freelance_sources(self):
@@ -122,7 +123,7 @@ class RegressionTests(unittest.TestCase):
         from discovery import query_gen
 
         class Plan:
-            queries = ['site:jobs.lever.co "Growth Marketing" SEO']
+            queries: ClassVar[list[str]] = ['site:jobs.lever.co "Growth Marketing" SEO']
 
         profile = {
             "s": "Growth Marketing Manager",

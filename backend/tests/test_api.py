@@ -734,6 +734,37 @@ class TestSettingsEndpoints(unittest.TestCase):
         self.assertEqual(accepted.json()["summary"]["vectors_dropped"], ["skills"])
         self.assertEqual(accepted.json()["summary"]["sync"]["synced"], 3)
 
+    def test_data_export_returns_zip_attachment(self):
+        with mock.patch(
+            "data.backup.export_app_data_backup",
+            return_value=(b"zip-bytes", "juste-recrute-moi-backup-test.zip", {"files_exported": 2, "bytes_exported": 9, "warnings": []}),
+        ):
+            resp = get("/api/v1/data/export")
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.content, b"zip-bytes")
+        self.assertEqual(resp.headers["content-type"], "application/zip")
+        self.assertIn("juste-recrute-moi-backup-test.zip", resp.headers["content-disposition"])
+
+    def test_data_import_requires_confirmation_and_returns_summary(self):
+        with mock.patch("data.backup.import_app_data_backup", return_value={"files_restored": 3, "errors": []}):
+            rejected = CLIENT.post(
+                "/api/v1/data/import",
+                headers=AUTH,
+                data={"confirm": "NOPE"},
+                files={"file": ("backup.zip", b"zip", "application/zip")},
+            )
+            accepted = CLIENT.post(
+                "/api/v1/data/import",
+                headers=AUTH,
+                data={"confirm": "IMPORT"},
+                files={"file": ("backup.zip", b"zip", "application/zip")},
+            )
+
+        self.assertEqual(rejected.status_code, 422)
+        self.assertEqual(accepted.status_code, 200)
+        self.assertEqual(accepted.json()["summary"]["files_restored"], 3)
+
 
 class TestFollowupsEndpoint(unittest.TestCase):
     def test_due_followups_returns_list(self):
