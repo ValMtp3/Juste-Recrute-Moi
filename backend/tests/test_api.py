@@ -411,7 +411,7 @@ class TestLeadsEndpoints(unittest.TestCase):
 
         message = leads._manual_generation_failed_message({"title": "Engineer"}, RuntimeError("timeout"))
 
-        self.assertEqual(message, "Génération échouée pour Engineer : timeout")
+        self.assertEqual(message, "Génération échouée pour Engineer : RuntimeError")
         self.assertNotIn("Generation failed", message)
 
     def test_delete_lead_not_found(self):
@@ -1210,7 +1210,7 @@ class TestIngestionEndpoints(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["status"], "partial")
-        self.assertIn("graph locked", data["errors"][0])
+        self.assertEqual(data["errors"][0], "Import profil partiel (RuntimeError)")
 
     def test_profile_import_valid_skills(self):
         resp = post(

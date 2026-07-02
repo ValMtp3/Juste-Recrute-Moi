@@ -3,6 +3,7 @@ import re
 import threading
 from datetime import datetime, timezone, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -130,20 +131,39 @@ def _is_disabled(value) -> bool:
     return str(value).strip().lower() in {"0", "false", "no", "off"}
 
 
+def _target_parts(target: str) -> tuple[str, str, str]:
+    value = str(target or "").strip()
+    marker = value.lower()
+    if marker.startswith("site:"):
+        value = value[5:].split()[0].strip().strip('"')
+    parsed = urlparse(value if "://" in value else f"https://{value}")
+    return (parsed.hostname or "").lower(), (parsed.path or "").lower(), marker
+
+
+def _target_host_is(target: str, domain: str) -> bool:
+    host, _path, _marker = _target_parts(target)
+    return host == domain or host.endswith(f".{domain}")
+
+
+def _target_path_starts(target: str, domain: str, prefix: str) -> bool:
+    host, path, _marker = _target_parts(target)
+    return (host == domain or host.endswith(f".{domain}")) and path.startswith(prefix)
+
+
 def _normal_scan_mode(value: str | None) -> str:
     mode = str(value or "balanced").strip().lower()
     return mode if mode in {"lean", "balanced", "thorough"} else "balanced"
 
 
 def _is_keyless_or_structured_target(target: str) -> bool:
-    lower = target.lower()
+    _host, _path, marker = _target_parts(target)
     return (
-        "news.ycombinator.com" in lower
-        or "hn-hiring" in lower
-        or "hackernews" in lower
-        or "remoteok.com/api" in lower
-        or "remotive.com/api" in lower
-        or "jobicy.com/api" in lower
+        _target_host_is(target, "news.ycombinator.com")
+        or "hn-hiring" in marker
+        or "hackernews" in marker
+        or _target_path_starts(target, "remoteok.com", "/api")
+        or _target_path_starts(target, "remotive.com", "/api")
+        or _target_path_starts(target, "jobicy.com", "/api")
         or _is_rss_target(target)
     )
 
@@ -170,10 +190,11 @@ def _annotate_source_meta(
 
 def _scrape_browser_target(target: str, *, headed: bool, llm_scan_mode: str) -> list[dict]:
     crawl_target = target
-    if "wellfound.com" in target or "angel.co" in target:
+    _host, path, _marker = _target_parts(target)
+    if _target_host_is(target, "wellfound.com") or _target_host_is(target, "angel.co"):
         batch = web_sources.scrape_wellfound_target(target, headed=headed)
         extraction_mode = "browser_llm_wellfound"
-    elif "github.com" in target and "jobs" in target.lower():
+    elif _target_host_is(target, "github.com") and "jobs" in path:
         batch = web_sources.scrape_github_jobs_target(target, headed=headed)
         extraction_mode = "browser_llm_github_jobs"
     elif target.startswith("site:"):
@@ -679,13 +700,14 @@ def run(
             continue
         try:
             before = len(processed_leads)
-            if "news.ycombinator.com" in target or "hn-hiring" in target.lower() or "hackernews" in target.lower():
+            _host, _path, marker = _target_parts(target)
+            if _target_host_is(target, "news.ycombinator.com") or "hn-hiring" in marker or "hackernews" in marker:
                 batch = asyncio.run(_scrape_hn_hiring())
-            elif "remoteok.com/api" in target:
+            elif _target_path_starts(target, "remoteok.com", "/api"):
                 batch = asyncio.run(_scrape_remoteok())
-            elif "remotive.com/api" in target:
+            elif _target_path_starts(target, "remotive.com", "/api"):
                 batch = asyncio.run(_scrape_remotive(target))
-            elif "jobicy.com/api" in target:
+            elif _target_path_starts(target, "jobicy.com", "/api"):
                 batch = asyncio.run(_scrape_jobicy_api(target))
             elif _is_rss_target(target):
                 batch = asyncio.run(_scrape_rss(target))

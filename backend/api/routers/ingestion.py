@@ -81,6 +81,10 @@ class ProfileImportBody(BaseModel):
     achievements: list[ProfileEntry] = Field(default_factory=list)
 
 
+def _public_error(exc: BaseException, message: str) -> str:
+    return f"{message} ({type(exc).__name__})"
+
+
 def _read_profile_template(path: Path, logger) -> dict:
     """Load the profile-import template, falling back to a built-in default if
     the file is missing or corrupt (C3 — packaged builds must not 500 here)."""
@@ -88,7 +92,7 @@ def _read_profile_template(path: Path, logger) -> dict:
         with open(path, encoding="utf-8") as file:
             return json.load(file)
     except (FileNotFoundError, json.JSONDecodeError) as exc:
-        logger.warning("profile template unavailable (%s); serving default", exc)
+        logger.warning("profile template unavailable (%s); serving default", type(exc).__name__)
         return _default_profile_template()
 
 
@@ -191,7 +195,7 @@ def create_router(manager, logger) -> APIRouter:
                 })
                 return profile_payload
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(status_code=400, detail=_public_error(exc, "Le profil n'a pas pu être importé")) from exc
 
     @router.post("/ingest/linkedin")
     async def ingest_linkedin(file: UploadFile = File(...)):
@@ -202,7 +206,7 @@ def create_router(manager, logger) -> APIRouter:
         try:
             return await get_profile_service().ingest_linkedin(raw)
         except Exception as exc:
-            logger.error("linkedin parse failed: %s", exc)
+            logger.error("linkedin parse failed: %s", type(exc).__name__)
             raise HTTPException(422, "L'export LinkedIn n'a pas pu être analysé.") from exc
 
     @router.post("/ingest/github")
@@ -215,7 +219,7 @@ def create_router(manager, logger) -> APIRouter:
                 max_repos=body.max_repos,
             )
         except Exception as exc:
-            logger.error("github ingest failed: %s", exc)
+            logger.error("github ingest failed: %s", type(exc).__name__)
             raise HTTPException(502, "Le profil GitHub n'a pas pu être importé.") from exc
         if "error" in result:
             status_code = int(result.get("status_code") or (404 if result.get("error_kind") == "not_found" else 502))
@@ -228,7 +232,7 @@ def create_router(manager, logger) -> APIRouter:
         try:
             return await get_profile_service().import_profile_data(body)
         except Exception as exc:
-            logger.error("profile import failed: %s", exc)
+            logger.error("profile import failed: %s", type(exc).__name__)
             return {
                 "status": "partial",
                 "stats": {
@@ -240,7 +244,7 @@ def create_router(manager, logger) -> APIRouter:
                     "achievements": 0,
                     "vector_sync": "skipped",
                 },
-                "errors": [str(exc)],
+                "errors": [_public_error(exc, "Import profil partiel")],
             }
 
     @router.get("/ingest/profile/template")
@@ -256,8 +260,8 @@ def create_router(manager, logger) -> APIRouter:
         try:
             result = await get_profile_service().ingest_portfolio(body.url, auto_import=body.auto_import)
         except Exception as exc:
-            logger.error("portfolio ingest failed: %s", exc)
-            raise HTTPException(502, f"Impossible d'analyser le portfolio : {exc}") from exc
+            logger.error("portfolio ingest failed: %s", type(exc).__name__)
+            raise HTTPException(502, _public_error(exc, "Impossible d'analyser le portfolio")) from exc
         if result.get("error") and not result.get("screenshot_b64"):
             raise HTTPException(int(result.get("status_code") or 422), result["error"])
         if result.get("imported"):

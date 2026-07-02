@@ -12,6 +12,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 env:
   PNPM_VERSION: "10.33.2"
   # pip-audit currently reports no fixed versions for these transitive ML advisories.
