@@ -199,19 +199,30 @@ def classify_job_seniority(lead: dict) -> str:
     years = _experience_years(text)
     max_years = max(years) if years else 0
 
-    if _has_seniority_term(text, SENIOR_TERMS) or max_years >= 5:
+    # An explicit HIGH year range (>=5) is the strongest senior signal — honor it
+    # first. Otherwise explicit entry-level signals (a fresher/junior WORD or a low
+    # <=2yr range) take precedence over an incidental senior NOUN like
+    # 'manager'/'lead'/'architect' that merely appears in an otherwise entry-level
+    # posting (e.g. "Account Manager - Entry Level (0-2 years)"), which previously
+    # got misclassified senior and dropped from beginner feeds.
+    if max_years >= 5:
         return "senior"
-    if _has_seniority_term(text, MID_TERMS) or max_years >= 3:
-        return "mid"
     if _has_seniority_term(text, FRESHER_TERMS):
         return "fresher"
     if _has_seniority_term(text, JUNIOR_TERMS):
         return "junior"
-    if years:
-        if max_years <= 1:
-            return "fresher"
-        if max_years <= 2:
-            return "junior"
+    # A low required-experience RANGE is itself an explicit entry-level signal (per
+    # the comment above), so it must be tested BEFORE the senior-term check —
+    # otherwise an incidental senior noun ('Account Manager — 2 yrs') wrongly wins.
+    # 0-1yr -> fresher, 2yr -> junior.
+    if years and max_years <= 1:
+        return "fresher"
+    if years and max_years <= 2:
+        return "junior"
+    if _has_seniority_term(text, SENIOR_TERMS):
+        return "senior"
+    if _has_seniority_term(text, MID_TERMS) or max_years >= 3:
+        return "mid"
     return "unknown"
 
 

@@ -102,7 +102,14 @@ def _freshness(lead: dict, max_age_days: int = 7) -> tuple[bool, str]:
             return True, "freshness assumed (recency-constrained source)"
         return False, "no posting date"
     newest = max(dates)
-    age_days = (datetime.now(timezone.utc) - newest).days
+    age_seconds = (datetime.now(timezone.utc) - newest).total_seconds()
+    if age_seconds < -86400:
+        # More than a day in the future = mis-parse (e.g. DD/MM read as MM/DD) or
+        # bad source data; don't let it slip past the staleness gate. A few hours
+        # ahead is ordinary NTP/timezone skew on a genuinely fresh posting — allow
+        # it (timedelta.days floors, so the old `.days < 0` rejected those too).
+        return False, "future posting date; treating as unverified"
+    age_days = max(0, int(age_seconds // 86400))
     if age_days > max_age_days:
         return False, f"stale posting: {age_days} days old"
     return True, f"fresh posting: {age_days} days old"
@@ -172,7 +179,11 @@ def evaluate_lead_quality(
     if signal <= 0:
         signal = int(signal_quality(text).get("score") or 0)
     score = max(0, min(100, signal - penalties))
-    accepted = score >= max(0, min(int(min_quality or MIN_DEFAULT_QUALITY), 100))
+    # `min_quality or MIN_DEFAULT_QUALITY` treated an explicit 0 ("accept all") as
+    # unset and forced the default back on — silently defeating free_scout's own
+    # explicit-0 handling (it passes min_quality=min_score, which can be 0). A real
+    # 0 is a valid threshold; just clamp it to [0, 100].
+    accepted = score >= max(0, min(min_quality, 100))
 
     if not reasons:
         reasons.append("passes source quality checks")

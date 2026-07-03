@@ -24,7 +24,7 @@ Champs recommandés :
 
 ## Filtre Qualité
 
-Avant sauvegarde, les offres doivent passer par la quality gate. Elle rejette ou dégrade notamment :
+Avant sauvegarde, les offres doivent passer par `discovery.quality_gate.evaluate_lead_quality`. Elle rejette ou dégrade notamment :
 
 - les offres sans URL ;
 - les lignes trop pauvres ;

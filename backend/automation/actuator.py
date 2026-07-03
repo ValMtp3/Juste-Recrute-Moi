@@ -7,8 +7,14 @@ import re
 from typing import Any
 from pydantic import BaseModel, Field
 from core.logging import get_logger
+from core.url_guard import assert_public_url, block_private_route
 
 _log = get_logger(__name__)
+
+# Wall-clock ceiling for a single read_form session (nav + field probing +
+# screenshot + close). Past this the coroutine is cancelled so a slow/blocking
+# page can't pin the single-worker sidecar and make the backend look unreachable.
+READ_FORM_DEADLINE_S = 45
 
 _AUTO_APPLY_ENABLED = os.environ.get("JHM_AUTO_APPLY", "false").lower() == "true"
 
@@ -57,73 +63,104 @@ async def read_form(
 
     candidate_with_cl = {**candidate, "cover_letter": cover_letter}
 
-    result_fields = []
+    result_fields: list[dict] = []
     unmatched: list[str] = []
     screenshot_b64 = ""
     error = None
 
+    # SSRF guard FIRST, before spawning Chromium: the lead URL is LLM-extracted
+    # from an untrusted page, so reject non-public hosts up front — an internal
+    # URL must never cost a browser launch (DoS amplification) or be reached.
     try:
-        async with async_playwright() as pw:
-            browser = await launch_chromium(pw, headless=True)
-            ctx = await browser.new_context(
-                viewport={"width": 1280, "height": 900},
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            )
-            page = await ctx.new_page()
-            await page.goto(url, wait_until="domcontentloaded", timeout=20000)
-            await page.wait_for_timeout(2000)
+        await asyncio.to_thread(assert_public_url, url)
+    except Exception as exc:
+        _log.warning("read_form rejected non-public url %s: %s", url, exc)
+        return {
+            "platform": platform,
+            "platform_label": "Generic form",
+            "screenshot_b64": "",
+            "fields": [],
+            "unmatched_labels": [],
+            "error": str(exc),
+        }
 
-            for field_cfg in fields_cfg:
-                sel = field_cfg["selector"]
-                ftype = field_cfg["type"]
-                answer = resolve_answer(ftype, candidate_with_cl)
+    async def _fill_and_capture(page) -> None:
+        nonlocal screenshot_b64
+        for field_cfg in fields_cfg:
+            sel = field_cfg["selector"]
+            ftype = field_cfg["type"]
+            answer = resolve_answer(ftype, candidate_with_cl)
+            found = False
+            try:
+                el = page.locator(sel).first
+                await el.wait_for(state="visible", timeout=1500)
+                found = True
+            except Exception as log_exc:
+                logging.getLogger(__name__).warning('suppressed exception in backend/automation/actuator.py:read_form: %s', log_exc)
                 found = False
 
+            if not found:
+                confidence = "low"
+            elif platform:
+                confidence = "high"
+            else:
+                confidence = "medium"
+
+            result_fields.append({
+                "type":          ftype,
+                "label":         ftype.replace("_", " ").title(),
+                "selector":      sel.split(",")[0].strip(),
+                "answer":        answer,
+                "found_on_page": found,
+                "confidence":    confidence,
+            })
+
+        try:
+            labels = await page.locator("label").all_text_contents()
+            covered_words = {"first", "last", "email", "phone", "linkedin",
+                             "github", "website", "city", "cover", "resume", "name"}
+            for lbl in labels:
+                lbl_lower = lbl.lower().strip()
+                if lbl_lower and not any(w in lbl_lower for w in covered_words) and len(lbl_lower) < 60:
+                    unmatched.append(lbl.strip())
+        except Exception as log_exc:
+            logging.getLogger(__name__).warning('suppressed exception in backend/automation/actuator.py:read_form: %s', log_exc)
+
+        try:
+            raw = await page.screenshot(type="png", full_page=False)
+            screenshot_b64 = base64.b64encode(raw).decode()
+        except Exception as log_exc:
+            logging.getLogger(__name__).warning('suppressed exception in backend/automation/actuator.py:read_form: %s', log_exc)
+
+    async def _run_session() -> None:
+        async with async_playwright() as pw:
+            browser = await launch_chromium(pw, headless=True)
+            try:
+                ctx = await browser.new_context(
+                    viewport={"width": 1280, "height": 900},
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                )
+                await ctx.route("**/*", block_private_route)
+                page = await ctx.new_page()
+                await page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                await page.wait_for_timeout(2000)
+                await _fill_and_capture(page)
+            finally:
+                # A wedged Chromium must not hang the coroutine or leak the
+                # process — time-box the close and swallow its failure.
                 try:
-                    el = page.locator(sel).first
-                    await el.wait_for(state="visible", timeout=1500)
-                    found = True
-                except Exception as log_exc:
-                    logging.getLogger(__name__).warning('suppressed exception in backend/automation/actuator.py:read_form: %s', log_exc)
-                    found = False
+                    await asyncio.wait_for(browser.close(), timeout=5)
+                except Exception as close_exc:
+                    _log.warning("read_form browser close timed out/failed for %s: %s", url, close_exc)
 
-                if not found:
-                    confidence = "low"
-                elif platform:
-                    confidence = "high"
-                else:
-                    confidence = "medium"
-
-                result_fields.append({
-                    "type":          ftype,
-                    "label":         ftype.replace("_", " ").title(),
-                    "selector":      sel.split(",")[0].strip(),
-                    "answer":        answer,
-                    "found_on_page": found,
-                    "confidence":    confidence,
-                })
-
-            try:
-                labels = await page.locator("label").all_text_contents()
-                covered_words = {"first", "last", "email", "phone", "linkedin",
-                                 "github", "website", "city", "cover", "resume", "name"}
-                for lbl in labels:
-                    lbl_lower = lbl.lower().strip()
-                    if lbl_lower and not any(w in lbl_lower for w in covered_words) and len(lbl_lower) < 60:
-                        unmatched.append(lbl.strip())
-            except Exception as log_exc:
-                logging.getLogger(__name__).warning('suppressed exception in backend/automation/actuator.py:read_form: %s', log_exc)
-                pass
-
-            try:
-                raw = await page.screenshot(type="png", full_page=False)
-                screenshot_b64 = base64.b64encode(raw).decode()
-            except Exception as log_exc:
-                logging.getLogger(__name__).warning('suppressed exception in backend/automation/actuator.py:read_form: %s', log_exc)
-                pass
-
-            await browser.close()
-
+    # Overall wall-clock: a hung navigation/interaction can otherwise pin this
+    # coroutine on the single-worker sidecar and make the whole backend look
+    # unreachable to the UI. Bound the entire session.
+    try:
+        await asyncio.wait_for(_run_session(), timeout=READ_FORM_DEADLINE_S)
+    except TimeoutError:
+        _log.error("read_form timed out after %ss for %s", READ_FORM_DEADLINE_S, url)
+        error = f"Reading the form timed out after {READ_FORM_DEADLINE_S}s. The page may be slow or blocking automation."
     except Exception as exc:
         _log.error("read_form failed for %s: %s", url, exc)
         error = str(exc)
@@ -207,6 +244,20 @@ def _ready_to_submit(result: dict) -> bool:
     # actually landed in the right field, so they must NOT by themselves make a
     # form "ready to submit". A vision-only form is read/previewed, never auto-sent.
     return bool(result.get("uploaded")) and bool(result.get("fields"))
+
+
+def _submit_mode(has_submit: bool, ready: bool, dry_run: bool, auto_apply: bool) -> str:
+    """The submit safety decision, centralized so it can be unit-tested.
+
+    Returns 'dry_run' | 'read_only' | 'submit' | 'blocked'. Crucially, 'submit'
+    (the ONLY mode that actually clicks the button) requires a real submit button,
+    a DOM-verified ready form, auto-apply explicitly enabled, and not a dry run.
+    """
+    if dry_run:
+        return "dry_run"
+    if not auto_apply:
+        return "read_only"
+    return "submit" if (has_submit and ready) else "blocked"
 
 
 # Labels/controls the vision actuator must never click. The page is untrusted, so
@@ -478,6 +529,10 @@ async def _run(job: dict, asset: str, dry_run: bool = False) -> bool | dict:
                     "Chrome/124.0.0.0 Safari/537.36"
                 ),
             )
+            # SSRF guard (same as read_form): the lead url is LLM-extracted from an
+            # untrusted page and must not drive the browser to an internal host.
+            await asyncio.to_thread(assert_public_url, job.get("url", ""))
+            await ctx.route("**/*", block_private_route)
             pg = await ctx.new_page()
             await pg.goto(job.get("url", ""), wait_until="domcontentloaded", timeout=30000)
             await pg.wait_for_timeout(2000)
@@ -498,8 +553,9 @@ async def _run(job: dict, asset: str, dry_run: bool = False) -> bool | dict:
 
             submit_btn = await _find_submit(pg)
             ready = _ready_to_submit(filled)
+            mode = _submit_mode(bool(submit_btn), ready, dry_run, _AUTO_APPLY_ENABLED)
 
-            if dry_run:
+            if mode == "dry_run":
                 if submit_btn:
                     await submit_btn.scroll_into_view_if_needed()
                     await submit_btn.evaluate("el => el.style.outline = '3px solid #ef4444'")
@@ -513,7 +569,7 @@ async def _run(job: dict, asset: str, dry_run: bool = False) -> bool | dict:
                     "ready_to_submit": bool(submit_btn and ready),
                 }
 
-            if not _AUTO_APPLY_ENABLED:
+            if mode == "read_only":
                 _log.warning(
                     "auto-apply is disabled — form was read but not submitted. "
                     "Set JHM_AUTO_APPLY=true to re-enable."
@@ -527,7 +583,7 @@ async def _run(job: dict, asset: str, dry_run: bool = False) -> bool | dict:
                     "ready_to_submit": bool(submit_btn and ready),
                 }
 
-            if submit_btn and ready:
+            if mode == "submit":
                 await submit_btn.click(timeout=5000)
                 ok = True
             else:

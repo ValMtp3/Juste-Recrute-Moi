@@ -161,7 +161,7 @@ def _filter_free_targets_for_market(raw_targets: str, market_focus: str) -> str:
 
 def _is_direct_free_target(target: str) -> bool:
     lower = str(target or "").strip().lower()
-    return lower.startswith(("france_travail:", "jobspy:", "adzuna:", "jooble:", "wttj:", "apec:", "import:", "ats:"))
+    return lower.startswith(("france_travail:", "jobspy:", "adzuna:", "jooble:", "wttj:", "hellowork:", "apec:", "import:", "ats:"))
 
 
 def _merge_usage(out: dict, incoming: dict | None, *, configured: int) -> None:

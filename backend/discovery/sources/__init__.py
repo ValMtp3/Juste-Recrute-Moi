@@ -7,6 +7,8 @@ from discovery.sources.ats import (
     scrape_greenhouse,
     is_ats_target,
     scrape_lever,
+    scrape_personio,
+    scrape_recruitee,
     scrape_smartrecruiters,
     scrape_teamtailor,
     scrape_workable,
@@ -17,6 +19,7 @@ from discovery.sources.adzuna import scrape_target as scrape_adzuna_target
 from discovery.sources.jooble import scrape_target as scrape_jooble_target
 from discovery.sources.wttj_rss import scrape_target as scrape_wttj_target
 from discovery.sources.apec import scrape_target as scrape_apec_target
+from discovery.sources.hellowork import scrape_target as scrape_hellowork_target
 from discovery.sources.url_import import scrape_target as scrape_url_import_target
 from discovery.sources.apify import run_actor as run_apify_actor
 from discovery.sources.apify import run_board_scan
@@ -49,12 +52,15 @@ __all__ = [
     "scrape_github",
     "scrape_github_jobs_target",
     "scrape_greenhouse",
+    "scrape_hellowork_target",
     "scrape_hn",
     "scrape_hn_hiring",
     "scrape_jobicy_api",
     "scrape_jobspy_target",
     "scrape_jooble_target",
     "scrape_lever",
+    "scrape_personio",
+    "scrape_recruitee",
     "scrape_reddit",
     "scrape_remoteok",
     "scrape_remotive",

@@ -485,6 +485,22 @@ fn kill_process_tree(pid: u32) {
     }
 }
 
+// Only treat a PID as our sidecar when the live process's image/command actually
+// names the sidecar binary. The old checks (a bare "python" substring on Windows,
+// and `kill -0` existence on other platforms) matched ANY recycled-PID process —
+// so after an abnormal exit left a stale sidecar.pid behind and the OS reused that
+// PID for an unrelated process, cleanup could force-kill it. The dev sidecar runs
+// via `python`, so the loose python match is allowed ONLY in debug builds; a
+// release build requires the packaged "jhm-sidecar" image, and when we can't
+// positively confirm it we do NOT kill (fail-safe).
+fn process_image_is_sidecar(text: &str) -> bool {
+    let text = text.to_lowercase();
+    if text.contains("jhm-sidecar") {
+        return true;
+    }
+    cfg!(debug_assertions) && (text.contains("python") || text.contains("pythonw"))
+}
+
 #[cfg(windows)]
 fn is_jhm_process(pid: u32) -> bool {
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -495,17 +511,24 @@ fn is_jhm_process(pid: u32) -> bool {
     let Ok(output) = output else {
         return false;
     };
-    let text = String::from_utf8_lossy(&output.stdout).to_lowercase();
-    text.contains("jhm-sidecar") || text.contains("python")
+    process_image_is_sidecar(&String::from_utf8_lossy(&output.stdout))
 }
 
 #[cfg(not(windows))]
 fn is_jhm_process(pid: u32) -> bool {
-    std::process::Command::new("kill")
-        .args(["-0", &pid.to_string()])
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    // `ps -o command=` prints the process's command line (empty header) and exits
+    // non-zero when the PID doesn't exist — stricter than the old `kill -0`, which
+    // matched any live PID the user could signal.
+    let output = std::process::Command::new("ps")
+        .args(["-p", &pid.to_string(), "-o", "command="])
+        .output();
+    let Ok(output) = output else {
+        return false;
+    };
+    if !output.status.success() {
+        return false;
+    }
+    process_image_is_sidecar(&String::from_utf8_lossy(&output.stdout))
 }
 
 fn wait_for_process_exit(pid: u32, timeout: std::time::Duration) -> bool {

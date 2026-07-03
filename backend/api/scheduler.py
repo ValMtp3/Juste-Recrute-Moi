@@ -93,10 +93,17 @@ def create_ghost_tick(manager):
         discovered = await asyncio.to_thread(repo.leads.get_discovered_leads)
         await manager.broadcast({"type": "agent", "event": "ghost_eval", "msg": f"Ghost Mode: evaluating {len(discovered)} leads"})
 
+        # Token gate: the background cycle LLM-evaluates only the top-K by the cheap
+        # deterministic score, so an unattended Ghost run can't quietly burn tokens on
+        # the whole backlog.
+        from core.config import int_cfg
+        ghost_max_llm = int_cfg(cfg, "ghost_max_llm_evaluations", 15, 0, 500)
+        llm_ids = await ranking_service.select_llm_eval_ids(discovered, profile, max_llm=ghost_max_llm)
+
         approved = []
         for lead in discovered:
             try:
-                result = await ranking_service.evaluate_lead(lead, profile)
+                result = await ranking_service.evaluate_lead(lead, profile, cfg, use_llm=lead["job_id"] in llm_ids)
                 # H1: background re-scoring must not overwrite a status the user
                 # changed (approved/applied/interviewing) during this slow eval
                 # loop. preserve_status keeps the lead's current status; the
@@ -194,10 +201,25 @@ def create_lifespan(scheduler: AsyncIOScheduler, ghost_tick, logger):
         ensure_ghost_job(scheduler, ghost_tick)
         log_startup_warnings(get_repository(), logger)
         scheduler.start()
+
+        # Warm real semantic embeddings in the background: auto-download the ONNX model
+        # if it's missing so ranking uses meaning-level fit (not the near-random hash
+        # fallback) by default, with no manual setup. Non-blocking — the scan uses hash
+        # until the model is ready, then upgrades automatically.
+        async def _warm_embeddings() -> None:
+            try:
+                from data.vector.embeddings import ensure_onnx_model
+                active = await asyncio.to_thread(ensure_onnx_model)
+                logger.info("embedding warm-up done (onnx active=%s)", active)
+            except Exception as exc:
+                logger.warning("embedding warm-up skipped: %s", exc)
+
+        warm_task = asyncio.create_task(_warm_embeddings())
         logger.info("FastAPI live.")
         try:
             yield
         finally:
+            warm_task.cancel()
             scheduler.shutdown(wait=False)
             close_all()
         logger.info("FastAPI shutdown.")

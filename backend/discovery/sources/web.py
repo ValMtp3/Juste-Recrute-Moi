@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from discovery.normalizer import is_recent
 from core.logging import get_logger
+from core.url_guard import assert_public_url, block_private_route
 
 _log = get_logger(__name__)
 _MAX_SCOUT_MARKDOWN_CHARS = 24000
@@ -259,6 +260,9 @@ async def _crawl_inner(u: str, headed: bool) -> str:
         br = await launch_chromium(pw, headless=not headed)
         try:
             ctx = await br.new_context(ignore_https_errors=True)
+            # SSRF guard: abort any document navigation/redirect to a non-public
+            # host (the browser path had none, unlike the httpx sources).
+            await ctx.route("**/*", block_private_route)
             pg = await ctx.new_page()
             await pg.goto(u, wait_until="domcontentloaded", timeout=30000)
             html = await pg.content()
@@ -273,6 +277,10 @@ async def _crawl_inner(u: str, headed: bool) -> str:
 
 
 async def crawl(u: str, headed: bool = False) -> str:
+    # SSRF guard on the INITIAL navigation (redirects are caught by the per-request
+    # route guard in _crawl_inner). Raises BlockedUrlError for a non-public host,
+    # which the scout records as a source error.
+    await asyncio.to_thread(assert_public_url, u)
     # Overall wall-clock bound for one target: goto has its own 30s timeout, but
     # content()/context teardown do not — without this a hung page could stall
     # the whole sequential scan indefinitely.
@@ -367,13 +375,31 @@ def parse_wellfound(md: str, src: str) -> list:
     return results
 
 
+def _require_scout_llm() -> None:
+    """Fail loudly when the web scout has no usable LLM.
+
+    The web path turns scraped page markdown into leads *via an LLM*. With no
+    reachable/configured LLM, ``call_llm`` returns an empty result and the entire
+    web source contributes zero leads silently — indistinguishable from "this page
+    had no jobs". Raising here surfaces the real cause in the scan's source-error
+    summary (configure a provider, or lean on the keyless API sources) instead of
+    a mystery empty scan. Checked before crawling so a browser launch isn't spent
+    on a path that cannot extract anything.
+    """
+    from llm.client import assert_llm_configured
+
+    assert_llm_configured("scout")
+
+
 def scrape(u: str, headed: bool = False) -> list:
+    _require_scout_llm()
     u = ensure_scheme(u)
     md = asyncio.run(crawl(u, headed=headed))
     return parse(md, u)
 
 
 def scrape_wellfound_target(target: str, headed: bool = False) -> list:
+    _require_scout_llm()
     crawl_target = google_past_week_url(target) if target.startswith("site:") else target
     md = asyncio.run(crawl(crawl_target, headed=headed))
     return parse_wellfound(md, crawl_target)

@@ -1,0 +1,11 @@
+{
+  "id": "FT-123",
+  "intitule": "Data Analyst",
+  "description": "<p>Analyse de donnees, SQL et Python.</p>",
+  "dateCreation": "2026-06-20T10:00:00Z",
+  "typeContratLibelle": "CDI",
+  "entreprise": { "nom": "Acme France" },
+  "lieu": { "libelle": "Lyon 02" },
+  "salaire": { "libelle": "42000 - 50000 EUR" },
+  "origineOffre": { "urlOrigine": "https://candidat.francetravail.fr/offres/recherche/detail/FT-123" }
+}

@@ -1,12 +1,15 @@
 # Feuille De Route
 
+> Statut : Juste Recrute Moi suit désormais upstream 1.4.0. Les jalons ci-dessous
+> indiquent la direction produit ; les éléments marqués ✓ sont déjà livrés.
+
 ## v0.1 - MVP Agrégateur France
 
-- Stabiliser France Travail comme source prioritaire.
-- Garder JobSpy pour Indeed / Google Jobs en best effort.
-- Renforcer les connecteurs ATS directs : Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Teamtailor.
-- Finaliser l'import URL JSON-LD / HTML.
-- Afficher clairement la fiabilité des sources dans l'UI.
+- ✓ Stabiliser France Travail comme source prioritaire.
+- ✓ Garder JobSpy pour Indeed / Google Jobs en best effort.
+- ✓ Renforcer les connecteurs ATS directs : Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Teamtailor, Recruitee et Personio.
+- ✓ Finaliser l'import URL JSON-LD / HTML.
+- ✓ Afficher clairement la fiabilité des sources dans l'UI.
 - Documenter l'installation et la configuration France Travail.
 
 ## v0.2 - Sources Françaises
@@ -18,7 +21,7 @@
 
 ## v0.3 - Matching Et Évaluation
 
-- Construire un petit jeu d'évaluation de qualité des offres.
+- ✓ Construire un petit jeu d'évaluation de qualité des offres (`backend/evals/`).
 - Améliorer l'apprentissage à partir des retours utilisateur.
 - Rendre l'état du matching sémantique plus visible.
 - Ajouter des benchmarks de ranking.
@@ -26,6 +29,6 @@
 ## Plus Tard
 
 - Stockage des clés API dans le trousseau système.
-- Releases desktop vérifiées pour Windows, macOS et Linux.
+- ✓ Releases desktop vérifiées pour Windows, macOS et Linux.
 - Séparation éventuelle de l'automatisation navigateur en plugin optionnel.
 - Catalogue de sources hébergé, tout en gardant les données utilisateur locales.

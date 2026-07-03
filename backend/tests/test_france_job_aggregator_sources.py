@@ -1,5 +1,8 @@
 import asyncio
+import json
 import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -9,7 +12,18 @@ import pytest
 from automation import free_scout
 from core.config import job_market_focus, job_targets, parse_search_intent, profile_for_discovery
 from discovery.service import DiscoveryService
-from discovery.sources import ats, france_travail, jobspy, url_import
+from discovery.sources import adzuna, apec, ats, france_travail, hellowork, jobspy, jooble, url_import, wttj_rss
+
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures" / "france_jobboards"
+
+
+def _fixture_text(name: str) -> str:
+    return (FIXTURES_DIR / name).read_text(encoding="utf-8")
+
+
+def _fixture_json(name: str) -> dict:
+    return json.loads(_fixture_text(name))
 
 
 def test_france_market_targets_prioritize_stable_and_best_effort_sources():
@@ -21,15 +35,17 @@ def test_france_market_targets_prioritize_stable_and_best_effort_sources():
     assert "https://remotive.com/api/remote-jobs" not in targets
     assert "https://jobicy.com/api/v2/remote-jobs?count=50" not in targets
     assert "https://weworkremotely.com/remote-jobs.rss" not in targets
-    assert any("welcometothejungle" in target for target in targets)
-    assert "site:apec.fr/candidat/recherche-emploi.html/emploi France" in targets
+    assert "wttj:query=developpeur&aroundQuery=France" in targets
+    assert "hellowork:query=developpeur&location=France" in targets
+    assert "apec:developpeur;location=France" in targets
+    assert "site:welcometothejungle.com/fr/jobs France" not in targets
+    assert "site:hellowork.com/fr-fr/emplois France" not in targets
+    assert "site:apec.fr/candidat/recherche-emploi.html/emploi France" not in targets
     assert "site:cadremploi.fr/emploi France" in targets
     assert "site:meteojob.com/jobs France" in targets
     assert "site:lesjeudis.com/jobs France" in targets
     assert "site:linkedin.com/jobs France" in targets
     assert "site:fr.indeed.com/emplois France" in targets
-    assert "wttj:query=developpeur&aroundQuery=France" in targets
-    assert "apec:developpeur;location=France" in targets
     assert "adzuna:developpeur;location=France;results=50" in targets
     assert "jooble:developpeur;location=France" in targets
     assert "ats:greenhouse:mistralai;query=developpeur;location=France" in targets
@@ -43,6 +59,7 @@ def test_france_market_plain_search_keeps_fallback_sources():
 
     assert targets[0] == "france_travail:data;lieu=Paris;range=0-49"
     assert "wttj:query=data&aroundQuery=Paris" in targets
+    assert "hellowork:query=data&location=Paris" in targets
     assert "apec:data;location=Paris" in targets
     assert "adzuna:data;location=Paris;results=50" in targets
     assert "jooble:data;location=Paris" in targets
@@ -50,7 +67,7 @@ def test_france_market_plain_search_keeps_fallback_sources():
     assert "ats:smartrecruiters:Ubisoft2;query=data;location=Paris" in targets
     assert "https://remotive.com/api/remote-jobs" not in targets
     assert "https://jobicy.com/api/v2/remote-jobs?count=50" not in targets
-    assert any("welcometothejungle" in target for target in targets)
+    assert "site:welcometothejungle.com/fr/jobs Paris" not in targets
 
 
 def test_france_market_targets_apply_location_radius_to_direct_sources():
@@ -64,6 +81,7 @@ def test_france_market_targets_apply_location_radius_to_direct_sources():
 
     assert targets[0] == "france_travail:data;lieu=Montpellier;range=0-49;rayon=25"
     assert "wttj:query=data&aroundQuery=Montpellier" in targets
+    assert "hellowork:query=data&location=Montpellier" in targets
     assert "apec:data;location=Montpellier" in targets
     assert "adzuna:data;location=Montpellier;results=50" in targets
     assert "jooble:data;location=Montpellier" in targets
@@ -82,6 +100,8 @@ def test_france_market_adds_broader_variants_outside_france_travail():
     assert targets.count("france_travail:Data analyst;lieu=Lyon;range=0-49;rayon=25") == 1
     assert "wttj:query=Data+analyst&aroundQuery=Lyon" in targets
     assert "wttj:query=Data&aroundQuery=Lyon" in targets
+    assert "hellowork:query=Data+analyst&location=Lyon" in targets
+    assert "hellowork:query=Data&location=Lyon" in targets
     assert "apec:Data;location=Lyon" in targets
     assert "adzuna:Data;location=Lyon;results=50" in targets
     assert "jooble:Data;location=Lyon" in targets
@@ -104,14 +124,15 @@ def test_france_market_radius_is_bounded_or_ignored():
 
 def test_france_market_replaces_generic_france_travail_target_with_profile_intent():
     targets = job_targets(
-        "france_travail:developpeur;lieu=France;range=0-49\nsite:hellowork.com/fr-fr/emplois",
+        "france_travail:developpeur;lieu=France;range=0-49\nhellowork:query=developpeur&location=France",
         "france",
         search_text="Développeur IA Montpellier alternance",
         location="Montpellier",
     )
 
     assert targets[0] == "france_travail:Développeur IA;lieu=Montpellier;range=0-49;typeContrat=APP"
-    assert "site:hellowork.com/fr-fr/emplois" in targets
+    assert "hellowork:query=D%C3%A9veloppeur+IA&location=Montpellier" in targets
+    assert "hellowork:query=developpeur&location=France" not in targets
     assert "france_travail:developpeur;lieu=France;range=0-49" not in targets
 
 
@@ -120,6 +141,7 @@ def test_france_market_replaces_generic_direct_sources_with_profile_intent():
         "\n".join([
             "france_travail:developpeur;lieu=France;range=0-49",
             "wttj:query=developpeur&aroundQuery=France",
+            "hellowork:query=developpeur&location=France",
             "apec:developpeur;location=France",
             "adzuna:developpeur;location=France;results=50",
             "jooble:developpeur;location=France",
@@ -132,6 +154,7 @@ def test_france_market_replaces_generic_direct_sources_with_profile_intent():
 
     assert "france_travail:Data analyst;lieu=Lyon;range=0-49;rayon=30" in targets
     assert "wttj:query=Data+analyst&aroundQuery=Lyon" in targets
+    assert "hellowork:query=Data+analyst&location=Lyon" in targets
     assert "apec:Data analyst;location=Lyon" in targets
     assert "adzuna:Data analyst;location=Lyon;results=50" in targets
     assert "jooble:Data analyst;location=Lyon" in targets
@@ -271,6 +294,43 @@ def test_france_travail_mapper_returns_stable_lead():
     assert lead["source_meta"]["source"] == "france_travail"
     assert lead["source_meta"]["source_reliability"] == "stable"
     assert lead["source_meta"]["contract_type"] == "CDI"
+
+
+def test_france_jobboard_fixtures_cover_direct_mappers():
+    ft_lead = france_travail.offer_to_lead(france_travail.offer_from_result(_fixture_json("france_travail_offer.json")))
+    assert ft_lead["platform"] == "france_travail"
+    assert ft_lead["title"] == "Data Analyst"
+    assert ft_lead["location"] == "Lyon 02"
+
+    wttj_item = ET.fromstring(_fixture_text("wttj_jobs.rss")).find(".//item")
+    assert wttj_item is not None
+    wttj_offer = wttj_rss.offer_from_result(wttj_item)
+    assert wttj_offer is not None
+    assert wttj_offer.platform == "wttj"
+    assert wttj_offer.company == "Jungle Data"
+
+    apec_offer = apec.offer_from_result(_fixture_json("apec_offer.json"))
+    assert apec_offer.platform == "apec"
+    assert apec_offer.location == "Paris"
+    assert apec_offer.remote is True
+
+    adzuna_offer = adzuna.offer_from_result(_fixture_json("adzuna_offer.json"))
+    assert adzuna_offer.platform == "adzuna"
+    assert adzuna_offer.salary_min == 45000
+    assert adzuna_offer.location == "Montpellier, Herault"
+
+    jooble_offer = jooble.offer_from_result(_fixture_json("jooble_offer.json"))
+    assert jooble_offer.platform == "jooble"
+    assert jooble_offer.location == "Nantes"
+
+    hellowork_offers = hellowork.offers_from_search_html(
+        "https://www.hellowork.com/fr-fr/emploi/recherche.html?k=data&l=Rennes",
+        _fixture_text("hellowork_search.html"),
+    )
+    assert len(hellowork_offers) == 1
+    assert hellowork_offers[0].platform == "hellowork"
+    assert hellowork_offers[0].company == "Hello Data"
+    assert hellowork_offers[0].location == "Rennes"
 
 
 def test_france_travail_non_json_response_is_actionable():
@@ -460,6 +520,7 @@ def test_discovery_service_routes_direct_france_targets_to_free_scout():
         targets = [
             "france_travail:developpeur",
             "wttj:query=developpeur&aroundQuery=France",
+            "hellowork:query=developpeur&location=France",
             "apec:developpeur;location=France",
             "adzuna:developpeur;location=France;results=50",
             "jooble:developpeur;location=France",

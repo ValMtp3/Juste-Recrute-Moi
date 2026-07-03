@@ -1,0 +1,13 @@
+{
+  "id": "adz-789",
+  "title": "Developpeur Python",
+  "description": "Construire des APIs FastAPI pour une plateforme SaaS.",
+  "redirect_url": "https://www.adzuna.fr/details/adz-789",
+  "created": "2026-06-22T09:00:00Z",
+  "contract_type": "permanent",
+  "salary_min": 45000,
+  "salary_max": 55000,
+  "company": { "display_name": "Adzuna Labs" },
+  "location": { "display_name": "Montpellier, Herault" },
+  "category": { "label": "IT Jobs" }
+}

@@ -239,3 +239,36 @@ def test_france_travail_settings_are_sensitive():
 
     assert "france_travail_client_id" in keys
     assert "france_travail_client_secret" in keys
+
+
+def test_source_settings_status_preserves_masked_france_travail_secret(monkeypatch):
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_ID", raising=False)
+    monkeypatch.delenv("FRANCE_TRAVAIL_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("ADZUNA_APP_ID", raising=False)
+    monkeypatch.delenv("ADZUNA_API_KEY", raising=False)
+    monkeypatch.delenv("JOOBLE_API_KEY", raising=False)
+
+    class FakeSettings:
+        def get_settings(self):
+            return {
+                "france_travail_client_id": "saved-client",
+                "france_travail_client_secret": "saved-secret",
+            }
+
+    class FakeRepo:
+        settings = FakeSettings()
+
+    status = settings_router.source_settings_status(
+        FakeRepo(),
+        {
+            "france_travail_client_id": settings_router.MASK,
+            "france_travail_client_secret": settings_router.MASK,
+            "adzuna_app_id": "typed-adzuna-id",
+            "adzuna_api_key": "",
+            "jooble_api_key": "typed-jooble",
+        },
+    )
+
+    assert status["france_travail"]["status"] == "ok"
+    assert status["adzuna"]["status"] == "partial"
+    assert status["jooble"]["status"] == "ok"

@@ -4,6 +4,7 @@ import { settingsApi } from "../../../api/settings";
 import type { ApiFetch } from "../../../types";
 import { MODEL_HINTS, PROVIDERS, SECRET_MASKS, isSubscriptionProvider, type CatalogRow, type Cfg, type StepConfig, type SubStatus } from "./config";
 import { readJsonResponse, responseErrorMessage } from "../../../shared/lib/httpError";
+
 const SECRET_DISPLAY_MASK = "••••••••••••••••";
 
 /* helpers */

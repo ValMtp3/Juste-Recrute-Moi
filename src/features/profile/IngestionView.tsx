@@ -33,6 +33,11 @@ type IngestionResult = {
   error?: string;
   importError?: string | null;
   stats?: ResultStats;
+  summary?: string;
+  report?: {
+    skipped?: Array<{ count?: number; field?: string; reason?: string }>;
+    capped?: Array<{ kept?: number; original?: number; field?: string }>;
+  };
   github_user?: { avatar?: string; login?: string; bio?: string };
   errors?: string[];
   screenshot_b64?: string;
@@ -219,8 +224,15 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
     setErrorMessage(null);
     try {
       const endpointType = type === "exp" ? "experience" : type;
+      // "Add Context" identity save is a PARTIAL update on a form that starts blank
+      // (unlike ProfileView, which pre-fills). Send only the fields the user filled
+      // so blank inputs don't overwrite previously-saved email/linkedin/etc. The
+      // backend uses exclude_unset, so unsent keys are left untouched.
+      const payload = type === "identity"
+        ? Object.fromEntries(Object.entries(data).filter(([, v]) => String(v ?? "").trim()))
+        : data;
       const r = await api(`/api/v1/profile/${endpointType}`, {
-        method: type === "identity" ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+        method: type === "identity" ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       });
       if (r.ok) {
         finishOperation("done");
@@ -929,10 +941,21 @@ export function IngestionView({ api, setView }: { api: ApiFetch; setView: (view:
                 border: `1px solid ${jsonResult.status === "ok" ? "var(--green)" : "var(--line)"}`,
               }}>
                 <div style={{ fontWeight: 600 }}>
-                  Importé : {jsonResult.stats?.skills ?? 0} compétences - {jsonResult.stats?.experience ?? 0} expériences - {jsonResult.stats?.projects ?? 0} projets - {jsonResult.stats?.certifications ?? 0} certifications
+                  {jsonResult.summary
+                    || `Importé : ${jsonResult.stats?.skills ?? 0} compétences - ${jsonResult.stats?.experience ?? 0} expériences - ${jsonResult.stats?.projects ?? 0} projets - ${jsonResult.stats?.certifications ?? 0} certifications`}
                 </div>
                 {jsonResult.status === "partial" && (
                   <div style={{ fontSize: 13, marginTop: 4, color: "var(--ink-3)" }}>Certains éléments ont été ignorés.</div>
+                )}
+                {(((jsonResult.report?.skipped?.length ?? 0) > 0) || ((jsonResult.report?.capped?.length ?? 0) > 0)) && (
+                  <div style={{ fontSize: 13, marginTop: 6, color: "var(--ink-3)", lineHeight: 1.6 }}>
+                    {jsonResult.report?.skipped?.slice(0, 6).map((s, i) => (
+                      <div key={`sk-${i}`}>Ignoré : {s.count} {s.field} ({s.reason})</div>
+                    ))}
+                    {jsonResult.report?.capped?.slice(0, 6).map((c, i) => (
+                      <div key={`cp-${i}`}>Conservé : {c.kept} sur {c.original} {c.field} (limite)</div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}

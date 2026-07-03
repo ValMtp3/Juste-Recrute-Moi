@@ -212,6 +212,28 @@ def _merge_scan_usage(total: dict, incoming: dict, target_count: int) -> None:
         total.setdefault("by_source", {})[key] = value
 
 
+def _record_scan_telemetry(summary: dict) -> None:
+    """Persist a completed scan as lifetime counters + a last-scan snapshot.
+
+    Best-effort and fail-silent: telemetry must never break or slow a scan, so
+    the underlying helpers swallow their own errors. This answers "how many leads
+    did the last scan yield, and why were the rest dropped?" from /diagnostics.
+    """
+    from core.telemetry import incr_metrics, set_metric_state
+
+    incr_metrics({
+        "scans_run": 1,
+        "leads_found": int(summary.get("candidates", 0) or 0),
+        "leads_saved": int(summary.get("saved", 0) or 0),
+        "leads_duplicate": int(summary.get("duplicates", 0) or 0),
+        "leads_filtered": int(summary.get("filtered", 0) or 0),
+        "leads_scored": int(summary.get("scored", 0) or 0),
+        "eval_fallback": int(summary.get("fallback", 0) or 0),
+        "eval_prefiltered": int(summary.get("prefiltered", 0) or 0),
+    })
+    set_metric_state("last_scan", summary)
+
+
 def _target_batches(urls: list[str], size: int) -> list[list[str]]:
     size = max(1, size)
     return [urls[index:index + size] for index in range(0, len(urls), size)]
@@ -513,6 +535,11 @@ async def _run_scan_inner(
     to_score = [lead for lead in discovered if (lead.get("status") or "discovered") == "discovered"]
     await manager.broadcast({"type": "agent", "event": "eval_start", "msg": f"Évaluation de {len(to_score)} nouvelle(s) offre(s) via {cfg.get('llm_provider', 'ollama')}"})
 
+    # Token gate: LLM-evaluate only the top-K new leads by the cheap deterministic
+    # score; the rest keep the deterministic score. Caps per-scan LLM cost at O(K).
+    max_llm = int_cfg(cfg, "max_llm_evaluations", 25, 0, 500)
+    llm_ids = await ranking_service.select_llm_eval_ids(to_score, profile, max_llm=max_llm)
+
     fallback_count = 0
     fallback_errors: list[str] = []
     prefiltered_count = 0
@@ -522,7 +549,7 @@ async def _run_scan_inner(
             await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Scan arrêté pendant l'évaluation."})
             return
         try:
-            result = await ranking_service.evaluate_lead(lead, profile)
+            result = await ranking_service.evaluate_lead(lead, profile, cfg, use_llm=lead["job_id"] in llm_ids)
             await asyncio.to_thread(
                 repo.leads.update_lead_score,
                 lead["job_id"], result["score"], result["reason"],
@@ -570,6 +597,15 @@ async def _run_scan_inner(
         })
     await manager.broadcast({"type": "agent", "event": "eval_done", "msg": "Cycle d'évaluation terminé"})
     await asyncio.to_thread(repo.settings.save_settings, {"last_scan_finished_at": datetime.now(timezone.utc).isoformat()})
+    await asyncio.to_thread(_record_scan_telemetry, {
+        "at": datetime.now(timezone.utc).isoformat(),
+        "new_leads": len(leads),
+        "scored": len(to_score),
+        "fallback": fallback_count,
+        "prefiltered": prefiltered_count,
+        **{k: scout_usage.get(k, 0) for k in ("configured", "executed", "candidates", "saved", "duplicates", "filtered", "missing_url", "errors")},
+        "by_source": scout_usage.get("by_source", {}),
+    })
     job_store.update(job.job_id, status="succeeded", progress=100)
 
 
@@ -634,7 +670,11 @@ async def _run_reevaluate_jobs_inner(
     repo = repo or get_repository()
     ranking_service = ranking_service or get_ranking_service()
     cfg = await asyncio.to_thread(repo.settings.get_settings)
-    profile = await asyncio.to_thread(repo.profile.get_profile)
+    # Enrich with the settings desired-position/target-role like the scan, ghost and
+    # free-source paths do — otherwise re-evaluate scores each lead against a poorer
+    # summary (missing the role signal) and can regress a matched lead to the
+    # wrong-field cap, giving a different score than the identical scan produced.
+    profile = profile_for_discovery(await asyncio.to_thread(repo.profile.get_profile), cfg)
     jobs = await asyncio.to_thread(repo.leads.get_job_leads_for_evaluation)
     total = len(jobs)
     scored = 0
@@ -642,6 +682,12 @@ async def _run_reevaluate_jobs_inner(
     fallback_count = 0
     fallback_errors: list[str] = []
     triaged_count = 0
+
+    # Token gate: LLM-evaluate only the top-K leads by the cheap deterministic score;
+    # the rest keep the (calibrated) deterministic score. This caps the dominant
+    # per-lead LLM cost from O(backlog) to O(K).
+    max_llm = int_cfg(cfg, "max_llm_evaluations", 25, 0, 500)
+    llm_ids = await ranking_service.select_llm_eval_ids(jobs, profile, max_llm=max_llm)
 
     await manager.broadcast({
         "type": "agent",
@@ -659,7 +705,9 @@ async def _run_reevaluate_jobs_inner(
             return
 
         try:
-            result = await ranking_service.evaluate_lead(lead, profile)
+            result = await ranking_service.evaluate_lead(
+                lead, profile, cfg, use_llm=lead["job_id"] in llm_ids
+            )
             preserve_status = should_preserve_job_status(lead.get("status", ""))
             await asyncio.to_thread(
                 repo.leads.update_lead_score,

@@ -82,7 +82,10 @@ def read_profile_from_vectors(db_path: str | None = None) -> dict:
 
     for row in [*_vector_rows("candidates"), *_vector_rows("profile")]:
         name = _first_text(row, "n", "name", "label")
-        summary = _first_text(row, "s", "summary", "text")
+        # Do NOT fall back to 'text' for the summary: on the aggregate 'profile' row
+        # that field is the whole concatenated profile dump, which would become the
+        # candidate summary when the candidate has no real summary.
+        summary = _first_text(row, "s", "summary")
         if name.lower() in {"complete profile", "profile", "candidate"}:
             name = ""
         if name and not is_bad_vector_label(name) and not profile["n"]:
@@ -171,6 +174,47 @@ def delete_vec_id_from_all(row_id: str) -> None:
 
 def drop_profile_aggregate_vector() -> None:
     delete_vec_rows("profile", ["profile:default"])
+
+
+def drop_vec_table(table_name: str) -> None:
+    """Drop a vector table entirely so the next write recreates it at the current
+    embedding dim. Needed when a rebuild leaves a table with zero rows: a provider
+    switch changes the vector dimension, but embed_rows() only recreates tables it
+    actually writes to, so an emptied table stays stranded at the old dim and every
+    later single-item write is silently skipped by the dim-guard."""
+    try:
+        if table_name not in vec_table_names():
+            return
+        _vec().drop_table(table_name)
+    except Exception as log_exc:
+        logging.getLogger(__name__).warning('suppressed exception in backend/data/graph/profile.py:drop_vec_table: %s', log_exc)
+
+
+def current_embedding_dim() -> int | None:
+    """Dimensionality of the active embedding provider, via a tiny probe embed.
+    None when embeddings are unavailable. Used by a rebuild to detect vector tables
+    stranded at an OLD dimension after a provider switch (1536<->384)."""
+    try:
+        from data.vector.embeddings import embed_texts
+        vectors = embed_texts(["probe"])
+        if vectors:
+            try:
+                return len(vectors[0])
+            except TypeError:
+                return None
+    except Exception as log_exc:
+        logging.getLogger(__name__).warning('suppressed exception in backend/data/graph/profile.py:current_embedding_dim: %s', log_exc)
+    return None
+
+
+def vec_table_dim(table_name: str) -> int | None:
+    """Stored vector dimension of an existing table, or None if absent/unknown."""
+    store = _vec()
+    if getattr(store, "available", True) is False:
+        return None
+    if table_name not in vec_table_names():
+        return None
+    return _existing_vector_dim(store, table_name)
 
 
 def prune_bad_vector_rows() -> int:
@@ -284,7 +328,7 @@ def _upsert_rows(table, ids: list[str], rows: list[dict]) -> None:
         table.add(rows)
 
 
-def put_vec_rows(table_name: str, rows: list[dict]) -> None:
+def put_vec_rows(table_name: str, rows: list[dict], *, allow_recreate: bool = False) -> None:
     if not rows:
         return
     store = _vec()
@@ -295,12 +339,24 @@ def put_vec_rows(table_name: str, rows: list[dict]) -> None:
         if table_name in vec_table_names():
             # If the embedding dimensionality changed (e.g. the user switched
             # embedding provider, 1536<->384), the old table is in a different
-            # vector space and incompatible. Recreate it rather than letting the
-            # add silently fail and drop every new vector.
+            # vector space and incompatible.
             want_dim = _incoming_vector_dim(rows)
             have_dim = _existing_vector_dim(store, table_name)
             if want_dim and have_dim and want_dim != have_dim:
-                _log.warning("vector dim for %s changed %s->%s; recreating table", table_name, have_dim, want_dim)
+                if not allow_recreate:
+                    # A single-item write (add_skill/project/... after a provider
+                    # switch) must NEVER drop+recreate the table from just its own
+                    # rows — that would destroy every other embedding for this
+                    # entity type. Skip the write; a full sync_vectors_from_graph
+                    # rebuild (allow_recreate=True) re-embeds the whole table at the
+                    # new dim. Losing one just-written vector beats losing all of them.
+                    _log.warning(
+                        "vector dim for %s mismatched (%s!=%s) on a partial write; skipping to avoid data loss "
+                        "(run a full vector re-sync to rebuild at the new dimension)",
+                        table_name, have_dim, want_dim,
+                    )
+                    return
+                _log.warning("vector dim for %s changed %s->%s; recreating table (full rebuild)", table_name, have_dim, want_dim)
                 store.drop_table(table_name)
                 store.create_table(table_name, data=rows)
                 return
@@ -341,7 +397,10 @@ def _rows_for_existing_table(table_name: str, rows: list[dict]) -> list[dict]:
         return rows
 
 
-def embed_rows(table_name: str, rows: list[dict], texts: Iterable[str]) -> None:
+def embed_rows(table_name: str, rows: list[dict], texts: Iterable[str], *, allow_recreate: bool = False) -> None:
+    """Embed and write rows. ``allow_recreate=True`` only from a full-table rebuild
+    (sync_vectors_from_graph), where ``rows`` is the COMPLETE set for the table, so
+    a dimension change may safely drop+recreate. Single-item callers leave it False."""
     try:
         from data.vector.embeddings import embed_texts
 
@@ -361,7 +420,7 @@ def embed_rows(table_name: str, rows: list[dict], texts: Iterable[str]) -> None:
         put_vec_rows(table_name, [
             {**row, "text": text, "vector": vector}
             for row, text, vector in zip(clean_rows, clean_texts, vectors, strict=False)
-        ])
+        ], allow_recreate=allow_recreate)
     except Exception as exc:
         _log.warning("écriture embedding impossible pour %s : %s", table_name, exc)
 
@@ -392,8 +451,11 @@ def add_candidate_vec(candidate_id: str, name: str, summary: str) -> None:
     embed_rows("candidates", [row], [profile_text(name, summary)])
 
 
-def add_profile_vec(profile_id: str, label: str, text: str) -> None:
-    embed_rows("profile", [{"id": profile_id, "label": label, "kind": "profile"}], [text])
+def add_profile_vec(profile_id: str, label: str, text: str, *, allow_recreate: bool = False) -> None:
+    # allow_recreate=True only from a full rebuild (sync_vectors_from_graph): the
+    # single profile:default row IS the complete "profile" table, so recreating
+    # from it on a dim change is safe and keeps it in step with the sibling tables.
+    embed_rows("profile", [{"id": profile_id, "label": label, "kind": "profile"}], [text], allow_recreate=allow_recreate)
 
 
 def add_skill_vec(skill_id: str, name: str, category: str) -> None:

@@ -4,6 +4,23 @@ import re
 
 from generation.generators.base import GeneratedAsset
 
+# JD keywords beyond TECH_TAXONOMY that a backend/systems role commonly screens on.
+# Scanned on BOTH the JD side (_job_keyword_terms) AND the profile side
+# (_profile_keyword_terms) — otherwise a candidate who genuinely has these skills
+# is structurally uncoverable (always reported as a gap and told to the LLM as a
+# "gap, not a claim to make", suppressing the very skills the JD screens on).
+_EXTRA_JD_TERMS: dict[str, tuple[str, ...]] = {
+    "Kafka": ("kafka",),
+    "Distributed Systems": ("distributed systems", "distributed system"),
+    "Event-Driven Architecture": ("event-driven", "event driven"),
+    "Microservices": ("microservices", "microservice"),
+    "System Design": ("system design",),
+}
+
+
+def _matches_alias(text: str, alias: str) -> bool:
+    return bool(re.search(rf"(?<![a-z0-9+#]){re.escape(alias)}(?![a-z0-9+#])", text))
+
 
 def _extract_jd_keywords(jd: str, profile: dict) -> str:
     """Extract the top ATS keywords from a job description, prioritising terms the candidate can claim."""
@@ -12,7 +29,10 @@ def _extract_jd_keywords(jd: str, profile: dict) -> str:
     found: list[str] = []
     for canonical, aliases in TECH_TAXONOMY.items():
         for alias in (canonical.lower(), *aliases):
-            if alias in jd_lower:
+            # Word-boundary match (like _job_keyword_terms) — a raw substring test
+            # matched e.g. 'go' inside 'category', injecting false ATS keywords into
+            # the tailoring prompt.
+            if re.search(rf"(?<![a-z0-9+#]){re.escape(alias.lower())}(?![a-z0-9+#])", jd_lower):
                 found.append(canonical)
                 break
     # Also pull soft / domain terms the JD explicitly names
@@ -58,11 +78,16 @@ def _profile_keyword_terms(profile: dict) -> set[str]:
         chunks.extend(str(item) for item in profile.get(key, []) or [])
 
     profile_text = "\n".join(chunks).lower()
-    return {
+    terms = {
         canonical
         for canonical, aliases in TECH_TAXONOMY.items()
-        if any(re.search(rf"(?<![a-z0-9+#]){re.escape(alias.lower())}(?![a-z0-9+#])", profile_text) for alias in aliases)
+        if any(_matches_alias(profile_text, alias.lower()) for alias in aliases)
     }
+    # Scan the SAME extra vocabulary the JD side adds, so these terms are coverable.
+    for canonical, aliases in _EXTRA_JD_TERMS.items():
+        if any(_matches_alias(profile_text, alias) for alias in aliases):
+            terms.add(canonical)
+    return terms
 
 
 def _job_keyword_terms(jd: str) -> list[str]:
@@ -72,18 +97,11 @@ def _job_keyword_terms(jd: str) -> list[str]:
     jd_lower = (jd or "").lower()
     found: list[str] = []
     for canonical, aliases in TECH_TAXONOMY.items():
-        if any(re.search(rf"(?<![a-z0-9+#]){re.escape(alias.lower())}(?![a-z0-9+#])", jd_lower) for alias in aliases):
+        if any(_matches_alias(jd_lower, alias.lower()) for alias in aliases):
             found.append(canonical)
 
-    extra_terms = {
-        "Kafka": ("kafka",),
-        "Distributed Systems": ("distributed systems", "distributed system"),
-        "Event-Driven Architecture": ("event-driven", "event driven"),
-        "Microservices": ("microservices", "microservice"),
-        "System Design": ("system design",),
-    }
-    for canonical, aliases in extra_terms.items():
-        if any(re.search(rf"(?<![a-z0-9+#]){re.escape(alias)}(?![a-z0-9+#])", jd_lower) for alias in aliases):
+    for canonical, aliases in _EXTRA_JD_TERMS.items():
+        if any(_matches_alias(jd_lower, alias) for alias in aliases):
             found.append(canonical)
 
     return list(dict.fromkeys(found))
@@ -112,7 +130,10 @@ def _keyword_coverage(profile: dict, lead: dict, resume_markdown: str = "") -> d
         "covered_terms": covered[:18],
         "missing_terms": missing[:12],
         "incorporated_terms": incorporated[:18],
-        "coverage_pct": round((len(covered) / len(jd_terms)) * 100) if jd_terms else 100,
+        # None (not a fake 100) when the JD extractor found no known keywords
+        # (e.g. a non-tech role vs the software-only taxonomy) so no consumer
+        # surfaces a fabricated "100% coverage".
+        "coverage_pct": round((len(covered) / len(jd_terms)) * 100) if jd_terms else None,
     }
 
 

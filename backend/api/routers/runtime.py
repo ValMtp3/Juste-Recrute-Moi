@@ -112,19 +112,40 @@ async def get_embedding_status():
     return embedding_status()
 
 
+def _spawn_vector_resync() -> None:
+    """Rebuild all vector tables in the background at the current provider's dim.
+
+    A provider change almost always changes the embedding dimension, leaving the
+    existing tables in the wrong vector space. Rebuilding here means semantic
+    matching uses the new embeddings and no later single-item write ever meets a
+    dim-mismatched table (which now skips itself to avoid data loss)."""
+    def _run() -> None:
+        import logging
+        try:
+            from graph_service.helpers import sync_vectors_from_graph
+            sync_vectors_from_graph()
+        except Exception as exc:
+            logging.getLogger(__name__).warning('vector re-sync after provider switch failed: %s', exc)
+
+    threading.Thread(target=_run, name="jhm-vector-resync", daemon=True).start()
+
+
 @router.post("/embeddings/provider")
 async def set_embedding_provider(body: dict):
     """Set the preferred embedding provider (onnx, openai, hash)."""
-    from data.sqlite.settings import save_settings
+    from data.sqlite.settings import get_settings, save_settings
     from data.vector.embeddings import embedding_status, reset_onnx_session
 
     provider = str(body.get("provider") or "onnx").strip().lower()
     if provider not in {"onnx", "openai", "hash"}:
         provider = "onnx"
 
+    previous = str((get_settings() or {}).get("embedding_provider", "onnx") or "onnx").strip().lower()
     save_settings({"embedding_provider": provider})
     # Reset cached state so the new provider takes effect
     reset_onnx_session()
+    if provider != previous:
+        _spawn_vector_resync()
     return embedding_status()
 
 
@@ -149,6 +170,11 @@ async def download_onnx_model_endpoint():
         result = download_onnx_model()
         if result.get("status") == "ok":
             reset_onnx_session()
+            # hash -> onnx is a SAME-dimension (384) transition, so put_vec_rows'
+            # dim-mismatch guard can't detect it and no rebuild would otherwise
+            # happen — leaving profile tables full of hash vectors compared against
+            # ONNX query vectors. Re-embed the graph with the now-active ONNX model.
+            _spawn_vector_resync()
 
     _ONNX_DOWNLOAD_JOB = threading.Thread(
         target=_worker, name="jhm-onnx-download", daemon=True

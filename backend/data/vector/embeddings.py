@@ -34,6 +34,12 @@ _onnx_session: Any = None
 _onnx_tokenizer: Any = None
 _onnx_error: str = ""
 _onnx_loaded: bool = False
+# Set when a runtime embedding call falls back to hash (openai: network/401/429/off-dim;
+# onnx: an inference/session error after the model loaded); cleared on the next success.
+# Lets status honestly report degraded semantic matching instead of claiming the
+# provider while actually serving hash vectors.
+_openai_runtime_error: str = ""
+_onnx_runtime_error: str = ""
 
 ONNX_MODEL_NAME = "all-MiniLM-L6-v2"
 ONNX_DIMS = 384
@@ -376,23 +382,33 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
     provider = active_provider()
 
     if provider == "onnx":
+        global _onnx_runtime_error
         try:
-            return _onnx_embed(texts)
+            vecs = _onnx_embed(texts)
+            _onnx_runtime_error = ""  # success: clear any prior degraded state
+            return vecs
         except Exception as exc:
+            # Record the fallback so status/semantic don't keep claiming 'onnx'
+            # while actually serving non-semantic hash vectors.
+            _onnx_runtime_error = str(exc) or "onnx embedding call failed"
             _log.warning("ONNX embedding failed, falling back to hash@%d: %s", ONNX_DIMS, exc)
             return [hash_embedding(t, ONNX_DIMS) for t in texts]
 
     if provider == "openai":
+        global _openai_runtime_error
         try:
             vecs = _openai_embed(texts)
             # Never let an off-dimension API response poison a table sized for
             # OPENAI_DIMS — treat it as a failure and fall back at the right dim.
             if vecs and len(vecs[0]) != OPENAI_DIMS:
                 raise RuntimeError(f"OpenAI returned dim {len(vecs[0])}, expected {OPENAI_DIMS}")
+            _openai_runtime_error = ""  # success: clear any prior degraded state
             return vecs
         except Exception as exc:
             # Critical: the OpenAI table is OPENAI_DIMS-wide, so the fallback hash
             # MUST be OPENAI_DIMS too — a 384-dim hash here silently corrupts it.
+            # Record the fallback so status/semantic don't keep claiming 'openai'.
+            _openai_runtime_error = str(exc) or "openai embedding call failed"
             _log.warning("OpenAI embedding failed, falling back to hash@%d: %s", OPENAI_DIMS, exc)
             return [hash_embedding(t, OPENAI_DIMS) for t in texts]
 
@@ -422,14 +438,32 @@ def embedding_status() -> dict:
     }
 
     if provider == "onnx":
-        base["model"] = ONNX_MODEL_NAME
         base["dims"] = ONNX_DIMS
-        base["mode"] = "onnx"
         base["model_path"] = str(_onnx_model_dir())
+        if _onnx_runtime_error:
+            # Session loaded but inference fell back to hash at runtime — report the
+            # truth so semantic scoring uses the hash-baseline window and the user
+            # is told matching is degraded, not silently 'healthy'.
+            base["model"] = "built-in hashing embedder (ONNX unavailable)"
+            base["mode"] = "hashing"
+            base["degraded"] = True
+            base["onnx_error"] = _onnx_runtime_error
+        else:
+            base["model"] = ONNX_MODEL_NAME
+            base["mode"] = "onnx"
     elif provider == "openai":
-        base["model"] = OPENAI_MODEL
         base["dims"] = OPENAI_DIMS
-        base["mode"] = "openai"
+        if _openai_runtime_error:
+            # The provider is openai but its last runtime call fell back to hash;
+            # report the truth so semantic scoring uses the hash-baseline window and
+            # the user is told matching is degraded, not silently 'healthy'.
+            base["model"] = "built-in hashing embedder (OpenAI unavailable)"
+            base["mode"] = "hashing"
+            base["degraded"] = True
+            base["openai_error"] = _openai_runtime_error
+        else:
+            base["model"] = OPENAI_MODEL
+            base["mode"] = "openai"
     else:
         base["model"] = "built-in hashing embedder"
         base["dims"] = HASH_DIMS
@@ -441,20 +475,50 @@ def embedding_status() -> dict:
     return base
 
 
+def ensure_onnx_model() -> bool:
+    """Make real ONNX semantics the default with zero manual setup: if the ONNX
+    provider is preferred but the model isn't downloaded yet, fetch it and reload the
+    session. No-op when the user chose hash, when a keyed OpenAI provider is set, or
+    when the model is already present. Safe to call at startup on a background thread —
+    an offline/failed download just leaves the hashing fallback in place. Returns True
+    when ONNX is active afterward.
+    """
+    pref = _configured_provider()
+    if pref == "hash":
+        return False
+    if pref == "openai" and _openai_api_key():
+        return False  # a keyed OpenAI provider is in use; don't pull the local model
+    if _onnx_model_ready():
+        return _load_onnx_session()
+    try:
+        result = download_onnx_model()
+    except Exception as exc:
+        _log.info("auto-download of ONNX embedding model skipped: %s", exc)
+        return False
+    if str((result or {}).get("status")) in ("ok", "exists", "downloaded"):
+        reset_onnx_session()
+        return _load_onnx_session()
+    _log.info("auto-download of ONNX embedding model did not complete: %s", (result or {}).get("error"))
+    return False
+
+
 def reset_onnx_session() -> None:
     """Force reload of the ONNX session on next use. Useful after model download."""
-    global _onnx_session, _onnx_tokenizer, _onnx_error, _onnx_loaded, _last_onnx_fallback_error
+    global _onnx_session, _onnx_tokenizer, _onnx_error, _onnx_loaded, _last_onnx_fallback_error, _openai_runtime_error, _onnx_runtime_error
     with _lock:
         _onnx_session = None
         _onnx_tokenizer = None
         _onnx_error = ""
         _onnx_loaded = False
         _last_onnx_fallback_error = None
+        # Clear the runtime degraded flags too — a provider switch / reset is a fresh start.
+        _openai_runtime_error = ""
+        _onnx_runtime_error = ""
 
 
 def unload_onnx_session() -> None:
     """Release the local ONNX embedder when a remote embedding provider is active."""
-    global _onnx_session, _onnx_tokenizer, _onnx_error, _onnx_loaded, _last_onnx_fallback_error
+    global _onnx_session, _onnx_tokenizer, _onnx_error, _onnx_loaded, _last_onnx_fallback_error, _openai_runtime_error, _onnx_runtime_error
     with _lock:
         if _onnx_session is None and _onnx_tokenizer is None and not _onnx_loaded:
             return
@@ -463,4 +527,6 @@ def unload_onnx_session() -> None:
         _onnx_error = ""
         _onnx_loaded = False
         _last_onnx_fallback_error = None
+        _openai_runtime_error = ""
+        _onnx_runtime_error = ""
     gc.collect()

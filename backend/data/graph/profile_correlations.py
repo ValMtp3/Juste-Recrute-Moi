@@ -21,13 +21,16 @@ from data.graph.profile_read import refresh_profile_snapshot
 from data.graph.profile_vectors import (
     add_profile_vec,
     credential_text,
+    current_embedding_dim,
     delete_vec_id_from_all,
+    drop_vec_table,
     embed_rows,
     experience_text,
     profile_text,
     project_text,
     prune_bad_vector_rows,
     skill_text,
+    vec_table_dim,
 )
 from graph_service.helpers import is_bad_vector_label
 
@@ -37,7 +40,9 @@ def purge_profile_deletion_tombstones(db_path: str | None = None) -> dict:
     purged = 0
 
     def deleted(key: str, *values) -> bool:
-        tokens = _delete_tokens(values)
+        # key-aware tokens (free-text uses _entry_key) — must match how the tombstone
+        # was stored, else purge would miss (or, before this, over-match) free-text.
+        tokens = _delete_tokens(key, values)
         return bool(tokens.intersection(deletions.get(key, [])))
 
     for row in _query_rows("MATCH (s:Skill) RETURN s.id, s.n"):
@@ -130,7 +135,7 @@ def sync_vectors_from_graph() -> dict:
         cand_texts.append(text)
         profile_parts.append(text)
     if cand_rows:
-        embed_rows("candidates", cand_rows, cand_texts)
+        embed_rows("candidates", cand_rows, cand_texts, allow_recreate=True)
         synced += len(cand_rows)
 
     skill_rows: list[dict] = []
@@ -143,7 +148,7 @@ def sync_vectors_from_graph() -> dict:
         skill_texts.append(text)
         profile_parts.append(text)
     if skill_rows:
-        embed_rows("skills", skill_rows, skill_texts)
+        embed_rows("skills", skill_rows, skill_texts, allow_recreate=True)
         synced += len(skill_rows)
 
     proj_rows: list[dict] = []
@@ -156,7 +161,7 @@ def sync_vectors_from_graph() -> dict:
         proj_texts.append(text)
         profile_parts.append(text)
     if proj_rows:
-        embed_rows("projects", proj_rows, proj_texts)
+        embed_rows("projects", proj_rows, proj_texts, allow_recreate=True)
         synced += len(proj_rows)
 
     exp_rows: list[dict] = []
@@ -170,7 +175,7 @@ def sync_vectors_from_graph() -> dict:
         exp_texts.append(text)
         profile_parts.append(text)
     if exp_rows:
-        embed_rows("experiences", exp_rows, exp_texts)
+        embed_rows("experiences", exp_rows, exp_texts, allow_recreate=True)
         synced += len(exp_rows)
 
     cred_rows: list[dict] = []
@@ -183,12 +188,31 @@ def sync_vectors_from_graph() -> dict:
         cred_texts.append(text)
         profile_parts.append(text)
     if cred_rows:
-        embed_rows("credentials", cred_rows, cred_texts)
+        embed_rows("credentials", cred_rows, cred_texts, allow_recreate=True)
         synced += len(cred_rows)
 
     if profile_parts:
-        add_profile_vec("profile:default", "Complete profile", "\n".join(profile_parts))
+        # Rebuild the aggregate 'profile' table at the new dim too, exactly like the
+        # five sibling tables above — otherwise a provider/dim switch strands
+        # profile:default at the old dimension (dim-guard skips a partial write).
+        add_profile_vec("profile:default", "Complete profile", "\n".join(profile_parts), allow_recreate=True)
         synced += 1
+
+    # A table can be stranded at the OLD embedding dimension after a provider switch
+    # in two ways this rebuild does NOT overwrite: (a) it produced zero rows (all
+    # items deleted / none of a kind), or (b) every row was rejected by embed_rows'
+    # stricter bad-label filter, so embed_rows wrote nothing and never recreated it.
+    # In both cases the old-dim table survives and later single-item writes to it are
+    # silently skipped by the dim-guard. Keying off the pre-embed row lists misses
+    # case (b), so drop any expected table whose STORED dim != the current dim — the
+    # next add_* then recreates it at the right dimension.
+    target_dim = current_embedding_dim()
+    if target_dim:
+        for table_name in ("candidates", "skills", "projects", "experiences", "credentials", "profile"):
+            existing_dim = vec_table_dim(table_name)
+            if existing_dim is not None and existing_dim != target_dim:
+                drop_vec_table(table_name)
+
     return {"status": "ok", "synced": synced, "deleted_bad_rows": deleted_bad_rows}
 
 

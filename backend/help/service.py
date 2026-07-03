@@ -228,7 +228,7 @@ Meilleurs formats de source :
 - APIs/RSS directs : RemoteOK API, Remotive API, Jobicy API, We Work Remotely RSS.
 - ATS/jobboards : Greenhouse, Lever, Ashby, Workable, LinkedIn, Indeed, Naukri, Foundit, Internshala, Glassdoor, SmartRecruiters et Workday.
 - HN Hiring : hn-hiring.
-- Cibles de recherche : site:jobs.lever.co France, site:boards.greenhouse.io remote marketing, site:welcometothejungle.com/fr/jobs France.
+- Cibles de recherche : site:jobs.lever.co France, site:boards.greenhouse.io remote marketing, wttj:query=developpeur&aroundQuery=France.
 - Domaine simple : company-careers.test, que l'app convertit en recherche d'offres ciblée.
 
 Pour une meilleure qualité de collecte :

@@ -63,11 +63,16 @@ def _evaluate_lead(args: Json) -> Json:
     lead = args.get("lead")
     if not isinstance(lead, dict):
         return _error_result("lead must be a JSON object")
+    # Distinguish an explicit 0 from "unset": `x or DEFAULT` treated min_quality=0
+    # ("accept all", a schema-legal value) as unset and forced the default back on,
+    # returning the wrong accepted/gate decision. Same for a strict max_age_days=0.
+    raw_min_quality = args.get("min_quality")
+    raw_max_age = args.get("max_age_days")
     quality = evaluate_lead_quality(
         lead,
-        min_quality=int(args.get("min_quality") or 60),
+        min_quality=int(raw_min_quality) if raw_min_quality is not None else 60,
         target_level=_text(args.get("target_level")) or "beginner",
-        max_age_days=int(args.get("max_age_days") or 7),
+        max_age_days=int(raw_max_age) if raw_max_age is not None else 7,
     )
     return _tool_result(quality)
 

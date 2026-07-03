@@ -12,6 +12,11 @@ from profile.ingest_parse import _parse_resume_heuristic as _parse_resume_heuris
 
 _log = get_logger(__name__)
 
+# Upper bound on résumé text fed to the LLM + deterministic parser. A real résumé
+# is a few KB; this bounds both LLM token cost and the (twice-run) regex parser
+# against a pathologically large paste/PDF so a single ingest can't stall the sidecar.
+MAX_INGEST_CHARS = 200_000
+
 def run(raw: str = "", pdf: str | None = None) -> C:
     from llm import call_llm, provider_needs_key, resolve_config
 
@@ -154,8 +159,19 @@ def ingest(raw: str = "", pdf: str | None = None) -> C:
     pdf_text = _document(pdf) if pdf else ""
     txt = (raw + " " + pdf_text).strip() if pdf_text else raw
     if not txt.strip():
+        if pdf and not raw.strip():
+            # A file was supplied but produced NO extractable text (scanned/image-only
+            # PDF, unreadable DOCX). Surface it rather than silently returning an
+            # empty 'Unknown' profile with HTTP 200.
+            raise ValueError(
+                "Could not read any text from the uploaded document. If it's a "
+                "scanned or image-only PDF, paste the résumé text instead."
+            )
         _log.warning("No usable text for extraction - returning empty profile")
         return C(n="Unknown", s="")
+    if len(txt) > MAX_INGEST_CHARS:
+        _log.warning("résumé text %d chars exceeds cap %d; truncating for extraction", len(txt), MAX_INGEST_CHARS)
+        txt = txt[:MAX_INGEST_CHARS]
     p = run(txt)
     # Capture before merge/normalize, which rebuild C and drop loc.
     extracted_loc = str(getattr(p, "loc", "") or "").strip()

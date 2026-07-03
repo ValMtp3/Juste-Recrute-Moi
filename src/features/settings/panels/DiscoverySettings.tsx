@@ -1,6 +1,8 @@
 import { useState, type ChangeEvent } from "react";
+import { settingsApi } from "../../../api/settings";
 import { FRANCE_SOURCE_PRESET, GLOBAL_SOURCE_PRESET, INDIA_SOURCE_PRESET, type Cfg } from "./config";
 import { BigToggle, LabelledField, SecretInput, SectionLabel } from "./shared";
+import { readJsonResponse, responseErrorMessage } from "../../../shared/lib/httpError";
 import type { ApiFetch } from "../../../types";
 
 const SOURCE_PRESETS = {
@@ -26,7 +28,7 @@ function configuredSourceTargets(raw: string) {
 function sourceKind(target: string) {
   const lower = target.toLowerCase();
   if (lower.startsWith("france_travail:")) return "France Travail";
-  if (lower.startsWith("wttj:") || lower.startsWith("apec:")) return "Jobboards directs";
+  if (lower.startsWith("wttj:") || lower.startsWith("hellowork:") || lower.startsWith("apec:")) return "Jobboards directs";
   if (lower.startsWith("adzuna:") || lower.startsWith("jooble:")) return "Agrégateurs";
   if (lower.startsWith("http://") || lower.startsWith("https://")) return "Flux web/API";
   if (lower.startsWith("site:") || lower.startsWith("ats:")) return "Sites et ATS";
@@ -44,9 +46,30 @@ function sourceKindCounts(targets: string[]) {
   return [...counts.entries()];
 }
 
+type SourceStatus = {
+  status: "ok" | "partial" | "missing";
+  required?: boolean;
+  detail?: string;
+};
+
+const SOURCE_STATUS_LABELS: Record<string, string> = {
+  france_travail: "France Travail",
+  adzuna: "Adzuna",
+  jooble: "Jooble",
+};
+
+function sourceStatusBadge(status: SourceStatus["status"]) {
+  if (status === "ok") return { label: "prêt", style: { background: "var(--green-soft)", color: "var(--green-ink)", border: "1px solid var(--green)" } };
+  if (status === "partial") return { label: "incomplet", style: { background: "var(--yellow-soft)", color: "var(--yellow-ink)", border: "1px solid var(--yellow)" } };
+  return { label: "à configurer", style: { background: "var(--paper-3)", color: "var(--ink-3)", border: "1px solid var(--line)" } };
+}
+
 export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: (k: keyof Cfg) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void; onChange: (k: keyof Cfg, v: string) => void; api: ApiFetch }) {
   const [siteDraft, setSiteDraft] = useState("");
   const [siteFeedback, setSiteFeedback] = useState("");
+  const [sourceStatus, setSourceStatus] = useState<Record<string, SourceStatus> | null>(null);
+  const [sourceStatusBusy, setSourceStatusBusy] = useState(false);
+  const [sourceStatusError, setSourceStatusError] = useState("");
   const marketFocus = ((cfg.job_market_focus || "france") in SOURCE_PRESETS ? cfg.job_market_focus || "france" : "global") as keyof typeof SOURCE_PRESETS;
   const configuredTargets = configuredSourceTargets(cfg.job_boards);
   const defaultTargets = configuredSourceTargets(SOURCE_PRESETS[marketFocus]);
@@ -63,6 +86,25 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
   const resetToMarketDefaults = () => {
     onChange("job_boards", "");
     setSiteFeedback(`Retour au preset ${MARKET_LABELS[marketFocus]} par défaut. Enregistrez les paramètres pour l'utiliser au prochain scan.`);
+  };
+  const checkSourceStatus = async () => {
+    setSourceStatusBusy(true);
+    setSourceStatusError("");
+    try {
+      const response = await settingsApi.sourceStatus(api, cfg);
+      if (!response.ok) {
+        throw new Error(await responseErrorMessage(response, `Statut des sources indisponible (${response.status})`));
+      }
+      setSourceStatus(await readJsonResponse<Record<string, SourceStatus>>(
+        response,
+        "Le statut des sources a répondu dans un format illisible.",
+      ));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error || "");
+      setSourceStatusError(message || "Le statut des sources n'a pas pu être vérifié.");
+    } finally {
+      setSourceStatusBusy(false);
+    }
   };
 
   const atsHosts = new Set(["greenhouse.io", "lever.co", "ashbyhq.com", "workable.com", "smartrecruiters.com", "teamtailor.com"]);
@@ -81,7 +123,7 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
     const value = raw.trim().replace(/,$/, "");
     if (!value) return "";
     const lower = value.toLowerCase();
-    if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|france_travail:|wttj:|apec:|adzuna:|jooble:|jobspy:|import:|https?:\/\/)/i.test(value)) {
+    if (/^(hn-hiring|site:|ats:|github:|hn:|reddit:|france_travail:|wttj:|hellowork:|apec:|adzuna:|jooble:|jobspy:|import:|https?:\/\/)/i.test(value)) {
       if (isKnownAtsHost(lower)) {
         return value;
       }
@@ -228,12 +270,52 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
                   sub="Activé par défaut ; enregistre les offres et classe leur niveau pour le filtrage"
                   tone="green"
                 />
+                <div style={{ border: "1px solid var(--line)", borderRadius: 11, background: "var(--card)", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)" }}>État des sources API</div>
+                      <div style={{ marginTop: 3, fontSize: 11.5, color: "var(--ink-3)", lineHeight: 1.4 }}>
+                        France Travail est prioritaire pour le marché français. Adzuna et Jooble augmentent le volume si leurs clés sont renseignées.
+                      </div>
+                    </div>
+                    <button type="button" className="btn btn-ghost" onClick={checkSourceStatus} disabled={sourceStatusBusy} style={{ fontSize: 11.5, padding: "6px 10px" }}>
+                      {sourceStatusBusy ? "Vérification..." : "Vérifier"}
+                    </button>
+                  </div>
+                  {sourceStatusError && <div role="alert" style={{ color: "var(--bad)", fontSize: 11.5, lineHeight: 1.45 }}>{sourceStatusError}</div>}
+                  {sourceStatus && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 8 }}>
+                      {Object.entries(sourceStatus).map(([key, status]) => {
+                        const badge = sourceStatusBadge(status.status);
+                        return (
+                          <div key={key} style={{ border: "1px solid var(--line)", borderRadius: 9, background: "var(--paper-2)", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 5 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                              <span style={{ fontSize: 12, fontWeight: 700 }}>{SOURCE_STATUS_LABELS[key] || key}</span>
+                              <span className="mono" style={{ fontSize: 10, padding: "2px 7px", borderRadius: 999, ...badge.style }}>{badge.label}</span>
+                            </div>
+                            {status.detail && <div style={{ fontSize: 10.8, color: "var(--ink-3)", lineHeight: 1.35 }}>{status.detail}</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <LabelledField label="Client ID France Travail" hint="API Offres d'emploi">
                     <SecretInput placeholder="client_id" value={cfg.france_travail_client_id} onChange={v => onChange("france_travail_client_id", v)} api={api} secretKey="france_travail_client_id" />
                   </LabelledField>
                   <LabelledField label="Secret France Travail" hint="conservé masqué après sauvegarde">
                     <SecretInput placeholder="client_secret" value={cfg.france_travail_client_secret} onChange={v => onChange("france_travail_client_secret", v)} api={api} secretKey="france_travail_client_secret" />
+                  </LabelledField>
+                  <LabelledField label="App ID Adzuna" hint="optionnel">
+                    <input type="text" placeholder="app_id" value={cfg.adzuna_app_id} onChange={set("adzuna_app_id")} className="mono field-input"
+                      style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1px solid var(--line)", background: "var(--card)", fontSize: 12 }} />
+                  </LabelledField>
+                  <LabelledField label="Clé API Adzuna" hint="optionnel">
+                    <SecretInput placeholder="app_key" value={cfg.adzuna_api_key} onChange={v => onChange("adzuna_api_key", v)} api={api} secretKey="adzuna_api_key" />
+                  </LabelledField>
+                  <LabelledField label="Clé API Jooble" hint="optionnel">
+                    <SecretInput placeholder="jooble key" value={cfg.jooble_api_key} onChange={v => onChange("jooble_api_key", v)} api={api} secretKey="jooble_api_key" />
                   </LabelledField>
                 </div>
                 <LabelledField label="Entreprises à surveiller" hint="fournisseur,slug par ligne : greenhouse,<slug-entreprise>">
@@ -439,12 +521,10 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
                       { label: "Indeed", url: "site:indeed.com/jobs" },
                       { label: "France Travail", url: "france_travail:developpeur;lieu=France;range=0-49" },
                       { label: "WTTJ RSS", url: "wttj:query=developpeur&aroundQuery=France" },
+                      { label: "HelloWork direct", url: "hellowork:query=developpeur&location=France" },
                       { label: "APEC direct", url: "apec:developpeur;location=France" },
                       { label: "Adzuna FR", url: "adzuna:developpeur;location=France;results=50" },
                       { label: "Jooble FR", url: "jooble:developpeur;location=France" },
-                      { label: "WTTJ web", url: "site:welcometothejungle.com/fr/jobs France" },
-                      { label: "HelloWork", url: "site:hellowork.com/fr-fr/emplois France" },
-                      { label: "APEC web", url: "site:apec.fr/candidat/recherche-emploi.html/emploi France" },
                       { label: "Cadremploi", url: "site:cadremploi.fr/emploi France" },
                       { label: "Meteojob", url: "site:meteojob.com/jobs France" },
                       { label: "LesJeudis", url: "site:lesjeudis.com/jobs France" },
@@ -499,6 +579,9 @@ export function DiscoverySettings({ cfg, set, onChange, api }: { cfg: Cfg; set: 
                   placeholder={[
                     "# Sources France stables / best effort",
                     "france_travail:developpeur;lieu=France;range=0-49,",
+                    "wttj:query=developpeur&aroundQuery=France,",
+                    "hellowork:query=developpeur&location=France,",
+                    "apec:developpeur;location=France,",
                     "# Hacker News Who is Hiring (Algolia API)",
                     "hn-hiring,",
                     "# APIs directes / flux RSS",

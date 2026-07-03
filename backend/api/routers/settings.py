@@ -197,6 +197,63 @@ def _provider_key(cfg: dict, provider: str) -> str:
     ).strip()
 
 
+def _setting_or_env(cfg: dict, key: str, *env_names: str) -> tuple[str, str]:
+    value = str(cfg.get(key) or "").strip()
+    if value:
+        return value, "settings"
+    for env_name in env_names:
+        env_value = str(os.environ.get(env_name, "") or "").strip()
+        if env_value:
+            return env_value, "env"
+    return "", ""
+
+
+def source_settings_status(repo: Repository, incoming: dict | None = None) -> dict:
+    cfg = _settings_with_incoming(repo, incoming)
+
+    ft_id, ft_id_source = _setting_or_env(cfg, "france_travail_client_id", "FRANCE_TRAVAIL_CLIENT_ID")
+    ft_secret, ft_secret_source = _setting_or_env(cfg, "france_travail_client_secret", "FRANCE_TRAVAIL_CLIENT_SECRET")
+    adzuna_app_id, adzuna_app_id_source = _setting_or_env(cfg, "adzuna_app_id", "ADZUNA_APP_ID")
+    adzuna_key, adzuna_key_source = _setting_or_env(cfg, "adzuna_api_key", "ADZUNA_API_KEY")
+    jooble_key, jooble_key_source = _setting_or_env(cfg, "jooble_api_key", "JOOBLE_API_KEY")
+
+    def required_pair(name: str, left: str, right: str, left_source: str, right_source: str, missing: str) -> dict:
+        if left and right:
+            sources = sorted({source for source in (left_source, right_source) if source})
+            return {"status": "ok", "required": True, "detail": f"{name} configuré ({', '.join(sources)})"}
+        if left or right:
+            return {"status": "partial", "required": True, "detail": missing}
+        return {"status": "missing", "required": True, "detail": missing}
+
+    return {
+        "france_travail": required_pair(
+            "France Travail",
+            ft_id,
+            ft_secret,
+            ft_id_source,
+            ft_secret_source,
+            "Renseignez Client ID et Secret France Travail, ou les variables FRANCE_TRAVAIL_CLIENT_ID / FRANCE_TRAVAIL_CLIENT_SECRET.",
+        ),
+        "adzuna": required_pair(
+            "Adzuna",
+            adzuna_app_id,
+            adzuna_key,
+            adzuna_app_id_source,
+            adzuna_key_source,
+            "Optionnel : renseignez adzuna_app_id et adzuna_api_key pour activer cet agrégateur.",
+        ),
+        "jooble": {
+            "status": "ok" if jooble_key else "missing",
+            "required": False,
+            "detail": (
+                f"Jooble configuré ({jooble_key_source})"
+                if jooble_key
+                else "Optionnel : renseignez jooble_api_key pour activer cet agrégateur."
+            ),
+        },
+    }
+
+
 def _rebuild_vector_tables() -> dict:
     vectors_dropped: list[str] = []
     errors: list[str] = []
@@ -319,6 +376,14 @@ def create_router(scheduler: AsyncIOScheduler, ghost_tick) -> APIRouter:
     @router.post("/settings/validate")
     async def validate_pending_settings(body: SettingsBody, repo: Repository = Depends(get_repository)):
         return await validate_provider_settings(repo, body.model_dump())
+
+    @router.get("/settings/source-status")
+    async def get_source_status(repo: Repository = Depends(get_repository)):
+        return await asyncio.to_thread(source_settings_status, repo)
+
+    @router.post("/settings/source-status")
+    async def post_source_status(body: SettingsBody, repo: Repository = Depends(get_repository)):
+        return await asyncio.to_thread(source_settings_status, repo, body.model_dump())
 
     async def _provider_models_response(provider: str, incoming: dict | None, repo: Repository):
         provider = provider.strip().lower()

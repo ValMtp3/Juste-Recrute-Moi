@@ -288,14 +288,18 @@ def _gemini_exec(exe_path: str, system: str, user: str, *, model, timeout: int) 
     # Preferred path: structured JSON {"response": "...", "error": {...}}.
     try:
         parsed = json.loads(out)
-        if isinstance(parsed, dict):
-            if parsed.get("error"):
-                raise _classify(f"{parsed.get('error')} {r.stderr or ''}")
-            text = str(parsed.get("response") or "").strip()
-            if text:
-                return text
     except (ValueError, TypeError):
-        pass  # not JSON — fall through to raw stdout / error handling
+        parsed = None  # not JSON — fall through to raw stdout / error handling
+    if isinstance(parsed, dict):
+        # A parsed envelope is authoritative: return its response text. Do NOT fall
+        # through to `return out` on an empty/absent response, or the raw JSON
+        # envelope ({"response": ""}) leaks back as if it were the model's output.
+        if parsed.get("error"):
+            raise _classify(f"{parsed.get('error')} {r.stderr or ''}")
+        text = str(parsed.get("response") or "").strip()
+        if text:
+            return text
+        raise _classify(r.stderr or "gemini returned an empty response")
     if r.returncode != 0:
         raise _classify(r.stderr or out or "gemini returned no output")
     if not out:

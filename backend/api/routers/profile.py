@@ -33,7 +33,12 @@ async def update_candidate_endpoint(body: CandidateBody, service=Depends(get_pro
 
 @router.put("/profile/identity")
 async def update_identity_endpoint(body: IdentityBody, service=Depends(get_profile_service)):
-    return await _call_service(service.update_identity, body.model_dump())
+    # exclude_unset so a partial update (e.g. "Add Context" sending only a phone)
+    # touches ONLY the fields the client actually sent — update_identity merges by
+    # `if key in identity`, so emitting the model's blank defaults for unsent fields
+    # would wipe previously-saved email/linkedin/etc. A full edit (ProfileView sends
+    # every field) still updates all of them, so intentional clears keep working.
+    return await _call_service(service.update_identity, body.model_dump(exclude_unset=True))
 
 
 @router.post("/profile/cleanup")

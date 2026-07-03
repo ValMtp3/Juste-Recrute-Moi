@@ -2,7 +2,7 @@
 
 Merci d'utiliser ou de tester Juste Recrute Moi.
 
-Le projet est encore en phase MVP. Le bon canal dépend du sujet.
+Juste Recrute Moi suit désormais la ligne stable v1.x du fork upstream. Le bon canal dépend du sujet.
 
 ## Bonnes Issues GitHub
 
@@ -32,4 +32,4 @@ Ne publiez pas de secrets ou données privées dans une issue publique. Voir [SE
 
 ## Attentes
 
-Le temps mainteneur est limité. Des étapes de reproduction claires, des exemples anonymisés et des PR petites facilitent fortement le traitement.
+Ce projet open source est sous AGPL-3.0-only, avec une option de licence commerciale séparée (voir `COMMERCIAL_LICENSE.md`). Le temps mainteneur est limité : des étapes de reproduction claires, des exemples anonymisés et des PR petites facilitent fortement le traitement.

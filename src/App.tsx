@@ -111,7 +111,7 @@ function readableStartupError(error: string | null) {
 }
 
 export default function App() {
-  const { conn, port, apiToken, sidecarError, logs, addLog: wsAddLog, progress } = useWS();
+  const { conn, port, apiToken, sidecarError, logs, addLog: wsAddLog, progress, resetProgress } = useWS();
   const api = useMemo<ApiFetch | null>(() => {
     if (!port || !apiToken) return null;
     return createApiFetch(port, apiToken);
@@ -152,15 +152,21 @@ export default function App() {
   }, [setReevaluating, setScanning]);
 
   useEffect(() => {
-    if (!scanning) return;
+    // Watchdog for ANY long-running op (scan / re-evaluate / cleanup): if a lost
+    // terminal WS frame leaves a flag stuck while the socket stays connected, clear
+    // it (and the progress bar) after 15 min so the UI isn't wedged.
+    if (!scanning && !reevaluating && !cleaning) return;
     const timer = window.setTimeout(() => {
       setScanning(false);
+      setReevaluating(false);
+      setCleaning(false);
+      resetProgress();
       const msg = "Indicateur de scan réinitialisé après 15 minutes sans progression backend.";
       setScanErr(msg);
       wsAddLog(msg, "system", "scan");
     }, 15 * 60 * 1000);
     return () => window.clearTimeout(timer);
-  }, [scanning, progress.updatedAt, setScanning, setScanErr, wsAddLog]);
+  }, [scanning, reevaluating, cleaning, progress.updatedAt, setScanning, setReevaluating, setCleaning, setScanErr, wsAddLog, resetProgress]);
 
   useEffect(() => {
     if (api) return;
@@ -370,6 +376,7 @@ export default function App() {
             onSettings={() => setShowSettings(true)}
             onActivity={() => setView("activity")}
           />
+          <NoticeBanner />
           <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--paper)" }}>
             {view === "apply"     && <ErrorBoundary label="Adaptation" api={api ?? undefined}><ApplyJobView port={port} api={api} leads={leads} openDrawer={setSel} initialInput={applyDraft} autoFocus={applyAutoFocus} /></ErrorBoundary>}
             {view === "dashboard" && <ErrorBoundary label="Tableau de bord" api={api ?? undefined}><DashboardView leads={leads} dueFollowups={dueFollowups} logs={logs} setView={setView} openDrawer={setSel} scanning={scanning} reevaluating={reevaluating} cleaning={cleaning} progress={progress} onScan={onScan} scanSpeed={scanSpeed} setScanSpeed={setScanSpeed} onStopScan={onStopScan} onReevaluate={onReevaluateJobs} onStopReevaluate={onStopReevaluate} onCleanup={onCleanupLeads} scanErr={scanErr} api={api} /></ErrorBoundary>}
@@ -458,6 +465,47 @@ function readableSubsystemMessage(message: string) {
   }
   return trimmed;
 }
+
+function NoticeBanner() {
+  // Transient banner for degraded/notable backend outcomes (LLM-fallback scoring,
+  // empty scout, feedback re-rank) that would otherwise be buried in the log.
+  const [notice, setNotice] = useState<{ level: string; msg: string } | null>(null);
+  useEffect(() => {
+    let timer = 0;
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ level?: string; msg?: string }>).detail;
+      if (!detail?.msg) return;
+      setNotice({ level: detail.level || "info", msg: detail.msg });
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setNotice(null), 9000);
+    };
+    window.addEventListener("backend-notice", handler);
+    return () => { window.removeEventListener("backend-notice", handler); window.clearTimeout(timer); };
+  }, []);
+  if (!notice) return null;
+  const warn = notice.level === "warn";
+  return (
+    <div
+      role="status"
+      style={{
+        display: "flex", alignItems: "center", gap: 10, padding: "8px 14px",
+        fontSize: 13, borderBottom: "1px solid var(--line, #e5e7eb)",
+        background: warn ? "var(--warn-bg, #fef3c7)" : "var(--info-bg, #e0f2fe)",
+        color: warn ? "#92400e" : "#075985",
+      }}
+    >
+      <span style={{ flex: 1 }}>{notice.msg}</span>
+      <button
+        onClick={() => setNotice(null)}
+        aria-label="Fermer"
+        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "inherit", lineHeight: 1 }}
+      >
+        ×
+      </button>
+    </div>
+  );
+}
+
 
 function SubsystemBanner({
   items,

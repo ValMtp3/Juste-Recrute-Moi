@@ -12,6 +12,11 @@ export const settingsApi = {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings),
   }),
+  sourceStatus: (api: ApiFetch, settings: object) => api("/api/v1/settings/source-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  }),
   models: (api: ApiFetch, provider: string, settings: object) => api(`/api/v1/settings/models/${provider}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -830,6 +830,35 @@ class TestFormReaderEndpoints(unittest.TestCase):
         self.assertEqual(detail, "Aucune URL exploitable n'est disponible pour cette offre.")
         self.assertNotIn("no url available", detail)
 
+    def test_form_read_resolves_candidate_name_from_flat_profile(self):
+        # Regression: the profile is FLAT (name at profile["n"]); reading
+        # profile["candidate"]["n"] (no such key) left the auto-fill name blank.
+        from api.dependencies import get_automation_service, get_repository
+
+        captured: dict = {}
+
+        class Service:
+            async def read_form(self, url, identity, cover_letter=""):
+                captured["identity"] = identity
+                return {"fields": [], "url": url}
+
+        mock_lead = {"job_id": "form-name-1", "url": "https://example.com/apply", "cover_letter_asset": "", "kind": "job"}
+        fake_repo = types.SimpleNamespace(
+            leads=types.SimpleNamespace(get_lead_by_id=lambda _job_id: mock_lead),
+            profile=types.SimpleNamespace(get_profile=lambda: {"n": "Ada Lovelace", "identity": {}}),
+            settings=types.SimpleNamespace(get_settings=lambda: {"email": "ada@example.com"}),
+        )
+        app.dependency_overrides[get_repository] = lambda: fake_repo
+        app.dependency_overrides[get_automation_service] = lambda: Service()
+        try:
+            resp = post("/api/v1/leads/form-name-1/form/read", json={"url": "https://example.com/apply"})
+        finally:
+            app.dependency_overrides.pop(get_repository, None)
+            app.dependency_overrides.pop(get_automation_service, None)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(captured["identity"]["name"], "Ada Lovelace")
+        self.assertEqual(captured["identity"]["email"], "ada@example.com")
+
     def test_identity_endpoint(self):
         resp = get("/api/v1/identity")
         self.assertEqual(resp.status_code, 200)
@@ -1225,12 +1254,49 @@ class TestIngestionEndpoints(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertGreaterEqual(resp.json()["stats"]["skills"], 0)
 
+    def test_profile_import_grouped_skills_dict(self):
+        # Bug: a grouped {category: [names]} skills object used to 422 at the
+        # rigid Pydantic gate. It must now import as real skills, categorized by
+        # group name — never a raw validation error.
+        resp = post(
+            "/api/v1/ingest/profile",
+            json={
+                "candidate": {"name": "Vasu"},
+                "skills": {
+                    "languages": ["Python", "TypeScript"],
+                    "frontend": ["React", "Vite"],
+                },
+                "projects": [{"title": "JustHireMe", "stack": ["Python", "React"]}],
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.json().get("status"), {"ok", "partial"})
+
+    def test_profile_import_flat_string_skills(self):
+        # A flat list of skill strings is also accepted (no {name} wrapper needed).
+        resp = post(
+            "/api/v1/ingest/profile",
+            json={"skills": ["Python", "React", "PostgreSQL"]},
+        )
+        self.assertEqual(resp.status_code, 200)
+
+    def test_profile_import_not_a_json_object(self):
+        # A JSON array (not an object) is a clear 400 with a human message, not a
+        # Pydantic detail array.
+        resp = post("/api/v1/ingest/profile", json=["Python", "React"])
+        self.assertEqual(resp.status_code, 400)
+
     def test_profile_import_skill_name_too_long(self):
+        # Tolerant contract: an oversized/garbage skill name is accepted (never a
+        # raw 422) and simply not imported — the normalizer bounds/validates fields
+        # instead of the API boundary rejecting the whole payload.
         resp = post(
             "/api/v1/ingest/profile",
             json={"skills": [{"name": "x" * 200, "category": "language"}]},
         )
-        self.assertEqual(resp.status_code, 422)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(resp.json().get("status"), {"ok", "partial"})
+        self.assertEqual(resp.json().get("stats", {}).get("skills"), 0)
 
     def test_profile_template_endpoint(self):
         resp = get("/api/v1/ingest/profile/template")

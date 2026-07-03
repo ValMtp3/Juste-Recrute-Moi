@@ -41,11 +41,12 @@ cargo check
 | Modele normalise `JobOffer` | `backend/tests/test_france_job_aggregator_sources.py` |
 | France Travail | `backend/tests/test_france_job_aggregator_sources.py` |
 | JobSpy en best effort | `backend/tests/test_france_job_aggregator_sources.py` |
-| ATS Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Teamtailor | `backend/tests/test_discovery_sources.py`, `backend/tests/test_france_job_aggregator_sources.py` |
+| ATS Greenhouse, Lever, Ashby, Workable, SmartRecruiters, Teamtailor, Recruitee, Personio | `backend/tests/test_sources_ats.py`, `backend/tests/test_discovery_sources.py`, `backend/tests/test_france_job_aggregator_sources.py` |
 | Import URL JSON-LD / HTML | `backend/tests/test_france_job_aggregator_sources.py` |
 | URL canonique et deduplication | `backend/tests/test_dedup_canonical.py`, `backend/tests/test_france_job_aggregator_sources.py` |
 | Quality gate neutre | `backend/tests/test_regression_targets_quality.py`, `backend/tests/test_quality_gate_freshness.py` |
 | Ecritures async pendant le scan | `backend/tests/test_discovery_async_db.py` |
+| Backbone keyless multi-source | `backend/tests/test_keyless_multisource_scan.py`, `backend/tests/test_discovery_backbone.py` |
 
 ## Scoring et classement
 

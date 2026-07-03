@@ -195,11 +195,13 @@ export function useWS() {
     };
     ws.onopen    = () => {
       if (wsRef.current !== ws) return;
-      const wasReconnect = retryRef.current > 0;
       setConn("connected");
       retryRef.current = 0;
       addLog("WebSocket connecté", "system", "ws");
-      if (wasReconnect) reconcileBackendStatus();
+      // Reconcile on EVERY connect (not only reconnect): a scan already running at
+      // app launch (scheduler / persisted sidecar) must be reflected in the UI
+      // instead of showing "Ready" until an incidental event happens to arrive.
+      reconcileBackendStatus();
     };
     ws.onmessage = (e) => {
       if (wsRef.current !== ws) return;
@@ -232,6 +234,24 @@ export function useWS() {
             emitAppEvent("leads-refresh");
           }
           if (d.event === "auto_discard_done") emitAppEvent("leads-refresh");
+          if (d.event === "scan_skipped") {
+            // Terminate the scan immediately (it returns without eval_done) and
+            // tell the user WHY, instead of leaving the spinner stuck for 15 min.
+            setProgress(emptyProgress());
+            emitAppEvent("scan-done");
+            emitAppEvent("backend-notice", { level: "warn", msg: d.msg ?? "Scan ignoré : ajoutez un rôle cible ou une source d'offres." });
+          }
+          // Surface degraded/notable outcomes prominently, not only in the log:
+          // LLM-fallback scoring, an empty scout, and feedback re-ranking.
+          if (d.event === "eval_fallback_summary" || d.event === "eval_prefilter_summary") {
+            emitAppEvent("backend-notice", { level: "warn", msg: d.msg ?? "Le scoring a fonctionné en mode dégradé." });
+          }
+          if (d.event === "feedback_relearn") {
+            emitAppEvent("backend-notice", { level: "info", msg: d.msg ?? "Les offres ont été reclassées à partir de vos retours." });
+          }
+          if (d.event === "scout_done" && typeof d.msg === "string" && /-\s*0 new leads/.test(d.msg)) {
+            emitAppEvent("backend-notice", { level: "warn", msg: d.msg });
+          }
         } else if (d.type === "LEAD_UPDATED" && d.data) {
           emitAppEvent("lead-updated", d.data as Lead);
         } else if (d.type === "HOT_X_LEAD" && d.data) {
@@ -407,5 +427,7 @@ export function useWS() {
     };
   }, [addLog, connect]);
 
-  return { conn, port, apiToken, sidecarError, logs, beat, addLog, progress };
+  const resetProgress = useCallback(() => setProgress(emptyProgress()), []);
+
+  return { conn, port, apiToken, sidecarError, logs, beat, addLog, progress, resetProgress };
 }

@@ -7,6 +7,7 @@ candidate's actual role, skills, and project evidence rather than generic keywor
 """
 
 import re
+from datetime import datetime, timezone
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from pydantic import BaseModel
 from core.logging import get_logger
@@ -83,7 +84,11 @@ def _period_months(period: str) -> int:
     if not period:
         return 0
     text = str(period).lower()
-    text = re.sub(r"\bpresent\b|\bcurrent\b|\bnow\b|\btoday\b", "2099-12", text)
+    # An ongoing role ends TODAY, not at a 2099 sentinel — that would credit a
+    # brand-new hire with ~600 months and misclassify a junior as senior (mirrors
+    # ranking.scoring_engine._period_months).
+    now = datetime.now(timezone.utc).strftime("%b %Y").lower()
+    text = re.sub(r"\bpresent\b|\bcurrent\b|\bnow\b|\btoday\b", now, text)
     pairs = re.findall(
         r"([a-z]{3,4})?\s*(\d{4})\s*(?:to|-|–|—|->|→)\s*([a-z]{3,4})?\s*(\d{4})",
         text,
@@ -470,6 +475,17 @@ Generate the queries now."""
     except Exception as exc:
         _log.warning("Le LLM n'a pas répondu (%s) ; utilisation des requêtes locales", exc)
         smart = _fallback_site_queries(profile, site_domains, seniority_hint)
+
+    if not smart and site_domains:
+        # The LLM produced no queries — it either raised, OR returned an empty
+        # structured result because the configured provider needs an API key it
+        # doesn't have (call_llm returns an empty model instead of raising). Either
+        # way, build deterministic queries so we don't silently drop every site:
+        # board (mirrors the loud-fail path in discovery/sources/web.py).
+        _log.warning("Le LLM n'a produit aucune requête ; fallback déterministe pour %s jobboard(s)", len(site_domains))
+        top_terms = _profile_search_terms(profile)[:3] or skills[:3] or role_terms[:3] or [target_role]
+        top = " OR ".join(f'"{s}"' for s in top_terms)
+        smart = [f"site:{d} ({top}) ({seniority_hint})" for d in site_domains]
 
     smart = _site_query_variants(profile, smart, seniority_hint)
 

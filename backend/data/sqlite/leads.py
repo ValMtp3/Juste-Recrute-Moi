@@ -18,7 +18,7 @@ LEAD_SELECT_COLUMNS = (
     "signal_reason,signal_tags,outreach_reply,outreach_dm,source_meta,feedback,"
     "feedback_note,followup_due_at,last_contacted_at,outreach_email,proposal_draft,"
     "fit_bullets,followup_sequence,proof_snippet,tech_stack,location,urgency,"
-    "base_signal_score,learning_delta,learning_reason,created_at,resume_version"
+    "base_signal_score,learning_delta,learning_reason,created_at,resume_version,base_score"
 )
 LEAD_COLUMN_NAMES = tuple(part.strip() for part in LEAD_SELECT_COLUMNS.split(","))
 
@@ -125,6 +125,7 @@ def lead_row_dict(row) -> dict:
         "learning_reason": row_get(row, "learning_reason") or "",
         "created_at": row_get(row, "created_at") or "",
         "resume_version": row_get(row, "resume_version") or 0,
+        "base_score": row_get(row, "base_score") or 0,
     }
 
 
@@ -272,6 +273,48 @@ def update_learning_score(job_id: str, ranked: dict, base_signal_score: int, db_
         conn.close()
 
 
+def update_learning_scores(updates: list[tuple[str, dict, int]], db_path: str = DEFAULT_DB_PATH) -> None:
+    """Batch form of update_learning_score: one connection + one commit for the whole
+    feedback recompute (up to 1000 leads) instead of a connect/commit/close per lead.
+    The recompute now runs on every feedback click (via the coalescing relearn runner),
+    so per-row transaction overhead was the dominant cost."""
+    if not updates:
+        return
+    params = [
+        (
+            int(ranked.get("signal_score") or 0),
+            str(ranked.get("signal_reason") or "")[:700],
+            json.dumps(ranked.get("source_meta") or {}, ensure_ascii=False),
+            int(ranked.get("base_signal_score") or base_signal_score),
+            int(ranked.get("learning_delta") or 0),
+            str(ranked.get("learning_reason") or "")[:700],
+            # Match score + its idempotency base (feedback re-rank). Fall back to the
+            # base only when the caller didn't compute a match score at all (key
+            # absent/None) — a legitimately-computed score of exactly 0 (a strong
+            # negative feedback delta driving a low-base lead to the floor) must
+            # persist as 0, not silently revert to the higher base_score.
+            int(ranked["score"] if ranked.get("score") is not None else (ranked.get("base_score") or 0)),
+            int(ranked.get("base_score") or 0),
+            job_id,
+        )
+        for job_id, ranked, base_signal_score in updates
+    ]
+    conn = get_connection(db_path)
+    try:
+        conn.executemany(
+            """
+            UPDATE leads
+            SET signal_score=?, signal_reason=?, source_meta=?, base_signal_score=?,
+                learning_delta=?, learning_reason=?, score=?, base_score=?
+            WHERE job_id=?
+            """,
+            params,
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def cleanup_text(lead: dict) -> str:
     parts = [
         lead.get("title", ""),
@@ -405,6 +448,16 @@ def cleanup_bad_leads(limit: int = 1000, dry_run: bool = False, db_path: str = D
     return {"scanned": len(rows), "discarded": 0 if dry_run else len(touched), "candidates": len(touched), "dry_run": dry_run, "items": touched}
 
 
+def _score_threshold(db_path: str, key: str, default: int) -> int:
+    """Read a 0-100 score-band setting, falling back to the default."""
+    try:
+        from data.sqlite.settings import get_setting
+        raw = get_setting(key, str(default), db_path)
+        return max(0, min(int(raw or default), 100))
+    except Exception:
+        return default
+
+
 def update_lead_score(
     job_id: str,
     score: int,
@@ -425,12 +478,21 @@ def update_lead_score(
             source_meta["scored_by"] = scored_by
             source_meta["match_scoring_mode"] = scored_by
 
+        # Two settable bands so the loop surfaces genuine matches in EVERY field: the
+        # deterministic rubric scores non-software roles lower, so a single hard 76 bar
+        # hid a nurse/lawyer's real matches entirely. "tailoring" = strong fit ready to
+        # generate; "matched" = moderate-but-genuine fit, shown for the user to review
+        # (off-field junk is already capped to ~15 by the ranker, well below the bar).
+        tailor_at = _score_threshold(db_path, "tailor_threshold", 76)
+        show_at = min(_score_threshold(db_path, "match_threshold", 45), tailor_at)
         if preserve_status:
             status = current_status
-        elif kind == "freelance":
-            status = "matched" if score >= 76 else "discarded"
+        elif score >= tailor_at:
+            status = "matched" if kind == "freelance" else "tailoring"
+        elif score >= show_at:
+            status = "matched"
         else:
-            status = "tailoring" if score >= 76 else "discarded"
+            status = "discarded"
 
         if preserve_status:
             conn.execute(

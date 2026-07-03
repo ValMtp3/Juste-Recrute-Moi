@@ -245,10 +245,10 @@ class ProfileService:
         return result
 
     async def import_profile_data(self, body: Any) -> dict:
-        from profile.normalization import normalize_profile_payload
+        from profile.normalization import normalize_profile_payload_report
 
         data = _as_dict(body)
-        data = normalize_profile_payload(data)
+        data, import_report = normalize_profile_payload_report(data)
         errors: list[str] = []
         stats = {key: 0 for key in ["skills", "experience", "projects", "education", "certifications", "achievements"]}
         existing_snapshot = await run_graph(self.get_profile)
@@ -362,10 +362,18 @@ class ProfileService:
         sync_status = await self._run_post_ingest_sync()
         vector_status = sync_status.get("vectors", sync_status)
 
+        # `imported` reflects what actually reached the graph (stats), not just what
+        # normalized — keep the two consistent for the summary.
+        import_report["imported"] = {key: stats.get(key, 0) for key in import_report.get("imported", {})}
+        summary = _summarize_import(stats, import_report)
         return {
             "status": "ok" if not errors else "partial",
             "stats": {**stats, "vector_sync": vector_status, "graph_sync": sync_status},
             "errors": errors,
+            # Additive transparency (existing keys above are unchanged): a one-line
+            # human summary + a structured report of received/imported/skipped/capped.
+            "summary": summary,
+            "report": import_report,
         }
 
 
@@ -375,6 +383,34 @@ def _as_dict(value: Any) -> dict:
     if isinstance(value, Mapping):
         return dict(value)
     return {}
+
+
+_IMPORT_LABELS = (
+    ("skills", "skill", "skills"),
+    ("experience", "role", "roles"),
+    ("projects", "project", "projects"),
+    ("education", "education entry", "education entries"),
+    ("certifications", "certification", "certifications"),
+    ("achievements", "achievement", "achievements"),
+)
+
+
+def _summarize_import(stats: dict, report: dict) -> str:
+    """One-line human summary of an import: what landed, what was skipped, what was
+    capped. Clauses with a zero count are omitted."""
+    imported = [
+        f"{stats[key]} {singular if stats[key] == 1 else plural}"
+        for key, singular, plural in _IMPORT_LABELS
+        if stats.get(key)
+    ]
+    head = "Imported " + ", ".join(imported) if imported else "Nothing was imported"
+    tails: list[str] = []
+    skipped_total = sum(int(item.get("count", 0)) for item in report.get("skipped", []))
+    if skipped_total:
+        tails.append(f"skipped {skipped_total}")
+    for capped in report.get("capped", []):
+        tails.append(f"capped {capped['field']} {capped['original']}->{capped['kept']}")
+    return head + ("" if not tails else "; " + ", ".join(tails))
 
 
 def _entry_title(value: Any) -> str:
@@ -626,7 +662,18 @@ def _merge_profile_snapshots(existing: dict, incoming: dict) -> dict:
 
 
 def _norm_key(value: Any) -> str:
+    # Lossy key for free-text items (education/certifications/achievements) where
+    # punctuation/spacing variants of the SAME entry should de-duplicate (an entry
+    # that differs only in dashes/commas/spacing collapses to one).
     return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _norm_key_strict(value: Any) -> str:
+    # Punctuation-preserving key for skill/project/experience dedup, where tech-name
+    # punctuation is significant: collapsing it dropped genuinely-distinct skills
+    # (C vs C++ vs C#, .NET vs NET). Matches the [a-z0-9+#.-] class the rest of the
+    # codebase treats as significant for skills.
+    return re.sub(r"[^a-z0-9+#.-]+", "", str(value or "").lower())
 
 
 def _dedupe_dict_items(items: list[dict], id_key: str) -> list[dict]:
@@ -640,9 +687,11 @@ def _dedupe_dict_items(items: list[dict], id_key: str) -> list[dict]:
         role = str(item.get("role") or "").strip()
         company = str(item.get("co") or item.get("company") or "").strip()
         if role or company:
-            key = _norm_key(f"{role} {company}")
+            key = _norm_key_strict(f"{role} {company}")
         else:
-            key = _norm_key(item.get("title") or item.get("n") or item.get(id_key) or "")
+            # Skills/projects: keep C vs C++ vs C# distinct so a real skill isn't
+            # dropped as a false duplicate.
+            key = _norm_key_strict(item.get("title") or item.get("n") or item.get(id_key) or "")
         if not key or key in seen:
             continue
         seen.add(key)

@@ -1,6 +1,29 @@
 # Journal des changements
 
-## 1.2.0 - 2026-06-23
+## 1.4.0 - 2026-07-03
+
+- Import profil plus tolérant : JSON Resume, clés alternatives, listes/groupes de compétences et stacks texte/liste sont normalisés au lieu de provoquer un 422 brut.
+- Rapport d'import visible : résumé, éléments ignorés et champs plafonnés sont affichés dans l'écran d'import.
+- Lecture de formulaire durcie : timeout, nettoyage navigateur, validation URL et lectures DB hors thread requête pour éviter un backend bloqué.
+- Ingestion durcie contre les entrées malformées ou trop volumineuses : texte/PDF, exports LinkedIn, crawl portfolio et imports GitHub sont bornés.
+
+## 1.3.0 - 2026-07-03
+
+- Feedback candidat relié au score de match réel, avec reclassement idempotent des offres ouvertes.
+- Backbone discovery keyless plus fiable, avec agrégateur structuré, seeds ATS automatiques et nouveaux adaptateurs SmartRecruiters, Recruitee et Personio.
+- Ranking plus agnostique métier : scoring relatif au profil, expérience non-tech mieux pondérée et garde-fou sémantique hors-métier.
+- Embeddings ONNX locaux activés automatiquement quand le modèle est disponible, avec fallback hash pendant le téléchargement.
+- Coût LLM réduit via pré-score local/top-K et prompt d'évaluation plus compact.
+- Fallback CV/lettre plus neutre métier quand le modèle IA est indisponible.
+- Durcissements sécurité/fiabilité sur SSRF, navigateur, sidecar desktop, discovery, ranking, génération, vector store, graphe profil et UI.
+
+## 1.2.0 - 2026-06-22
+
+- Discovery keyless zero-config par défaut avec sources ATS/community/RSS gratuites.
+- Runtime allégé autour du modèle ONNX local.
+- Options de modèles keyless élargies et matrice de test des chemins keyless/abonnement.
+
+## 1.1.1 - 2026-06-14
 
 - Renommage produit en Juste Recrute Moi.
 - Transformation du fork en MVP d'agregateur d'offres pour le marche francais.

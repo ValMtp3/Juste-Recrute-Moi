@@ -168,14 +168,20 @@ def location_from_text(text: str) -> str:
         if "india" in lower:
             return "Remote India"
         return "Remote"
-    patterns = [
-        r"(?:location|based in|onsite|hybrid)\s*[:\-]?\s*([A-Z][A-Za-z .,/+-]{2,80})",
+    # Keyword-prefixed location: match the keyword case-insensitively (inline
+    # (?i:...)) but require the CAPTURED location to start with a real uppercase
+    # letter — otherwise a global re.I made [A-Z] match lowercase, so "onsite work
+    # required" captured "work required" as a location.
+    match = re.search(r"(?i:location|based in|onsite|hybrid)\s*[:\-]?\s*([A-Z][A-Za-z .,/+-]{2,80})", clean)
+    if match:
+        return match.group(1).strip(" .")[:120]
+    match = re.search(
         r"\b(San Francisco|New York|London|Berlin|Bengaluru|Bangalore|Mumbai|Delhi|Toronto|Singapore)\b",
-    ]
-    for pat in patterns:
-        match = re.search(pat, clean, flags=re.I)
-        if match:
-            return match.group(1).strip(" .")[:120]
+        clean,
+        flags=re.I,
+    )
+    if match:
+        return match.group(1).strip(" .")[:120]
     return ""
 
 
@@ -187,13 +193,17 @@ def company_from_text(text: str, fallback: str = "Manual Lead") -> str:
             if value:
                 return value[:120]
     clean = clean_text(text)
+    # Keyword prefixes match case-insensitively (inline (?i:...)), but the
+    # [A-Z]-anchored captures must stay case-SENSITIVE — a global re.I let them
+    # match lowercase prose and grab noise as the company (same bug as the old
+    # location_from_text).
     patterns = [
-        r"(?:company|client|startup)\s*[:\-]\s*([A-Za-z0-9 .&_-]{2,80})",
-        r"\bat\s+([A-Z][A-Za-z0-9 .&_-]{2,80})",
+        r"(?i:company|client|startup)\s*[:\-]\s*([A-Za-z0-9 .&_-]{2,80})",
+        r"(?i:\bat)\s+([A-Z][A-Za-z0-9 .&_-]{2,80})",
         r"^([A-Z][A-Za-z0-9 .&_-]{2,80})\s+\|\s+",
     ]
     for pat in patterns:
-        match = re.search(pat, clean, flags=re.I)
+        match = re.search(pat, clean)
         if match:
             return match.group(1).strip(" .-|")[:120]
     return fallback

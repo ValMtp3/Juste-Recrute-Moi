@@ -19,7 +19,7 @@ export interface Cfg {
   generator_provider: string; generator_api_key: string; generator_model: string;
   ingestor_provider: string;  ingestor_api_key: string;  ingestor_model: string;
   actuator_provider: string;  actuator_api_key: string;  actuator_model: string;
-  apify_token: string; apify_actor: string; linkedin_cookie: string; france_travail_client_id: string; france_travail_client_secret: string; x_bearer_token: string; x_search_queries: string; x_watchlist: string;
+  apify_token: string; apify_actor: string; linkedin_cookie: string; france_travail_client_id: string; france_travail_client_secret: string; adzuna_app_id: string; adzuna_api_key: string; jooble_api_key: string; x_bearer_token: string; x_search_queries: string; x_watchlist: string;
   hunter_api_key: string; proxycurl_api_key: string; contact_lookup_enabled: string;
   x_max_requests_per_scan: string; x_max_results_per_query: string; x_min_signal_score: string; x_hot_lead_threshold: string; x_enable_notifications: string;
   free_sources_enabled: string; free_source_targets: string; company_watchlist: string; free_source_max_requests: string; free_source_min_signal_score: string;
@@ -50,7 +50,7 @@ export const EMPTY: Cfg = {
   generator_provider: "", generator_api_key: "", generator_model: "",
   ingestor_provider: "", ingestor_api_key: "", ingestor_model: "",
   actuator_provider: "", actuator_api_key: "", actuator_model: "",
-  apify_token: "", apify_actor: "", linkedin_cookie: "", france_travail_client_id: "", france_travail_client_secret: "", x_bearer_token: "", x_search_queries: "", x_watchlist: "",
+  apify_token: "", apify_actor: "", linkedin_cookie: "", france_travail_client_id: "", france_travail_client_secret: "", adzuna_app_id: "", adzuna_api_key: "", jooble_api_key: "", x_bearer_token: "", x_search_queries: "", x_watchlist: "",
   hunter_api_key: "", proxycurl_api_key: "", contact_lookup_enabled: "true",
   x_max_requests_per_scan: "5", x_max_results_per_query: "50", x_min_signal_score: "60", x_hot_lead_threshold: "80", x_enable_notifications: "false",
   free_sources_enabled: "true", free_source_targets: "", company_watchlist: "", free_source_max_requests: "20", free_source_min_signal_score: "60",
@@ -174,6 +174,7 @@ export const INDIA_SOURCE_PRESET = [
 export const FRANCE_SOURCE_PRESET = [
   "france_travail:developpeur;lieu=France;range=0-49,",
   "wttj:query=developpeur&aroundQuery=France,",
+  "hellowork:query=developpeur&location=France,",
   "apec:developpeur;location=France,",
   "adzuna:developpeur;location=France;results=50,",
   "jooble:developpeur;location=France,",
@@ -189,9 +190,6 @@ export const FRANCE_SOURCE_PRESET = [
   "ats:lever:payfit;query=developpeur;location=France,",
   "ats:smartrecruiters:Ubisoft2;query=developpeur;location=France,",
   "ats:teamtailor:alan;query=developpeur;location=France,",
-  "site:welcometothejungle.com/fr/jobs France,",
-  "site:hellowork.com/fr-fr/emplois France,",
-  "site:apec.fr/candidat/recherche-emploi.html/emploi France,",
   "site:cadremploi.fr/emploi France,",
   "site:meteojob.com/jobs France,",
   "site:lesjeudis.com/jobs France,",

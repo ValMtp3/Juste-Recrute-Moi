@@ -1,6 +1,7 @@
 import type { Lead } from "../../types";
 
 export type AppEventMap = {
+  "backend-notice": { level?: string; msg?: string };
   "backend-status": { scanning?: boolean; reevaluating?: boolean };
   "cleanup-done": undefined;
   "graph-refresh": undefined;

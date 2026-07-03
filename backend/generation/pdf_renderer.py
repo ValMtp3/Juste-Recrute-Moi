@@ -60,8 +60,18 @@ def _clean(text: str) -> str:
         text = text.replace(ch, rep)
     text = re.sub(r"[\U0001F1E6-\U0001FAFF]", "", text)
     text = text.replace("\ufffd", "")
-    text = unicodedata.normalize("NFKD", text)
-    return text.encode("latin-1", errors="ignore").decode("latin-1")
+    # Keep any character Helvetica's latin-1 encoding can render directly \u2014 so
+    # accented Latin names like Jos\u00e9 / M\u00fcller / Fran\u00e7ois survive \u2014 and only
+    # NFKD-decompose+strip the characters it genuinely can't encode. (Full
+    # non-Latin/CJK support still needs a bundled Unicode TTF; tracked separately.)
+    out: list[str] = []
+    for ch in text:
+        try:
+            ch.encode("latin-1")
+            out.append(ch)
+        except UnicodeEncodeError:
+            out.append(unicodedata.normalize("NFKD", ch).encode("latin-1", errors="ignore").decode("latin-1"))
+    return "".join(out)
 
 
 def _strip_inline(text: str) -> str:
@@ -159,7 +169,10 @@ def _render_resume_template(md_text: str, filename: str) -> str:
                     prefix = prefix_match.group(0)
                     out.append(prefix + _shorten_text(re.sub(r"^[-*+]\s+", "", stripped), int(budget["chars"])))
                     continue
-                if heading in {"SUMMARY", "SKILLS", "CERTIFICATES", "CERTS", "ACHIEVEMENTS", "EDUCATION"}:
+                # EDUCATION is excluded: its entries are '### Institution' headings
+                # already bounded by the ### entry budget, so counting the degree/
+                # major lines under them too double-charged and dropped degrees.
+                if heading in {"SUMMARY", "SKILLS", "CERTIFICATES", "CERTS", "ACHIEVEMENTS"}:
                     if entry_count >= int(budget["entries"]):
                         continue
                     entry_count += 1
