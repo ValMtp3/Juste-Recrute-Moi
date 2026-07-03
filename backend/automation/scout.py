@@ -10,6 +10,7 @@ import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from discovery.lead_intel import canonical_lead_id
+from discovery.location_filter import lead_location_match, remote_allowed_for_target, target_location_from_target
 from discovery.quality_gate import MIN_DEFAULT_QUALITY, attach_quality_metadata, evaluate_lead_quality
 from discovery.sources import apify as apify_sources
 from discovery.sources import ats as ats_sources
@@ -194,6 +195,11 @@ def _annotate_source_meta(
     meta["llm_scan_mode"] = llm_scan_mode
     if target.lower().startswith("site:"):
         meta.setdefault("query", target)
+    target_loc = target_location_from_target(target)
+    if target_loc:
+        meta.setdefault("target_location", target_loc)
+    if remote_allowed_for_target(target):
+        meta.setdefault("target_remote", "true")
     return {**item, "source_meta": meta}
 
 
@@ -617,6 +623,8 @@ def run(
     browser_scan_concurrency: int = 4,
     browser_scan_max_targets: int = 32,
     llm_scan_mode: str = "balanced",
+    target_location: str = "",
+    remote_preference: str = "any",
 ) -> list:
     errors: list[str] = []
     leads = []
@@ -768,26 +776,21 @@ def run(
         item = {**item, "source_meta": {**raw_meta, **source_meta}}
 
         target_str = raw_meta.get("source_target", "")
-        target_loc = ""
-        if target_str and ":" in target_str:
-            try:
-                from core.config import FRANCE_LOCATION_HINTS
-            except ImportError:
-                FRANCE_LOCATION_HINTS = set()
-            raw = target_str.split(":", 1)[1]
-            parts = [p.strip() for p in raw.replace("|", ";").split(";") if p.strip()]
-            for part in parts:
-                if "=" in part:
-                    k, v = part.split("=", 1)
-                    if k.strip().lower() in {"lieu", "location", "where", "aroundquery"}:
-                        target_loc = v.strip()
-                        break
-            if not target_loc and parts and "=" not in parts[0]:
-                kw = parts[0].lower()
-                for hint in FRANCE_LOCATION_HINTS:
-                    if hint in kw.split():
-                        target_loc = hint
-                        break
+        target_loc = target_location_from_target(target_str) or str(target_location or "").strip()
+        target_remote = remote_allowed_for_target(target_str, remote_preference)
+        if target_loc:
+            source_meta["target_location"] = target_loc
+        if target_remote:
+            source_meta["target_remote"] = "true"
+        item = {**item, "source_meta": {**raw_meta, **source_meta}}
+        if target_loc:
+            location = lead_location_match(item, target_loc, remote_allowed=target_remote)
+            if not location.accepted:
+                usage["filtered"] += 1
+                errors.append(f"filtré {plat}:{u} - {location.reason}")
+                continue
+            if location.detected_location:
+                item["source_meta"].setdefault("location_match", location.detected_location)
 
         quality = evaluate_lead_quality(item, min_quality=min_quality, target_location=target_loc)
         item = attach_quality_metadata(item, quality)

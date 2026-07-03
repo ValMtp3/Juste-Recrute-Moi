@@ -43,6 +43,8 @@ def run_apify_scout(
     browser_scan_concurrency: int = 4,
     browser_scan_max_targets: int = 32,
     llm_scan_mode: str = "balanced",
+    target_location: str = "",
+    remote_preference: str = "any",
 ) -> SourceAdapterResult:
     from automation import scout
 
@@ -56,6 +58,8 @@ def run_apify_scout(
             browser_scan_concurrency=browser_scan_concurrency,
             browser_scan_max_targets=browser_scan_max_targets,
             llm_scan_mode=llm_scan_mode,
+            target_location=target_location,
+            remote_preference=remote_preference,
         ),
         fallback_usage={"targets": len(urls)},
     )

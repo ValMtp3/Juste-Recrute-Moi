@@ -24,7 +24,13 @@ def test_discovery_service_runs_free_sources_with_profile_targets():
          mock.patch("automation.free_scout.LAST_ERRORS", []):
         result = asyncio.run(service.scan_free_sources(
             {"free_sources_enabled": "true"},
-            profile={"s": "Python developer", "skills": [{"n": "FastAPI"}]},
+            profile={
+                "s": "Python developer",
+                "skills": [{"n": "FastAPI"}],
+                "_discovery_location": "Paris",
+                "_remote_preference": "onsite",
+                "_job_market_focus": "france",
+            },
         ))
 
     assert result.leads == [fake_lead]
@@ -33,6 +39,7 @@ def test_discovery_service_runs_free_sources_with_profile_targets():
     kwargs = run.call_args.kwargs
     assert kwargs["raw_targets"]
     assert kwargs["kind_filter"] == "job"
+    assert kwargs["target_location"] == "Paris"
 
 
 def test_discovery_service_does_not_scan_free_sources_without_profile_or_targets():

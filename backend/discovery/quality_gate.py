@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from discovery.lead_intel import clean_text, signal_quality
+from discovery.location_filter import lead_location_match
 from discovery.normalizer import parse_date
-
 
 MIN_DEFAULT_QUALITY = 60
 HOT_LEAD_THRESHOLD = 80
@@ -86,7 +86,7 @@ def _has_fresh_source(lead: dict) -> bool:
     return isinstance(meta, dict) and bool(str(meta.get("fresh_source") or "").strip())
 
 
-def _freshness(lead: dict, max_age_days: int = 7) -> tuple[bool, str]:
+def _freshness(lead: dict, max_age_days: int = 15) -> tuple[bool, str]:
     values = [
         lead.get("posted_date"),
         (lead.get("source_meta") or {}).get("posted_date") if isinstance(lead.get("source_meta"), dict) else "",
@@ -132,7 +132,7 @@ def evaluate_lead_quality(
     *,
     min_quality: int = MIN_DEFAULT_QUALITY,
     target_level: str = "any",
-    max_age_days: int = 7,
+    max_age_days: int = 15,
     target_location: str = "",
 ) -> dict:
     text = _lead_text(lead)
@@ -149,12 +149,13 @@ def evaluate_lead_quality(
         penalties += 8
         reasons.append("missing company")
 
-    if target_location and target_location.lower() != "france":
-        lead_location = str(lead.get("location") or "").lower()
-        loc_lower = target_location.lower()
-        if loc_lower not in lead_location and loc_lower not in text.lower():
-            penalties += 35
-            reasons.append(f"location mismatch ({target_location})")
+    if target_location:
+        meta = lead.get("source_meta") if isinstance(lead.get("source_meta"), dict) else {}
+        target_remote = str(meta.get("target_remote") or "").strip().lower() in {"1", "true", "yes", "on"}
+        location = lead_location_match(lead, target_location, remote_allowed=target_remote)
+        if not location.accepted:
+            penalties += 45
+            reasons.append(location.reason)
 
     fresh, fresh_reason = _freshness(lead, max_age_days=max_age_days)
     reasons.append(fresh_reason)

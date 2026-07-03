@@ -11,6 +11,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_ex
 
 from core.config import france_travail_target_from_plain
 from discovery.lead_intel import canonical_lead_id
+from discovery.location_filter import lead_location_match, remote_allowed_for_target, target_location_from_target
 from discovery.normalizer import (
     budget_from_text,
     fit_bullets,
@@ -321,6 +322,8 @@ async def _scrape_target(target: str) -> list[dict]:
         return await _source_scrape_hellowork(target)
     if lower.startswith("apec:"):
         return await _source_scrape_apec(target)
+    if lower.startswith("hellowork:"):
+        return await _source_scrape_hellowork(target)
     if lower.startswith("import:"):
         return await _source_scrape_url_import(target)
     if lower.startswith("ats:") or lower.startswith(("http://", "https://")):
@@ -370,6 +373,8 @@ def run(
     kind_filter: str | None = None,
     max_requests: int = 20,
     min_signal_score: int = MIN_DEFAULT_QUALITY,
+    target_location: str = "",
+    remote_preference: str = "any",
     progress_callback: Callable[[int, int, str], None] | None = None,
 ) -> list[dict]:
     errors: list[str] = []
@@ -416,6 +421,7 @@ def run(
     leads: list[dict] = []
     seen: set[str] = set()
     empty_hints_seen: set[str] = set()
+    fallback_target_loc = str(target_location or "").strip()
 
     for i, target in enumerate(all_targets[:cap]):
         if progress_callback:
@@ -437,36 +443,28 @@ def run(
             errors.append(f"{target}: {_source_error_detail(exc)}")
             continue
 
-        target_loc = ""
-        if ":" in target:
-            try:
-                from core.config import FRANCE_LOCATION_HINTS
-            except ImportError:
-                FRANCE_LOCATION_HINTS = set()
-            raw = target.split(":", 1)[1]
-            parts = [p.strip() for p in raw.replace("|", ";").split(";") if p.strip()]
-            for part in parts:
-                if "=" in part:
-                    k, v = part.split("=", 1)
-                    if k.strip().lower() in {"lieu", "location", "where", "aroundquery"}:
-                        target_loc = v.strip()
-                        break
-            if not target_loc and parts and "=" not in parts[0]:
-                kw = parts[0].lower()
-                for hint in FRANCE_LOCATION_HINTS:
-                    if hint in kw.split():
-                        target_loc = hint
-                        break
+        target_loc = target_location_from_target(target) or fallback_target_loc
+        target_remote = remote_allowed_for_target(target, remote_preference)
 
         for item in batch:
             meta = dict(item.get("source_meta") or {})
             meta.setdefault("target", target)
             if target_loc:
                 meta.setdefault("target_location", target_loc)
+            if target_remote:
+                meta.setdefault("target_remote", "true")
             item["source_meta"] = meta
             if wanted and item.get("kind") != wanted:
                 usage["filtered"] += 1
                 continue
+            if target_loc:
+                location = lead_location_match(item, target_loc, remote_allowed=target_remote)
+                if not location.accepted:
+                    usage["filtered"] += 1
+                    errors.append(f"filtré {item.get('platform', 'free')}:{item.get('url', '')} - {location.reason}")
+                    continue
+                if location.detected_location:
+                    meta.setdefault("location_match", location.detected_location)
             item = rank_lead_by_feedback(item)
             quality = evaluate_lead_quality(item, min_quality=min_score, target_location=target_loc)
             item = attach_quality_metadata(item, quality)
@@ -538,11 +536,27 @@ def run(
             continue
 
         for item in batch:
+            target_loc = fallback_target_loc
+            target_remote = str(remote_preference or "").strip().lower() == "remote"
+            meta = dict(item.get("source_meta") or {})
+            if target_loc:
+                meta.setdefault("target_location", target_loc)
+            if target_remote:
+                meta.setdefault("target_remote", "true")
+            item["source_meta"] = meta
             if wanted and item.get("kind") != wanted:
                 usage["filtered"] += 1
                 continue
+            if target_loc:
+                location = lead_location_match(item, target_loc, remote_allowed=target_remote)
+                if not location.accepted:
+                    usage["filtered"] += 1
+                    errors.append(f"filtré {item.get('platform', 'connector')}:{item.get('url', '')} - {location.reason}")
+                    continue
+                if location.detected_location:
+                    meta.setdefault("location_match", location.detected_location)
             item = rank_lead_by_feedback(item)
-            quality = evaluate_lead_quality(item, min_quality=min_score)
+            quality = evaluate_lead_quality(item, min_quality=min_score, target_location=target_loc)
             item = attach_quality_metadata(item, quality)
             if not quality.get("accepted"):
                 usage["filtered"] += 1

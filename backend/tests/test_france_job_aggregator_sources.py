@@ -11,6 +11,7 @@ import pytest
 
 from automation import free_scout
 from core.config import job_market_focus, job_targets, parse_search_intent, profile_for_discovery
+from discovery.location_filter import lead_location_match, target_location_from_target
 from discovery.service import DiscoveryService
 from discovery.sources import adzuna, apec, ats, france_travail, hellowork, jobspy, jooble, url_import, wttj_rss
 
@@ -86,6 +87,7 @@ def test_france_market_targets_apply_location_radius_to_direct_sources():
     assert "adzuna:data;location=Montpellier;results=50" in targets
     assert "jooble:data;location=Montpellier" in targets
     assert "ats:greenhouse:mistralai;query=data;location=Montpellier" in targets
+    assert "site:hellowork.com/fr-fr/emplois Montpellier" in targets
 
 
 def test_france_market_adds_broader_variants_outside_france_travail():
@@ -276,6 +278,26 @@ def test_france_travail_fallback_params_drop_optional_filters():
     }
 
 
+def test_target_location_parser_handles_direct_and_site_targets():
+    assert target_location_from_target("france_travail:data;lieu=Paris;range=0-49") == "Paris"
+    assert target_location_from_target("wttj:query=data&aroundQuery=Lyon") == "Lyon"
+    assert target_location_from_target("site:hellowork.com/fr-fr/emplois Montpellier") == "Montpellier"
+
+
+def test_location_filter_rejects_explicit_city_mismatch():
+    lead = {
+        "title": "Data Analyst",
+        "company": "Acme",
+        "location": "Lyon, France",
+        "description": "Offre CDI pour construire des tableaux de bord.",
+    }
+
+    match = lead_location_match(lead, "Paris")
+
+    assert not match.accepted
+    assert "localisation hors cible" in match.reason
+
+
 def test_france_travail_mapper_returns_stable_lead():
     lead = france_travail.offer_to_lead(france_travail.offer_from_result({
         "id": "123ABC",
@@ -455,6 +477,33 @@ def test_jobspy_connector_normalizes_dataframe_like_rows(monkeypatch):
     assert leads[0]["platform"] == "jobspy_indeed"
     assert leads[0]["source_meta"]["source"] == "jobspy"
     assert leads[0]["source_meta"]["source_reliability"] == "best_effort"
+
+
+def test_free_scout_filters_non_matching_target_location(monkeypatch):
+    async def fake_adzuna(_target):
+        base = {
+            "kind": "job",
+            "company": "Acme",
+            "platform": "adzuna",
+            "posted_date": "today",
+            "signal_score": 90,
+            "description": "Offre d'emploi CDI pour construire des pipelines data et postuler rapidement.",
+        }
+        return [
+            {**base, "title": "Data Analyst Paris", "url": "https://example.com/paris", "location": "Paris, France"},
+            {**base, "title": "Data Analyst Lyon", "url": "https://example.com/lyon", "location": "Lyon, France"},
+        ]
+
+    monkeypatch.setattr(free_scout, "_source_scrape_adzuna", fake_adzuna)
+    monkeypatch.setattr(free_scout, "rank_lead_by_feedback", lambda lead: lead)
+    monkeypatch.setattr(free_scout, "url_exists", lambda _job_id: False)
+    monkeypatch.setattr(free_scout, "save_lead", lambda *args, **kwargs: None)
+
+    leads = free_scout.run(targets=["adzuna:data;location=Paris"], max_requests=1, min_signal_score=0)
+
+    assert [lead["title"] for lead in leads] == ["Data Analyst Paris"]
+    assert free_scout.LAST_USAGE["filtered"] == 1
+    assert any("localisation hors cible" in error for error in free_scout.LAST_ERRORS)
 
 
 def test_ats_target_detection_includes_france_friendly_ats():

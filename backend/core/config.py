@@ -72,21 +72,25 @@ FRANCE_ATS_SOURCE_TARGETS = [
     for provider, slug in FRANCE_ATS_SOURCE_BOARDS
 ]
 
-FRANCE_SITE_TARGETS = [
-    "site:cadremploi.fr/emploi France",
-    "site:meteojob.com/jobs France",
-    "site:lesjeudis.com/jobs France",
-    "site:linkedin.com/jobs France",
-    "site:fr.indeed.com/emplois France",
-    "site:talent.com/fr France",
-    "site:chooseyourboss.com France",
-    "site:jobs.smartrecruiters.com France",
-    "site:teamtailor.com/jobs France",
-    "site:boards.greenhouse.io France",
-    "site:jobs.lever.co France",
-    "site:jobs.ashbyhq.com France",
-    "site:apply.workable.com France",
+FRANCE_SITE_TARGET_BASES = [
+    "site:cadremploi.fr/emploi",
+    "site:meteojob.com/jobs",
+    "site:lesjeudis.com/jobs",
+    "site:linkedin.com/jobs",
+    "site:fr.indeed.com/emplois",
+    "site:talent.com/fr",
+    "site:chooseyourboss.com",
+    "site:jobs.smartrecruiters.com",
+    "site:teamtailor.com/jobs",
+    "site:boards.greenhouse.io",
+    "site:jobs.lever.co",
+    "site:jobs.ashbyhq.com",
+    "site:apply.workable.com",
 ]
+FRANCE_LOCAL_SITE_TARGET_BASES = [
+    "site:hellowork.com/fr-fr/emplois",
+]
+FRANCE_SITE_TARGETS = [f"{target} France" for target in FRANCE_SITE_TARGET_BASES]
 
 FRANCE_JOB_TARGETS = [*FRANCE_DIRECT_SOURCE_TARGETS, *FRANCE_ATS_SOURCE_TARGETS, *FRANCE_SITE_TARGETS]
 
@@ -493,6 +497,14 @@ def _france_direct_targets(
     return targets if include_france_travail else targets[1:]
 
 
+def _france_site_targets(location: str) -> list[str]:
+    location = _canonical_france_location(location or "France")
+    bases = list(FRANCE_SITE_TARGET_BASES)
+    if location != "France":
+        bases.extend(FRANCE_LOCAL_SITE_TARGET_BASES)
+    return [f"{target} {location}" for target in bases]
+
+
 def _france_ats_targets(
     role: str,
     location: str,
@@ -562,13 +574,13 @@ def _france_targets_from_intent(
                 contract=intent.contract,
                 remote=intent.remote,
             ),
-            *FRANCE_SITE_TARGETS,
+            *_france_site_targets(intent.location),
         ]
     if fallback_location and fallback_location.lower() != "france":
         return [
             *_france_direct_targets("developpeur", fallback_location, radius_km=radius_km),
             *_france_ats_targets("developpeur", fallback_location),
-            *FRANCE_SITE_TARGETS,
+            *_france_site_targets(fallback_location),
         ]
     return list(FRANCE_JOB_TARGETS)
 
@@ -609,7 +621,7 @@ def job_targets(
                         contract=intent.contract,
                         remote=intent.remote,
                     ),
-                    *FRANCE_SITE_TARGETS,
+                    *_france_site_targets(intent.location),
                 ]
             else:
                 targets = [plain_france_target, *FRANCE_JOB_TARGETS[1:]]
@@ -917,14 +929,17 @@ def profile_free_source_targets(profile: dict) -> str:
     # the raw concatenated terms produced unrelated results that got gate-filtered away.
     role_query = _clean_role_query(terms)
     location = str((profile or {}).get("_discovery_location") or "").strip()
+    focus = job_market_focus(profile.get("_job_market_focus"))
+    aggregator_location = location or ("France" if focus == "france" else "")
+    location_query = location if focus == "france" and location else "remote"
     lines = [
         # Keyless structured aggregator FIRST: real jobs for the candidate's role in
         # any field/region via plain JSON APIs — no headless browser, no LLM, no key.
-        "aggregator:" + role_query + (f"@@{location}" if location else ""),
-        f"github:{role_query} hiring help wanted",
-        f"hn:{role_query} remote hiring",
+        "aggregator:" + role_query + (f"@@{aggregator_location}" if aggregator_location else ""),
+        f"github:{role_query} {location_query} hiring help wanted",
+        f"hn:{role_query} {location_query} hiring",
     ]
-    if job_market_focus(profile.get("_job_market_focus")) != "france":
+    if focus != "france":
         lines.append(f"reddit:forhire:{role_query} hiring job remote")
     # Auto-derived ATS company targets (greenhouse/lever/ashby/... JSON APIs) matched
     # to the candidate's field + region, so the keyless structured backbone fires with
@@ -941,7 +956,10 @@ def profile_x_queries(profile: dict, market_focus: str = "global") -> str:
     if focus == "india":
         location = '("India" OR "Indian" OR "Bengaluru" OR "Mumbai" OR "Pune" OR "Hyderabad")'
     elif focus == "france":
-        location = '("France" OR "Paris" OR "Lyon" OR "remote" OR "hybrid" OR "télétravail")'
+        if loc_text and _norm_token(loc_text) not in {"", "france"}:
+            location = f'("{loc_text}" OR "France" OR "remote" OR "hybrid" OR "télétravail")'
+        else:
+            location = '("France" OR "Paris" OR "Lyon" OR "remote" OR "hybrid" OR "télétravail")'
     elif loc_text:
         # Any region: include the user's location plus remote alternatives.
         location = f'("{loc_text}" OR "remote" OR "hybrid")'

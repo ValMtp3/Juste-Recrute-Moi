@@ -39,6 +39,7 @@ async def run_actor(actor: str, inp: dict, token: str) -> list:
 
 def run_board_scan(urls: list[str], cfg: dict) -> BoardScanResult:
     from automation.source_adapters import run_apify_scout
+    from core.config import discovery_location, remote_preference
 
     def _int_cfg(key: str, default: int, lo: int, hi: int) -> int:
         try:
@@ -58,6 +59,8 @@ def run_board_scan(urls: list[str], cfg: dict) -> BoardScanResult:
         browser_scan_concurrency=_int_cfg("browser_scan_concurrency", 4, 1, 8),
         browser_scan_max_targets=_int_cfg("browser_scan_max_targets", 32, 1, 80),
         llm_scan_mode=str(cfg.get("llm_scan_mode") or "balanced").strip().lower() or "balanced",
+        target_location=discovery_location(cfg),
+        remote_preference=remote_preference(cfg),
     )
     return BoardScanResult(
         leads=result.leads,

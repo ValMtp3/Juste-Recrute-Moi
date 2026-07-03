@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
+from core.config import discovery_location, remote_preference as configured_remote_preference
 from discovery.targets import (
     free_sources_enabled,
     has_profile_discovery_signal,
@@ -55,6 +56,8 @@ class DiscoveryService:
                 kind_filter="job",
                 max_requests=int_cfg(cfg, "free_source_max_requests", 20, 1, 80),
                 min_signal_score=int_cfg(cfg, "free_source_min_signal_score", 60, 0, 100),
+                target_location=discovery_location(cfg),
+                remote_preference=configured_remote_preference(cfg),
             )
             leads.extend(free_result.leads)
             errors.extend(free_result.errors)
@@ -107,6 +110,8 @@ class DiscoveryService:
             kind_filter=kind_filter or "job",
             max_requests=int_cfg(cfg, "free_source_max_requests", 20, 1, 80),
             min_signal_score=int_cfg(cfg, "free_source_min_signal_score", 60, 0, 100),
+            target_location=str((profile or {}).get("_discovery_location") or discovery_location(cfg, profile) or ""),
+            remote_preference=str((profile or {}).get("_remote_preference") or configured_remote_preference(cfg) or "any"),
             progress_callback=sync_progress,
         )
         return DiscoveryRunResult(
