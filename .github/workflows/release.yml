@@ -51,11 +51,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -72,11 +72,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -88,7 +88,7 @@ jobs:
         run: pnpm build
 
       - name: Publier le dist frontend
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
           path: dist/
@@ -103,11 +103,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -159,11 +159,11 @@ jobs:
             Write-Warning "pnpm audit exited with $auditExit but reported no moderate/high/critical vulnerabilities. Continuing."
           }
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - uses: astral-sh/setup-uv@v8.2.0
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: false
 
@@ -186,20 +186,20 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - uses: astral-sh/setup-uv@v8.2.0
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: false
 
@@ -235,7 +235,7 @@ jobs:
         run: pnpm smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-sidecar-windows
           path: |
@@ -243,7 +243,7 @@ jobs:
           retention-days: 1
 
       - name: Publier les artefacts runtime OTA
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-runtime-windows
           path: release-assets/
@@ -257,20 +257,20 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - uses: astral-sh/setup-uv@v8.2.0
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: false
 
@@ -305,7 +305,7 @@ jobs:
         run: pnpm smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-sidecar-macos
           path: |
@@ -313,7 +313,7 @@ jobs:
           retention-days: 1
 
       - name: Publier les artefacts runtime OTA
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-runtime-macos
           path: release-assets/
@@ -327,20 +327,20 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - uses: astral-sh/setup-uv@v8.2.0
+      - uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: false
 
@@ -373,7 +373,7 @@ jobs:
         run: pnpm smoke:sidecar
 
       - name: Publier l'artefact sidecar backend
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: backend-sidecar-linux
           path: |
@@ -381,7 +381,7 @@ jobs:
           retention-days: 1
 
       - name: Publier les artefacts runtime OTA
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-runtime-linux
           path: release-assets/
@@ -400,11 +400,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -419,19 +419,19 @@ jobs:
           workspaces: "src-tauri -> target"
 
       - name: Télécharger le sidecar backend
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: backend-sidecar-windows
           path: src-tauri/resources/backend/
 
       - name: Télécharger le dist frontend
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: dist/
 
       - name: Télécharger le pack runtime Windows
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-assets-runtime-windows
           path: runtime-assets/
@@ -580,7 +580,7 @@ jobs:
           $lines | Set-Content -Path "$releaseDir\SHA256SUMS-windows.txt" -Encoding utf8
 
       - name: Publier les artefacts de release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-windows
           path: release-assets/
@@ -599,11 +599,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -618,19 +618,19 @@ jobs:
           workspaces: "src-tauri -> target"
 
       - name: Télécharger le sidecar backend
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: backend-sidecar-macos
           path: src-tauri/resources/backend/
 
       - name: Télécharger le dist frontend
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: dist/
 
       - name: Télécharger le pack runtime macOS
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-assets-runtime-macos
           path: runtime-assets/
@@ -777,7 +777,7 @@ jobs:
           rm "$asset_list"
 
       - name: Publier les artefacts de release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-macos
           path: release-assets/
@@ -794,11 +794,11 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
@@ -831,19 +831,19 @@ jobs:
           workspaces: "src-tauri -> target"
 
       - name: Télécharger le sidecar backend
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: backend-sidecar-linux
           path: src-tauri/resources/backend/
 
       - name: Télécharger le dist frontend
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: frontend-dist
           path: dist/
 
       - name: Télécharger le pack runtime Linux
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-assets-runtime-linux
           path: runtime-assets/
@@ -933,7 +933,7 @@ jobs:
           rm "$asset_list"
 
       - name: Publier les artefacts de release
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-linux
           path: release-assets/
@@ -950,16 +950,16 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Télécharger les artefacts de release
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-assets-*
           path: release-assets
